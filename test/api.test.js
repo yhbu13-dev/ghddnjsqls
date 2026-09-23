@@ -95,6 +95,9 @@ test('사장님 링크: 열람 기록 → 수량 수정 승인 → 재사용 불
     const token = /\/o\/([^\s]+)/.exec(body)[1];
     const page = await fetch(b.base + '/o/' + token);
     assert.equal(page.status, 200);
+    const pv = await b.call('GET', '/api/owner/' + token + '?preview=1', { csrf: false });
+    assert.equal(pv.status, 200);
+    assert.equal(b.db.get('SELECT opened_at FROM proposals WHERE id = ?', [p.id]).opened_at, null, '운영자 미리보기는 열람으로 기록하지 않음');
     const view = await b.call('GET', '/api/owner/' + token, { csrf: false });
     assert.equal(view.status, 200);
     assert.equal(view.json.canAct, true);

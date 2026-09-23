@@ -1,3 +1,4 @@
+[hidden] { display: none !important; }
 /* ==========================================================================
    디자인 토큰 — 피치덱과 동일한 시각 언어 (라이트 단일 테마, 그라데이션 없음)
    ========================================================================== */
@@ -505,3 +506,76 @@ svg text { font-family: var(--sans); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* ==========================================================================
+   운영 툴 추가 스타일 — 폼 · 모달 · 관리 화면 · 모바일(사장님·기사) 페이지
+   ========================================================================== */
+.sample-banner { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 7px; background: var(--sub-t); color: var(--sub); font-size: 12px; }
+.sample-banner b { color: var(--ink); }
+.sync { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--gray); white-space: nowrap; }
+.sync .d { width: 7px; height: 7px; border-radius: 50%; background: var(--main); }
+.sync.err .d { background: var(--danger); }
+.sync.err { color: var(--danger); }
+.fgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; }
+.fgrid .full { grid-column: 1 / -1; }
+.fld { display: flex; flex-direction: column; gap: 4px; font-size: 12px; min-width: 0; }
+.fld > span { color: var(--gray); font-size: 11.5px; }
+.fld small { color: var(--gray); font-size: 11px; }
+.inp, .fld input, .fld select, .fld textarea {
+  height: 32px; border: 1px solid var(--line); border-radius: 6px; padding: 0 9px; background: var(--paper); font-size: 12.5px; min-width: 0; width: 100%;
+}
+.fld textarea { height: auto; min-height: 70px; padding: 7px 9px; resize: vertical; font-family: inherit; }
+.inp:focus, .fld input:focus, .fld select:focus, .fld textarea:focus { outline: 2px solid var(--main-t2); border-color: var(--main); }
+.chk { display: flex; align-items: center; gap: 7px; font-size: 12.5px; }
+.chk input { width: 15px; height: 15px; accent-color: var(--main); }
+.form-err { color: var(--danger); font-size: 12px; min-height: 16px; }
+.modal-f { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 20px 16px; border-top: 1px solid var(--line); flex-wrap: wrap; }
+.modal.sm { width: 480px; }
+.copybox { display: flex; gap: 6px; }
+.copybox input { flex: 1; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11.5px; }
+.pre { white-space: pre-wrap; font-size: 12px; line-height: 1.6; background: var(--ink-t); border-radius: 7px; padding: 10px 12px; max-height: 260px; overflow: auto; }
+.subnav { display: flex; gap: 4px; flex-wrap: wrap; border-bottom: 1px solid var(--line); padding-bottom: 8px; }
+.subnav button { border: 0; background: none; padding: 6px 12px; border-radius: 6px; font-size: 12.5px; color: var(--gray); }
+.subnav button:hover { background: var(--hover); color: var(--ink); }
+.subnav button[aria-current="page"] { background: var(--main-t); color: var(--main); font-weight: 600; }
+.qty-step { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.qty-step button { width: 28px; height: 28px; border: 0; background: var(--ink-t); font-size: 15px; }
+.qty-step input { width: 44px; height: 28px; border: 0; text-align: center; font-size: 13px; font-variant-numeric: tabular-nums; }
+.kbd-hint { font-size: 11px; color: var(--gray); }
+.skel-line { height: 12px; border-radius: 4px; background: var(--ink-t); animation: sk 1.2s ease-in-out infinite; }
+.loading-dim { opacity: .5; transition: opacity .2s; }
+.code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11.5px; background: var(--ink-t); padding: 1px 5px; border-radius: 4px; word-break: break-all; }
+a { color: var(--main); }
+
+/* 모바일 페이지 (사장님 승인 · 기사 배송) */
+body.m { overflow: auto; background: var(--bg); }
+.m-wrap { max-width: 480px; margin: 0 auto; padding: 16px 16px 40px; display: flex; flex-direction: column; gap: 12px; }
+.m-head { display: flex; align-items: center; gap: 10px; padding: 4px 0 2px; }
+.m-head .pf { width: 36px; height: 36px; border-radius: 12px; background: var(--main); color: #fff; display: grid; place-items: center; font-family: var(--serif); font-weight: 700; font-size: 16px; flex: none; }
+.m-head b { display: block; font-size: 15px; }
+.m-head small { color: var(--gray); font-size: 12px; }
+.m-card { background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.m-card h2 { font-size: 16px; }
+.m-lead { font-size: 14.5px; line-height: 1.6; }
+.m-line { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.m-line:last-child { border-bottom: 0; }
+.m-line .nm { flex: 1; min-width: 0; font-size: 14px; }
+.m-line .nm small { display: block; color: var(--gray); font-size: 11.5px; }
+.m-total { display: flex; justify-content: space-between; font-size: 15px; font-weight: 700; padding-top: 4px; }
+.m-btn { height: 48px; border-radius: 10px; border: 1px solid var(--line); background: var(--paper); font-size: 15px; font-weight: 600; width: 100%; }
+.m-btn.pri { background: var(--main); border-color: var(--main); color: #fff; }
+.m-btn.bad { color: var(--danger); border-color: rgba(192, 57, 43, .4); }
+.m-btn:disabled { opacity: .5; }
+.m-btns { display: flex; flex-direction: column; gap: 8px; }
+.m-note { font-size: 12px; color: var(--gray); line-height: 1.6; }
+.m-done { text-align: center; padding: 22px 16px; }
+.m-done .ic { margin: 0 auto 8px; color: var(--main); }
+.m-stop { border-left: 3px solid var(--line); }
+.m-stop.cur { border-left-color: var(--sub); }
+.m-stop.done { border-left-color: var(--main); opacity: .75; }
+.m-stop.failed { border-left-color: var(--danger); opacity: .75; }
+.m-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13px; }
+.m-row a { font-size: 13px; }
+.cnt-grid { display: grid; grid-template-columns: 1fr auto auto; gap: 6px 8px; align-items: center; font-size: 13px; }
+.cnt-grid input { width: 64px; height: 38px; border: 1px solid var(--line); border-radius: 8px; text-align: center; font-size: 15px; font-variant-numeric: tabular-nums; }
+.cnt-grid .h { font-size: 11px; color: var(--gray); text-align: center; }

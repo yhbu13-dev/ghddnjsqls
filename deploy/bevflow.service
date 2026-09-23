@@ -1,0 +1,39 @@
+# /etc/systemd/system/bevflow.service
+# 설치:
+#   sudo useradd --system --home /opt/bevflow --shell /usr/sbin/nologin bevflow
+#   sudo cp -r . /opt/bevflow && sudo mkdir -p /opt/bevflow/data /opt/bevflow/backups
+#   sudo chown -R bevflow:bevflow /opt/bevflow
+#   sudo cp deploy/bevflow.env.example /etc/bevflow.env && sudo chmod 600 /etc/bevflow.env
+#   sudo cp deploy/bevflow.service /etc/systemd/system/ && sudo systemctl daemon-reload
+#   sudo systemctl enable --now bevflow
+#   journalctl -u bevflow -f        # 첫 실행 때 관리자 임시 비밀번호가 여기 찍힙니다
+
+[Unit]
+Description=BevFlow 운영 관제 서버
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=bevflow
+Group=bevflow
+WorkingDirectory=/opt/bevflow
+EnvironmentFile=/etc/bevflow.env
+ExecStart=/usr/bin/node --disable-warning=ExperimentalWarning server/index.js
+Restart=always
+RestartSec=3
+TimeoutStopSec=10
+
+# 하드닝: 앱 디렉터리의 data/, backups/ 만 쓰기 허용
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/bevflow/data /opt/bevflow/backups
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

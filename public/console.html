@@ -1,1 +1,49 @@
-<!doctype html><title>console</title>
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>BevFlow 운영 관제</title>
+<link rel="stylesheet" href="/assets/app.css">
+</head>
+<body>
+<div class="boot" id="boot" role="status" aria-live="polite">
+  <div class="boot-in">
+    <span class="logo">Bev<i>Flow</i></span>
+    <div class="boot-bar"><i></i></div>
+    <span id="bootMsg">운영 데이터를 불러오는 중…</span>
+  </div>
+</div>
+
+<div class="app">
+  <header class="top">
+    <div class="brand"><span class="logo">Bev<i>Flow</i></span><span class="brand-sub">OPS CONSOLE</span></div>
+    <div class="page-title"><h1 id="pageTitle">관제 홈</h1><span id="pageDesc"></span></div>
+    <div class="top-right">
+      <span class="seg-label">권역</span>
+      <div class="seg" id="regionSeg" role="group" aria-label="권역 필터"></div>
+      <div class="clock" title="한국 표준시"><span class="live-dot" aria-hidden="true"></span><span id="clockDate"></span><b id="clockTime"></b></div>
+      <div class="pos-status" id="syncStatus"></div>
+    </div>
+  </header>
+
+  <aside class="side" aria-label="주 메뉴">
+    <button class="reset" id="btnRefresh" type="button" title="서버에서 최신 데이터를 다시 불러옵니다"></button>
+    <nav class="nav" id="nav"></nav>
+    <div class="side-foot">
+      <div class="pilot-box" id="pilotBox"></div>
+      <div class="sys" id="sysStatus"></div>
+      <div class="operator" id="operator"></div>
+    </div>
+  </aside>
+
+  <main id="main" tabindex="-1"></main>
+</div>
+
+<aside class="drawer" id="drawer" aria-label="발주 상세" aria-hidden="true"></aside>
+<div id="modalRoot"></div>
+<div id="tip" role="tooltip"></div>
+<div id="toasts" aria-live="polite"></div>
+<script src="/assets/console.js"></script>
+</body>
+</html>

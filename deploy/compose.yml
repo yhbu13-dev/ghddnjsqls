@@ -1,0 +1,32 @@
+# HTTPS까지 한 번에:  cd deploy && DOMAIN=ops.example.com docker compose up -d
+#   docker compose logs bevflow          # 첫 실행 때 관리자 임시 비밀번호
+#   docker compose exec bevflow npm run backup
+services:
+  bevflow:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    restart: unless-stopped
+    environment:
+      BEVFLOW_ADMIN_EMAIL: ${BEVFLOW_ADMIN_EMAIL:-}
+    volumes:
+      - bevflow-data:/app/data
+      - bevflow-backups:/app/backups
+    expose:
+      - "8080"
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on: [bevflow]
+    ports:
+      - "80:80"
+      - "443:443"
+    command: caddy reverse-proxy --from ${DOMAIN:?DOMAIN을 지정하세요} --to bevflow:8080
+    volumes:
+      - caddy-data:/data
+
+volumes:
+  bevflow-data:
+  bevflow-backups:
+  caddy-data:

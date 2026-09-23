@@ -1,7 +1,7 @@
 'use strict';
 // BevFlow 운영 서버 진입점
 //   node --disable-warning=ExperimentalWarning server/index.js
-// 환경 변수: PORT, BEVFLOW_DB, BEVFLOW_TRUST_PROXY, BEVFLOW_ADMIN_EMAIL, BEVFLOW_ADMIN_PASSWORD,
+// 환경 변수: PORT, HOST, BEVFLOW_DB, BEVFLOW_TRUST_PROXY, BEVFLOW_ADMIN_EMAIL, BEVFLOW_ADMIN_PASSWORD,
 //            BEVFLOW_LINK_SECRET, BEVFLOW_INGEST_SECRET, BEVFLOW_WEBHOOK_SECRET
 
 const path = require('node:path');
@@ -31,9 +31,10 @@ if (!ctx.db.get('SELECT 1 FROM users LIMIT 1')) {
 }
 
 const port = Number(env.PORT || 8080);
+const host = env.HOST || undefined; // 프록시 뒤에서는 127.0.0.1 권장
 const server = createServer(ctx, { trustProxy: env.BEVFLOW_TRUST_PROXY === '1' });
-server.listen(port, () => {
-  console.log(`BevFlow 운영 서버 실행 중 → http://localhost:${port}  (DB: ${file})`);
+server.listen(port, host, () => {
+  console.log(`BevFlow 운영 서버 실행 중 → http://${host || 'localhost'}:${port}  (DB: ${file})`);
   console.log(`외부 접속 주소 설정값: ${ctx.R.public_base_url} — 사장님·기사 링크가 이 주소로 만들어집니다`);
 });
 const stopJobs = jobs.start(ctx);

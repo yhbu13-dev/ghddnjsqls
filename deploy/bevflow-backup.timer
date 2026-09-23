@@ -1,0 +1,12 @@
+# /etc/systemd/system/bevflow-backup.timer
+#   sudo systemctl enable --now bevflow-backup.timer
+# 서버 시간대가 UTC라면 19:00 UTC = 04:00 KST
+[Unit]
+Description=BevFlow DB 매일 백업
+
+[Timer]
+OnCalendar=*-*-* 19:00:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

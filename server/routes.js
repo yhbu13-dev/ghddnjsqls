@@ -82,8 +82,7 @@ function buildRoutes(ctx) {
   r.get('/api/stores/:id/series', async (req, p, url) => {
     const days = num(url.searchParams.get('days') || 14, '기간', { min: 1, max: 60 });
     const sku = str(url.searchParams.get('sku'), 'SKU', { re: SKU_ID });
-    const since = Date.now() - days * T.DAY;
-    return { points: db.all('SELECT t, est AS E, band AS w FROM inv_snapshots WHERE store_id = ? AND sku_id = ? AND t >= ? ORDER BY t', [id(p.id), sku, since]) };
+    return snapshot.storeHistory(ctx, id(p.id), sku, days, Date.now());
   }, { role: 'viewer' });
 
   const act = (fn) => async (req, p) => {
@@ -440,10 +439,10 @@ function buildRoutes(ctx) {
       payMethod: p.pay_method, payFailReason: p.status === 'payfail' ? p.pay_fail_reason : null,
     };
   };
-  r.get('/api/owner/:token', async (req, p) => {
+  r.get('/api/owner/:token', async (req, p, url) => {
     const pr = ownerProposal(p.token);
     const now = Date.now();
-    orders.markOpened(ctx, pr.id, now);
+    if (url.searchParams.get('preview') !== '1') orders.markOpened(ctx, pr.id, now); // 운영자 미리보기는 열람으로 치지 않음
     return ownerView(db.get('SELECT * FROM proposals WHERE id = ?', [pr.id]), now);
   }, { public: true });
   r.post('/api/owner/:token/approve', async (req, p) => {
