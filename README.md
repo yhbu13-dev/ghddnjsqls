@@ -1,5 +1,7 @@
 # BevFlow 운영 관제
 
+[![CI](https://github.com/yhbu13-dev/ghddnjsqls/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/yhbu13-dev/ghddnjsqls/actions/workflows/ci.yml)
+
 식당 POS 판매 로그로 음료 재고를 추정해 발주를 제안하고, 사장님 승인 → 결제 → 당일 배송 → 티오더 정산까지 처리하는 **운영팀용 실사용 도구**입니다.
 
 - **운영 콘솔** (`/`, 로그인): 관제 홈 · 재고 관제 · 발주 관제 · 알림톡 모니터 · 배송 관제 · 파일럿 리포트 · 관리
@@ -31,9 +33,11 @@ npm test                   # 엔진·API·통합·단일 파일 테스트 18개
 npm run bundle             # 소스를 고친 뒤 dist/bevflow.js 다시 만들기 (안 하면 테스트가 알려 줌)
 ```
 
+PR과 `main` 푸시마다 GitHub Actions가 Node 22.13(최소 지원) · 22 · 24에서 같은 테스트를 돌립니다(`.github/workflows/ci.yml`).
+
 ## 실제 운영 시작 순서
 
-1. **서버 배포**: HTTPS 주소를 마련합니다(`deploy/` 참고). [관리 → 운영 설정 → 외부 접속 주소]에 그 주소를 넣어야 사장님·기사 링크가 올바르게 만들어집니다.
+1. **서버 배포**: 서울 리전 VM 한 대와 도메인을 준비하고, GitHub Actions의 **Deploy** 워크플로로 설치합니다(`deploy/README.md`). HTTPS 인증서·외부 접속 주소·첫 관리자 계정·매일 백업까지 자동으로 설정됩니다.
 2. **샘플 삭제**: 샘플 데이터를 넣었다면 [관리 → 데이터 연동 → 샘플 데이터 전체 삭제]로 지웁니다.
 3. **마스터 등록**: [관리]에서 SKU(박스 단가) → 권역(거점 좌표) → 기사 → 매장 순서로 등록합니다. 매장은 CSV로 한 번에 가져올 수 있습니다.
 4. **메뉴 매핑**: 티오더 POS 메뉴명을 SKU에 연결합니다. 세트 메뉴는 SKU별로 여러 줄로 매핑합니다. 매핑되지 않은 메뉴는 [SKU·메뉴 매핑 → 미매핑 POS 메뉴]에 쌓입니다.
@@ -76,7 +80,8 @@ public/               console · login · owner · driver 페이지 (빌드 없�
 scripts/              seed-sample · backup · create-admin · bundle(단일 파일 빌드)
 dist/bevflow.js       단일 실행 파일 (위 전부를 묶은 결과물 — 직접 고치지 말 것)
 test/                 node:test 테스트
-deploy/               systemd · Caddy(HTTPS) · Dockerfile
+deploy/               서버 설치 스크립트 · systemd · Caddy(HTTPS) · Dockerfile
+.github/workflows/    CI(테스트) · Deploy(운영 서버 배포)
 demo/index.html       투자자 미팅용 오프라인 데모 (서버 없이 열리는 단일 HTML)
 ```
 

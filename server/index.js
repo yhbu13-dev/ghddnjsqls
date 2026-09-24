@@ -2,7 +2,7 @@
 // BevFlow 운영 서버 진입점
 //   node --disable-warning=ExperimentalWarning server/index.js
 // 환경 변수: PORT, HOST, BEVFLOW_DB, BEVFLOW_TRUST_PROXY, BEVFLOW_ADMIN_EMAIL, BEVFLOW_ADMIN_PASSWORD,
-//            BEVFLOW_LINK_SECRET, BEVFLOW_INGEST_SECRET, BEVFLOW_WEBHOOK_SECRET
+//            BEVFLOW_LINK_SECRET, BEVFLOW_INGEST_SECRET, BEVFLOW_WEBHOOK_SECRET, BEVFLOW_PUBLIC_BASE_URL
 
 const path = require('node:path');
 const fs = require('node:fs');
@@ -10,6 +10,7 @@ const crypto = require('node:crypto');
 const { createContext } = require('./context');
 const { createServer } = require('./app');
 const auth = require('./auth');
+const settings = require('./settings');
 const jobs = require('./jobs');
 
 const env = process.env;
@@ -17,6 +18,12 @@ const file = env.BEVFLOW_DB || path.join(__dirname, '..', 'data', 'bevflow.db');
 if (file !== ':memory:') fs.mkdirSync(path.dirname(file), { recursive: true });
 
 const ctx = createContext({ file, env });
+
+// 배포 스크립트가 넘겨주는 외부 접속 주소 — 아직 한 번도 정하지 않았을 때만 초기값으로 저장 (이후엔 [운영 설정]이 우선)
+if (env.BEVFLOW_PUBLIC_BASE_URL && !ctx.db.get("SELECT 1 FROM settings WHERE key = 'public_base_url'")) {
+  settings.save(ctx.db, { public_base_url: env.BEVFLOW_PUBLIC_BASE_URL });
+  ctx.reload();
+}
 
 // 첫 실행: 관리자 계정 생성
 if (!ctx.db.get('SELECT 1 FROM users LIMIT 1')) {
