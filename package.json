@@ -1,0 +1,16 @@
+{
+  "name": "bevflow-ops",
+  "version": "1.0.0",
+  "private": true,
+  "description": "BevFlow 운영 관제 서버 — POS 판매 로그 기반 음료 재고 추정 · 발주 제안 · 승인 · 배송 · 정산",
+  "license": "UNLICENSED",
+  "engines": { "node": ">=22.13" },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning server/index.js",
+    "test": "node --disable-warning=ExperimentalWarning --test --test-timeout=60000 test/*.test.js",
+    "seed:sample": "node --disable-warning=ExperimentalWarning scripts/seed-sample.js",
+    "backup": "node --disable-warning=ExperimentalWarning scripts/backup.js",
+    "create-admin": "node --disable-warning=ExperimentalWarning scripts/create-admin.js",
+    "bundle": "node scripts/bundle.js"
+  }
+}

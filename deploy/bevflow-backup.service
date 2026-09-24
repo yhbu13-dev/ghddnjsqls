@@ -1,0 +1,11 @@
+# /etc/systemd/system/bevflow-backup.service — bevflow-backup.timer가 매일 실행
+[Unit]
+Description=BevFlow DB 백업
+
+[Service]
+Type=oneshot
+User=bevflow
+Group=bevflow
+WorkingDirectory=/opt/bevflow
+EnvironmentFile=/etc/bevflow.env
+ExecStart=/usr/bin/node /opt/bevflow/bevflow.js backup

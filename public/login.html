@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>BevFlow 로그인</title>
+<link rel="stylesheet" href="/assets/app.css">
+</head>
+<body class="m">
+<main class="m-wrap" style="max-width:380px;padding-top:12vh">
+  <div class="m-head"><span class="logo" style="font-size:24px">Bev<i>Flow</i></span><span class="brand-sub">OPS CONSOLE</span></div>
+  <form class="m-card" id="loginForm" autocomplete="on">
+    <h2>운영 콘솔 로그인</h2>
+    <label class="fld"><span>이메일</span><input id="email" type="email" autocomplete="username" required></label>
+    <label class="fld"><span>비밀번호</span><input id="password" type="password" autocomplete="current-password" required></label>
+    <div class="form-err" id="err"></div>
+    <button class="m-btn pri" type="submit">로그인</button>
+  </form>
+  <form class="m-card" id="changeForm" hidden>
+    <h2>비밀번호 변경</h2>
+    <p class="m-note">임시 비밀번호로 로그인했거나 변경을 요청했습니다. 10자 이상 새 비밀번호를 정해 주세요.</p>
+    <label class="fld"><span>현재(임시) 비밀번호</span><input id="cur" type="password" autocomplete="current-password" required></label>
+    <label class="fld"><span>새 비밀번호</span><input id="next" type="password" autocomplete="new-password" minlength="10" required></label>
+    <label class="fld"><span>새 비밀번호 확인</span><input id="next2" type="password" autocomplete="new-password" minlength="10" required></label>
+    <div class="form-err" id="err2"></div>
+    <button class="m-btn pri" type="submit">변경하고 다시 로그인</button>
+  </form>
+  <p class="m-note" style="text-align:center">계정이 없으면 관리자에게 요청하세요.</p>
+</main>
+<script src="/assets/login.js"></script>
+</body>
+</html>
