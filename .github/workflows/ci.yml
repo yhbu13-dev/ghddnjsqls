@@ -1,0 +1,36 @@
+# PR과 main 푸시마다 엔진 · API · 통합 · 단일 파일 테스트를 돌린다.
+# 외부 패키지가 없어 npm install 단계가 없다.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        # 22.13.0 = package.json engines 최소 버전 (node:sqlite 플래그 없이 동작하는 첫 22.x)
+        node: ['22.13.0', '22', '24']
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+          package-manager-cache: false   # 설치할 패키지가 없음
+      - run: node --version
+      # dist/bevflow.js가 소스와 다르면 test/bundle.test.js가 실패한다 → 로컬에서 npm run bundle 후 커밋
+      - run: npm test

@@ -1,5 +1,7 @@
 # BevFlow 운영 관제
 
+[![CI](https://github.com/yhbu13-dev/ghddnjsqls/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/yhbu13-dev/ghddnjsqls/actions/workflows/ci.yml)
+
 식당 POS 판매 로그로 음료 재고를 추정해 발주를 제안하고, 사장님 승인 → 결제 → 당일 배송 → 티오더 정산까지 처리하는 **운영팀용 실사용 도구**입니다.
 
 - **운영 콘솔** (`/`, 로그인): 관제 홈 · 재고 관제 · 발주 관제 · 알림톡 모니터 · 배송 관제 · 파일럿 리포트 · 관리
@@ -30,6 +32,8 @@ npm start                  # 소스 그대로 실행 (npm run seed:sample · bac
 npm test                   # 엔진·API·통합·단일 파일 테스트 18개
 npm run bundle             # 소스를 고친 뒤 dist/bevflow.js 다시 만들기 (안 하면 테스트가 알려 줌)
 ```
+
+PR과 `main` 푸시마다 GitHub Actions가 Node 22.13(최소 지원) · 22 · 24에서 같은 테스트를 돌립니다(`.github/workflows/ci.yml`).
 
 ## 실제 운영 시작 순서
 
