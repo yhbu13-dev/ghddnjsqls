@@ -8,4 +8,4 @@ User=bevflow
 Group=bevflow
 WorkingDirectory=/opt/bevflow
 EnvironmentFile=/etc/bevflow.env
-ExecStart=/usr/bin/node --disable-warning=ExperimentalWarning scripts/backup.js
+ExecStart=/usr/bin/node /opt/bevflow/bevflow.js backup

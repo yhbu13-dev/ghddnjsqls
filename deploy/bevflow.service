@@ -1,8 +1,8 @@
 # /etc/systemd/system/bevflow.service
 # 설치:
 #   sudo useradd --system --home /opt/bevflow --shell /usr/sbin/nologin bevflow
-#   sudo cp -r . /opt/bevflow && sudo mkdir -p /opt/bevflow/data /opt/bevflow/backups
-#   sudo chown -R bevflow:bevflow /opt/bevflow
+#   sudo mkdir -p /opt/bevflow/data /opt/bevflow/backups
+#   sudo cp dist/bevflow.js /opt/bevflow/ && sudo chown -R bevflow:bevflow /opt/bevflow
 #   sudo cp deploy/bevflow.env.example /etc/bevflow.env && sudo chmod 600 /etc/bevflow.env
 #   sudo cp deploy/bevflow.service /etc/systemd/system/ && sudo systemctl daemon-reload
 #   sudo systemctl enable --now bevflow
@@ -19,7 +19,7 @@ User=bevflow
 Group=bevflow
 WorkingDirectory=/opt/bevflow
 EnvironmentFile=/etc/bevflow.env
-ExecStart=/usr/bin/node --disable-warning=ExperimentalWarning server/index.js
+ExecStart=/usr/bin/node /opt/bevflow/bevflow.js
 Restart=always
 RestartSec=3
 TimeoutStopSec=10

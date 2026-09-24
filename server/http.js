@@ -88,14 +88,27 @@ function send(res, status, body, headers = {}) {
   res.end(payload);
 }
 
+// 단일 파일 빌드(dist/bevflow.js)는 public/ 파일을 이 맵에 넣어 둡니다
+function embeddedAsset(rel) {
+  const map = globalThis.__BEVFLOW_ASSETS__;
+  return map && Object.prototype.hasOwnProperty.call(map, rel) ? map[rel] : null;
+}
+
 function serveFile(res, root, rel, extraHeaders = {}) {
+  const type = MIME[path.extname(rel).toLowerCase()] || 'application/octet-stream';
+  const headers = { ...SECURITY_HEADERS, 'Content-Type': type, 'Cache-Control': type.startsWith('text/html') ? 'no-store' : 'public, max-age=300', ...extraHeaders };
+  const embedded = embeddedAsset(rel);
+  if (embedded != null) {
+    res.writeHead(200, headers);
+    res.end(embedded);
+    return true;
+  }
   const file = path.resolve(root, '.' + path.posix.normalize('/' + rel));
   if (!file.startsWith(path.resolve(root) + path.sep)) return false;
   let st;
   try { st = fs.statSync(file); } catch { return false; }
   if (!st.isFile()) return false;
-  const type = MIME[path.extname(file).toLowerCase()] || 'application/octet-stream';
-  res.writeHead(200, { ...SECURITY_HEADERS, 'Content-Type': type, 'Cache-Control': type.startsWith('text/html') ? 'no-store' : 'public, max-age=300', ...extraHeaders });
+  res.writeHead(200, headers);
   fs.createReadStream(file).pipe(res);
   return true;
 }

@@ -8,6 +8,7 @@ const args = process.argv.slice(2);
 const opt = (k, d) => { const i = args.indexOf('--' + k); return i >= 0 ? args[i + 1] : d; };
 const file = opt('db', process.env.BEVFLOW_DB || path.join(__dirname, '..', 'data', 'bevflow.db'));
 const outDir = opt('out', path.join(__dirname, '..', 'backups'));
+if (!fs.existsSync(file)) { console.error('DB 파일이 없습니다:', file); process.exit(1); }
 fs.mkdirSync(outDir, { recursive: true });
 const stamp = new Date(Date.now() + 9 * 3600e3).toISOString().replace(/[-:]/g, '').slice(0, 13).replace('T', '-');
 const out = path.join(outDir, `bevflow-${stamp}.db`);

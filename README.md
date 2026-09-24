@@ -9,20 +9,26 @@
 
 Node.js 22 내장 모듈만 쓰고 외부 패키지가 없습니다(`npm install` 불필요). 데이터는 SQLite 파일 하나에 저장하며, 50~500개 매장 파일럿은 작은 VM 한 대로 충분합니다.
 
-## 빠른 시작
+## 빠른 시작 — 파일 하나로 실행
+
+**`dist/bevflow.js`** 한 파일에 서버 · 화면 · 스크립트가 모두 들어 있습니다. 이 파일만 복사하면 됩니다(Node.js 22.13 이상).
 
 ```bash
-# Node.js 22.13 이상
-npm run seed:sample        # (선택) 50개 매장 · 6주 샘플 데이터 생성 — 실제 엔진으로 시뮬레이션
-npm start                  # http://localhost:8080
+node bevflow.js seed-sample      # (선택) 50개 매장 · 6주 샘플 데이터 — 실제 엔진으로 시뮬레이션
+node bevflow.js                  # 서버 실행 → http://localhost:8080
+node bevflow.js backup           # DB 온라인 백업 (backups/, 30일 보관)
+node bevflow.js create-admin ops@회사.kr 홍길동   # 관리자 추가·비밀번호 분실 시 재설정
+node bevflow.js help
 ```
 
-첫 실행 때 관리자 계정이 만들어지고, 터미널에 임시 비밀번호가 출력됩니다. 첫 로그인에서 비밀번호를 바꿔야 합니다. 이메일과 비밀번호를 미리 정하려면 `BEVFLOW_ADMIN_EMAIL`, `BEVFLOW_ADMIN_PASSWORD`를 설정하세요.
+데이터는 파일 옆 `data/bevflow.db`에 저장됩니다(`BEVFLOW_DB`로 변경). 첫 실행 때 관리자 계정이 만들어지고, 터미널에 임시 비밀번호가 출력됩니다. 첫 로그인에서 비밀번호를 바꿔야 합니다. 이메일과 비밀번호를 미리 정하려면 `BEVFLOW_ADMIN_EMAIL`, `BEVFLOW_ADMIN_PASSWORD`를 설정하세요.
+
+### 소스에서 개발할 때
 
 ```bash
-npm test                   # 엔진·API·통합 테스트 16개
-npm run backup             # DB 온라인 백업 (backups/, 30일 보관)
-npm run create-admin -- ops@회사.kr 홍길동   # 관리자 추가·비밀번호 분실 시 재설정
+npm start                  # 소스 그대로 실행 (npm run seed:sample · backup · create-admin 도 같음)
+npm test                   # 엔진·API·통합·단일 파일 테스트 18개
+npm run bundle             # 소스를 고친 뒤 dist/bevflow.js 다시 만들기 (안 하면 테스트가 알려 줌)
 ```
 
 ## 실제 운영 시작 순서
@@ -67,7 +73,8 @@ server/
   engine/             inventory · proposals · orders · delivery · settlement · messages
   adapters/           notifier(console/webhook) · payment(invoice/sandbox_card)
 public/               console · login · owner · driver 페이지 (빌드 없음)
-scripts/              seed-sample · backup · create-admin
+scripts/              seed-sample · backup · create-admin · bundle(단일 파일 빌드)
+dist/bevflow.js       단일 실행 파일 (위 전부를 묶은 결과물 — 직접 고치지 말 것)
 test/                 node:test 테스트
 deploy/               systemd · Caddy(HTTPS) · Dockerfile
 demo/index.html       투자자 미팅용 오프라인 데모 (서버 없이 열리는 단일 HTML)

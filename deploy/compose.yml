@@ -1,6 +1,6 @@
 # HTTPS까지 한 번에:  cd deploy && DOMAIN=ops.example.com docker compose up -d
 #   docker compose logs bevflow          # 첫 실행 때 관리자 임시 비밀번호
-#   docker compose exec bevflow npm run backup
+#   docker compose exec bevflow node bevflow.js backup
 services:
   bevflow:
     build:

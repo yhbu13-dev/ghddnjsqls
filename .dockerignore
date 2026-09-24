@@ -1,9 +1,2 @@
-.git
-node_modules
-data
-backups
-*.db
-*.db-wal
-*.db-shm
-test
-docs
+*
+!dist/bevflow.js

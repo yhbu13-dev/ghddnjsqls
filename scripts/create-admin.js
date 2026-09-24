@@ -2,12 +2,16 @@
 // 관리자 계정 추가 / 비밀번호 분실 시 재설정
 //   npm run create-admin -- <이메일> <이름>   → 임시 비밀번호 출력 (첫 로그인 때 변경)
 const path = require('node:path');
+const fs = require('node:fs');
 const crypto = require('node:crypto');
 const { createContext } = require('../server/context');
 const auth = require('../server/auth');
 const [email, name = '관리자'] = process.argv.slice(2);
-if (!email) { console.error('사용법: npm run create-admin -- <이메일> [이름]'); process.exit(1); }
-const ctx = createContext({ file: process.env.BEVFLOW_DB || path.join(__dirname, '..', 'data', 'bevflow.db') });
+const cli = globalThis.__BEVFLOW_CLI__ ? globalThis.__BEVFLOW_CLI__ + ' create-admin' : 'npm run create-admin --';
+if (!email) { console.error(`사용법: ${cli} <이메일> [이름]`); process.exit(1); }
+const file = process.env.BEVFLOW_DB || path.join(__dirname, '..', 'data', 'bevflow.db');
+if (file !== ':memory:') fs.mkdirSync(path.dirname(file), { recursive: true });
+const ctx = createContext({ file });
 const temp = crypto.randomBytes(9).toString('base64url');
 const cur = ctx.db.get('SELECT id FROM users WHERE email = ?', [email]);
 if (cur) {

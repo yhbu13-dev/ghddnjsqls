@@ -2,6 +2,8 @@
 
 운영팀(관제 담당)이 매일 보는 순서와, 콘솔 경보별 대응입니다. 시각은 기본 설정 기준이며 [관리 → 운영 설정]에서 바꿀 수 있습니다.
 
+명령은 단일 파일(`bevflow.js`) 기준입니다. 소스 폴더에서 돌릴 때는 `node bevflow.js 명령` 대신 `npm run 명령`을 씁니다.
+
 ## 하루 흐름
 
 | 시각 | 시스템이 하는 일 | 운영자가 할 일 |
@@ -52,7 +54,7 @@
 ## 백업 · 복구
 
 ```bash
-npm run backup                         # backups/bevflow-YYYYMMDD-HHMM.db (실행 중에도 안전)
+node bevflow.js backup                 # backups/bevflow-YYYYMMDD-HHMM.db (실행 중에도 안전)
 # 복구: 서버를 멈추고 파일을 교체
 systemctl stop bevflow && rm -f data/bevflow.db-wal data/bevflow.db-shm && cp backups/bevflow-….db data/bevflow.db && systemctl start bevflow
 ```
@@ -60,7 +62,7 @@ systemctl stop bevflow && rm -f data/bevflow.db-wal data/bevflow.db-shm && cp ba
 `deploy/bevflow-backup.timer`(systemd)나 아래 크론으로 매일 백업하고, 백업 폴더를 다른 저장소(예: 오브젝트 스토리지)로 복사해 두세요.
 
 ```cron
-0 4 * * * cd /opt/bevflow && /usr/bin/npm run backup >> /var/log/bevflow-backup.log 2>&1
+0 4 * * * /usr/bin/node /opt/bevflow/bevflow.js backup >> /var/log/bevflow-backup.log 2>&1
 ```
 
 ## 보안
@@ -78,4 +80,4 @@ systemctl stop bevflow && rm -f data/bevflow.db-wal data/bevflow.db-shm && cp ba
 | 발주 제안이 안 나옴 | 매장이 **운영 중**인지, 초기 잔량이 들어갔는지, 보류·만료 후 재제안 대기 중이 아닌지, 이미 진행 중인 발주가 있는지 |
 | 재고가 줄지 않음 | POS 메뉴가 매핑돼 있는지([미매핑 POS 메뉴]), 매장의 티오더 매장 ID가 맞는지 |
 | 배차가 안 됨 | 오늘이 배송 요일인지, 권역에 **운영 중** 기사가 있는지. [지금 배차 실행]으로 수동 실행 |
-| 비밀번호 분실 | 서버에서 `npm run create-admin -- 이메일` |
+| 비밀번호 분실 | 서버에서 `node bevflow.js create-admin 이메일` |

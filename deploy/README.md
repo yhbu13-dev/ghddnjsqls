@@ -2,13 +2,15 @@
 
 사장님·기사 링크가 카카오톡에서 열려야 하므로 **HTTPS 도메인**이 필요합니다(예: `ops.회사.kr`). 50~500개 매장 파일럿은 1 vCPU · 1GB 메모리 VM 한 대로 충분합니다.
 
+서버에 올릴 것은 **`dist/bevflow.js` 파일 하나**입니다(`npm run bundle`로 소스에서 다시 만들 수 있습니다). 데이터는 그 파일 옆 `data/`, 백업은 `backups/`에 쌓입니다.
+
 ## A. VM + systemd + Caddy (권장)
 
 ```bash
 # Node.js 22.13 이상, Caddy 2 설치 후
 sudo useradd --system --home /opt/bevflow --shell /usr/sbin/nologin bevflow
-sudo cp -r . /opt/bevflow && sudo mkdir -p /opt/bevflow/data /opt/bevflow/backups
-sudo chown -R bevflow:bevflow /opt/bevflow
+sudo mkdir -p /opt/bevflow/data /opt/bevflow/backups
+sudo cp dist/bevflow.js /opt/bevflow/ && sudo chown -R bevflow:bevflow /opt/bevflow
 
 sudo cp deploy/bevflow.env.example /etc/bevflow.env && sudo chmod 600 /etc/bevflow.env
 sudo cp deploy/bevflow.service deploy/bevflow-backup.service deploy/bevflow-backup.timer /etc/systemd/system/
@@ -29,7 +31,7 @@ sudo systemctl reload caddy
 업데이트:
 
 ```bash
-sudo rsync -a --exclude data --exclude backups ./ /opt/bevflow/ && sudo chown -R bevflow:bevflow /opt/bevflow
+sudo cp dist/bevflow.js /opt/bevflow/ && sudo chown bevflow:bevflow /opt/bevflow/bevflow.js
 sudo systemctl restart bevflow     # DB 스키마는 시작할 때 자동으로 올라갑니다
 ```
 
@@ -39,10 +41,10 @@ sudo systemctl restart bevflow     # DB 스키마는 시작할 때 자동으로 
 cd deploy
 DOMAIN=ops.example.com docker compose up -d --build
 docker compose logs bevflow | grep -A3 관리자     # 관리자 임시 비밀번호
-docker compose exec bevflow npm run backup
+docker compose exec bevflow node bevflow.js backup
 ```
 
-데이터는 `bevflow-data` 볼륨, 백업은 `bevflow-backups` 볼륨에 남습니다. 이미지만 쓰려면 저장소 루트에서 `docker build -f deploy/Dockerfile -t bevflow .`
+데이터는 `bevflow-data` 볼륨, 백업은 `bevflow-backups` 볼륨에 남습니다. 이미지에는 `bevflow.js` 하나만 들어갑니다. 이미지만 쓰려면 저장소 루트에서 `docker build -f deploy/Dockerfile -t bevflow .`
 
 ## 배포 뒤 꼭 할 것
 
