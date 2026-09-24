@@ -1,0 +1,124 @@
+# 운영 서버 배포 — Actions 탭 → Deploy → Run workflow
+# 테스트를 통과한 dist/bevflow.js를 SSH로 올리고 deploy/setup-server.sh로 설치·재시작한 뒤 HTTPS 헬스체크까지 확인한다.
+#
+# 저장소 Settings → Secrets and variables → Actions
+#   Variables  DEPLOY_HOST         서버 IP 또는 호스트명
+#              DEPLOY_USER         비밀번호 없이 sudo 되는 SSH 계정 (AWS Lightsail·EC2 Ubuntu: ubuntu)
+#              DEPLOY_DOMAIN       서비스 도메인 (예: ops.example.com) — A 레코드가 서버 IP를 가리켜야 함
+#              DEPLOY_KNOWN_HOSTS  (권장) 서버 호스트 키. 비우면 첫 배포 로그에 값이 찍힘
+#              DEPLOY_SSH_PORT     (선택) 기본 22
+#   Secrets    DEPLOY_SSH_KEY      그 계정의 SSH 개인 키 전체 (-----BEGIN … KEY----- 포함)
+#              DEPLOY_ADMIN_EMAIL / DEPLOY_ADMIN_PASSWORD  (첫 배포만) 첫 관리자 계정, 비밀번호 10자 이상
+# 자세한 순서: deploy/README.md
+name: Deploy
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: production
+      url: ${{ steps.health.outputs.url }}
+    env:
+      DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+      DEPLOY_DOMAIN: ${{ vars.DEPLOY_DOMAIN }}
+      DEPLOY_SSH_PORT: ${{ vars.DEPLOY_SSH_PORT || '22' }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          package-manager-cache: false
+
+      - name: 테스트 (실패하면 배포하지 않음)
+        run: npm test
+
+      - name: 배포 설정 확인
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          missing=0
+          for v in DEPLOY_HOST DEPLOY_USER DEPLOY_DOMAIN; do
+            if [ -z "${!v}" ]; then echo "::error::저장소 변수 $v 가 없습니다 (Settings → Secrets and variables → Actions → Variables)"; missing=1; fi
+          done
+          if [ -z "$DEPLOY_SSH_KEY" ]; then echo "::error::저장소 시크릿 DEPLOY_SSH_KEY 가 없습니다 (… → Secrets)"; missing=1; fi
+          exit "$missing"
+
+      - name: SSH 준비
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ vars.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          if [ -n "$DEPLOY_KNOWN_HOSTS" ]; then
+            printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          else
+            ssh-keyscan -T 15 -p "$DEPLOY_SSH_PORT" "$DEPLOY_HOST" 2>/dev/null > ~/.ssh/known_hosts
+            [ -s ~/.ssh/known_hosts ] || { echo "::error::$DEPLOY_HOST:$DEPLOY_SSH_PORT 에 SSH로 접속할 수 없습니다 (방화벽·IP 확인)"; exit 1; }
+            echo "::warning::DEPLOY_KNOWN_HOSTS 변수가 없어 이번 접속에서 받은 호스트 키를 그대로 믿었습니다. 아래 줄들을 DEPLOY_KNOWN_HOSTS 변수에 넣으면 이후 배포가 서버 위장을 막습니다."
+            cat ~/.ssh/known_hosts
+          fi
+          cat > ~/.ssh/config <<EOF
+          Host bevflow
+            HostName $DEPLOY_HOST
+            User $DEPLOY_USER
+            Port $DEPLOY_SSH_PORT
+            IdentityFile ~/.ssh/deploy_key
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+            ServerAliveInterval 15
+          EOF
+          ssh bevflow 'sudo -n true' || { echo "::error::$DEPLOY_USER 계정이 비밀번호 없이 sudo를 쓸 수 없습니다"; exit 1; }
+
+      - name: 서버에 설치
+        env:
+          DEPLOY_ADMIN_EMAIL: ${{ secrets.DEPLOY_ADMIN_EMAIL }}
+          DEPLOY_ADMIN_PASSWORD: ${{ secrets.DEPLOY_ADMIN_PASSWORD }}
+        run: |
+          umask 077
+          mkdir bundle
+          cp dist/bevflow.js deploy/setup-server.sh deploy/bevflow.service deploy/bevflow-backup.service deploy/bevflow-backup.timer deploy/Caddyfile bundle/
+          {
+            printf 'BEVFLOW_DOMAIN=%q\n' "$DEPLOY_DOMAIN"
+            if [ -n "$DEPLOY_ADMIN_EMAIL" ]; then printf 'BEVFLOW_ADMIN_EMAIL=%q\n' "$DEPLOY_ADMIN_EMAIL"; fi
+            if [ -n "$DEPLOY_ADMIN_PASSWORD" ]; then printf 'BEVFLOW_ADMIN_PASSWORD=%q\n' "$DEPLOY_ADMIN_PASSWORD"; fi
+          } > bundle/deploy.env
+          tar czf bundle.tgz -C bundle .
+          rm -rf bundle
+          ssh bevflow 'rm -rf /tmp/bevflow-deploy && mkdir -m 700 /tmp/bevflow-deploy'
+          scp -q bundle.tgz bevflow:/tmp/bevflow-deploy/
+          rm -f bundle.tgz
+          ssh bevflow 'cd /tmp/bevflow-deploy && tar xzf bundle.tgz && rm -f bundle.tgz && sudo bash setup-server.sh /tmp/bevflow-deploy; rc=$?; sudo rm -rf /tmp/bevflow-deploy; exit $rc'
+
+      - name: 외부 접속 확인 (HTTPS)
+        id: health
+        run: |
+          url="https://$DEPLOY_DOMAIN"
+          for _ in $(seq 1 24); do
+            if curl -fsS --max-time 10 "$url/healthz"; then
+              echo
+              echo "url=$url" >> "$GITHUB_OUTPUT"
+              echo "### 배포 완료: $url" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::$url/healthz 에 접속할 수 없습니다 — 도메인 A 레코드가 $DEPLOY_HOST 인지, 방화벽에서 80·443이 열렸는지 확인하세요 (서버: sudo journalctl -u caddy -n 50)"
+          exit 1
+
+      - name: SSH 키 정리
+        if: always()
+        run: rm -f ~/.ssh/deploy_key
