@@ -99,6 +99,11 @@ test('카카오톡 챗봇: 연결 코드 → 버튼만으로 담기 → 확인 �
   assert.equal(r.version, '2.0');
   assert.match(r.template.outputs[0].textCard.title, /매장 연결/);
   assert.match(r.template.outputs[0].textCard.buttons[0].webLinkUrl, /^https:\/\/ops\.example\.com\/k\/link\?t=/);
+  assert.equal(r.template.outputs[0].textCard.buttons.length, 1, '고객용 주소가 없으면 연결 버튼만');
+  require('../server/settings').save(db, { kakao_guest_url: 'https://mall.example.com/board' }); ctx.reload();
+  r = await bot(ctx, now, null, '', 'guest-1');
+  assert.match(r.template.outputs[0].textCard.description, /일반 주문·배송 문의/);
+  assert.deepEqual(r.template.outputs[0].textCard.buttons[1], { label: '쇼핑몰 문의하기', action: 'webLink', webLinkUrl: 'https://mall.example.com/board' });
 
   r = await bot(ctx, now, null, '123456');
   assert.match(r.template.outputs[0].simpleText.text, /올바르지 않습니다/);

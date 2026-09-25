@@ -48,6 +48,8 @@ const SPEC = {
   kakao_rest_key: { def: '', type: 'text', re: /^[A-Za-z0-9]{0,64}$/, label: '카카오 REST API 키 (카카오 로그인)' },
   kakao_channel_id: { def: '', type: 'text', re: /^(_[A-Za-z0-9]{2,20})?$/, label: '카카오톡 채널 ID (예: _xaBcD)' },
   kakao_block_id: { def: '', type: 'text', re: /^[a-f0-9]{0,40}$/, label: '오픈빌더 발주 블록 ID' },
+  kakao_guest_label: { def: '쇼핑몰 문의하기', type: 'text', re: /^[^<>]{0,14}$/, label: '거래처가 아닌 고객용 버튼 이름 (14자)' },
+  kakao_guest_url: { def: '', type: 'url', label: '거래처가 아닌 고객용 버튼 주소 (쇼핑몰·고객센터, 비우면 버튼 없음)' },
   sheet_time: { def: '09:00', type: 'time', label: '정기 발주서 준비 시각' },
   alert_unconfirmed: { def: '11:30', type: 'time', label: '관리자 알림: 미확정 발주서' },
   alert_pick: { def: '11:50', type: 'time', label: '관리자 알림: 오늘 출고 합계' },

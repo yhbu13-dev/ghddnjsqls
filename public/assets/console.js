@@ -1336,7 +1336,7 @@
     ['배송', ['driver_capacity', 'drive_min', 'stop_min']],
     ['정산·지표', ['fee_rate', 'settle_lag_days', 'pilot_start', 'target_approval', 'target_stop', 'target_error']],
     ['연동', ['pay_method', 'notifier', 'webhook_url', 'public_base_url']],
-    ['점주 직접 발주 · 카카오', ['order_min_amount', 'order_link_hours', 'kakao_channel_id', 'kakao_block_id', 'kakao_rest_key']],
+    ['점주 직접 발주 · 카카오', ['order_min_amount', 'order_link_hours', 'kakao_channel_id', 'kakao_block_id', 'kakao_rest_key', 'kakao_guest_label', 'kakao_guest_url']],
     ['정기 발주서 · 관리자 알림', ['sheet_time', 'alert_unconfirmed', 'alert_pick', 'alert_delivery']],
   ];
   function admSettings(d) {

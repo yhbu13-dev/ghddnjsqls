@@ -149,8 +149,13 @@ async function skill(ctx, body, now = Date.now()) {
       } catch (e) { return U.res([U.text(e.message)]); }
     }
     const t = tokens.sign(ctx.secret, { k: 'kl', id: 0, u: userKey, e: now + 30 * 60e3 });
-    return U.res([U.card('매장 연결이 필요해요', '처음 한 번만 매장을 연결하면 그다음부터는 버튼만 눌러 발주할 수 있어요.\n\n운영팀이 알려 드린 연결 코드 6자리를 이 채팅방에 보내거나, 아래 버튼을 눌러 주세요.',
-      [U.link('매장 연결하기', `${R.public_base_url}/k/link?t=${encodeURIComponent(t)}`)])]);
+    // 쇼핑몰 채널처럼 일반 고객도 들어오는 채널이면: 거래처는 연결, 일반 고객은 쇼핑몰·고객센터로 안내
+    const guest = R.kakao_guest_url ? [U.link(R.kakao_guest_label || '쇼핑몰 문의하기', R.kakao_guest_url)] : [];
+    return U.res([U.card(guest.length ? '거래처 발주 안내' : '매장 연결이 필요해요',
+      (guest.length ? '거래처 사장님은 처음 한 번만 매장을 연결하면 그다음부터 버튼만 눌러 발주할 수 있어요.' : '처음 한 번만 매장을 연결하면 그다음부터는 버튼만 눌러 발주할 수 있어요.')
+        + '\n\n운영팀이 알려 드린 연결 코드 6자리를 이 채팅방에 보내거나, 아래 버튼을 눌러 주세요.'
+        + (guest.length ? '\n\n일반 주문·배송 문의는 아래 문의 버튼을 이용해 주세요.' : ''),
+      [U.link('매장 연결하기', `${R.public_base_url}/k/link?t=${encodeURIComponent(t)}`), ...guest])]);
   }
 
   if (!x) x = (UTTER.find(([re]) => re.test(utter)) || [null, { s: 'home' }])[1];
