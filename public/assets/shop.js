@@ -21,6 +21,9 @@
   let done = null;              // 방금 접수된 발주
   let ref = null;               // 중복 접수 방지 키
   let busy = false;
+  let grp = 'ALL';              // 매대·소분류 필터
+  let onlyChg = false;          // 발주서: 바뀐 줄만
+  let showMore = false;         // 발주서: 발주서에 없는 품목 펼치기
   const timers = {};
   const saving = new Set();     // 서버에 아직 저장되지 않은 수량 변경
 
@@ -41,6 +44,12 @@
   const P = (id) => V.products.find((p) => p.id === id);
   const cartLines = () => Object.entries(qty).filter(([id, n]) => n > 0 && P(id)).map(([id, n]) => ({ ...P(id), qty: n }));
   const totals = () => { const l = cartLines(); return { count: l.length, amount: l.reduce((a, x) => a + x.qty * x.price, 0) }; };
+  // 발주서 방식(사우나): 지난 발주 수량과 비교한 상태
+  const baseOf = (id) => (V.sheet && V.sheet.base[id]) || 0;
+  const chgOf = (p) => { const b = baseOf(p.id), n = qty[p.id] || 0; return !b && n ? 'new' : b && !n ? 'off' : n > b ? 'up' : n < b ? 'dn' : ''; };
+  const CHG = { up: '늘림', dn: '줄임', off: '뺌', new: '추가' };
+  const changed = () => V.products.filter((p) => chgOf(p));
+  const groupsIn = (list) => [...new Set(list.map((p) => p.grp).filter(Boolean))];
 
   // 수량 변경 → 화면 즉시 반영, 서버 장바구니는 잠시 뒤 저장 (카톡 채팅과 공유)
   function setQty(id, n) {
@@ -61,6 +70,7 @@
       <button class="s-hbtn" data-view="${view === 'orders' ? 'shop' : 'orders'}">${view === 'orders' ? '← 발주하기' : '📦 발주 내역'}</button>
     </header>`;
     if (view === 'orders') { app.innerHTML = head + ordersHtml(); return; }
+    if (V.mode === 'sheet') return renderSheet(head);
 
     const cats = V.categories;
     const tabs = `<nav class="s-tabs" aria-label="품목">${cats.map((c) => {
@@ -83,10 +93,13 @@
     if (!cur) body = '<div class="empty">발주할 수 있는 품목이 없어요. 운영팀에 문의해 주세요.</div>';
     else {
       let list = V.products.filter((p) => p.category === tab);
+      const gs = groupsIn(list);
+      if (gs.length > 1) body = `<div class="s-gchips">${['ALL', ...gs].map((g) => `<button class="s-gc ${grp === g ? 'on' : ''}" data-grp="${esc(g)}">${g === 'ALL' ? `전체 ${list.length}` : `${esc(g)} ${list.filter((p) => p.grp === g).length}`}</button>`).join('')}</div>`;
+      if (grp !== 'ALL') list = list.filter((p) => p.grp === grp);
       if (quick === 'fav') list = list.filter((p) => p.freq > 0).sort((a, b) => b.freq - a.freq);
       if (q.trim()) list = list.filter((p) => (p.name + ' ' + p.spec).toLowerCase().includes(q.trim().toLowerCase()));
-      body = list.length ? `<div class="s-list">${list.map(itemHtml).join('')}</div>`
-        : `<div class="empty">${quick === 'fav' ? '아직 자주 시킨 품목이 없어요' : '찾는 품목이 없어요'}</div>`;
+      body = (body || '') + (list.length ? `<div class="s-list">${list.map(itemHtml).join('')}</div>`
+        : `<div class="empty">${quick === 'fav' ? '아직 자주 시킨 품목이 없어요' : '찾는 품목이 없어요'}</div>`);
     }
     const lockInfo = cats.filter((c) => c.status !== 'approved');
     const more = lockInfo.length ? `<button class="s-more" data-act="access">➕ 다른 품목도 발주하고 싶어요 <small>${lockInfo.map((c) => `${c.icon} ${esc(c.short)}${c.status === 'pending' ? ' (승인 대기)' : ''}`).join(' · ')}</small></button>` : '';
@@ -98,6 +111,57 @@
 
     app.innerHTML = head + banner + notice + tabs + quickRow + body + more + (V.channelChatUrl ? `<p class="m-note s-foot">문의는 <a href="${esc(V.channelChatUrl)}" target="_blank" rel="noopener">카카오톡 채널 채팅</a>으로 보내 주세요.</p>` : '') + bar;
     app.classList.toggle('has-bar', !!t.count);
+  }
+
+  // ── 발주서 화면 (사우나 매점: 매대 순서 · 지난번 수량이 채워진 발주서에서 바뀐 줄만 고치기) ──
+  function renderSheet(head) {
+    const t = totals(), d = V.delivery, sh = V.sheet;
+    const ch = changed(), cnt = { up: 0, dn: 0, off: 0, new: 0 };
+    ch.forEach((p) => { cnt[chgOf(p)]++; });
+    const today = sh.preparedAt && sh.preparedAt >= Date.now() - (Date.now() + KST) % 864e5;
+    const banner = `<div class="s-banner sheet"><span class="s-bi">📋</span><div>${today ? `<b>오늘 ${sh.standing ? esc(sh.standing) + ' ' : ''}정기 발주서</b>` : '<b>발주서</b>'}${sh ? ` · 지난번(${esc(sh.date.slice(5).replace('-', '/'))}) 기준` : ''}
+      <small>${esc(d.cutoff)}까지 확정하면 <b>${esc(d.word)} 오후</b> 도착 · 바뀐 것만 고쳐 주세요</small></div></div>`;
+    if (!t.count && !ch.length) {
+      app.innerHTML = head + banner + `<section class="m-card m-done"><div class="m-lead">아직 채워진 발주서가 없어요</div>
+        ${sh ? `<p class="m-note">지난번(${esc(sh.code)}) 발주 수량으로 채운 뒤 바뀐 것만 고치면 돼요.</p><button class="m-btn pri" data-act="loadsheet">📋 지난 발주서 불러오기</button>` : '<p class="m-note">첫 발주는 아래에서 품목을 골라 주세요.</p>'}</section>`
+        + (sh ? '' : sheetRows()) + barHtml(t, ch.length);
+      app.classList.toggle('has-bar', !!t.count);
+      return;
+    }
+    const zones = groupsIn(V.products);
+    const chips = `<div class="s-chg">${ch.length ? `<span>바뀐 줄 <b>${ch.length}</b></span>` : '<span>지난번과 같아요</span>'}${['up', 'dn', 'off', 'new'].filter((k) => cnt[k]).map((k) => `<span class="c-${k}">${CHG[k]} ${cnt[k]}</span>`).join('')}</div>
+      <div class="s-gchips">${['ALL', ...zones].map((g) => `<button class="s-gc ${grp === g && !onlyChg ? 'on' : ''}" data-grp="${esc(g)}">${g === 'ALL' ? '전체 매대' : esc(g)}</button>`).join('')}<button class="s-gc ${onlyChg ? 'on' : ''}" data-chg="1">✏️ 바뀐 것만 ${ch.length}</button></div>`;
+    app.innerHTML = head + banner + `<div class="s-stick">${chips}</div>` + sheetRows() + barHtml(t, ch.length);
+    app.classList.toggle('has-bar', true);
+  }
+  function sheetRows() {
+    const inSheet = (p) => baseOf(p.id) || qty[p.id];
+    const pass = (p) => (grp === 'ALL' || p.grp === grp) && (!onlyChg || chgOf(p));
+    const zones = groupsIn(V.products);
+    const zoneOf = (p) => p.grp || '기타';
+    const order = [...zones, '기타'];
+    let html = order.map((z) => {
+      const l = V.products.filter((p) => zoneOf(p) === z && inSheet(p) && pass(p));
+      return l.length ? `<div class="s-zh">${esc(z)} <span>${l.length}줄</span></div><div class="s-rows">${l.map(rowHtml).join('')}</div>` : '';
+    }).join('');
+    if (!html) html = `<div class="empty">${onlyChg ? '바뀐 줄이 없어요. 지난번 그대로예요.' : '이 매대에는 발주서 품목이 없어요.'}</div>`;
+    const extra = V.products.filter((p) => !inSheet(p) && (grp === 'ALL' || p.grp === grp));
+    if (!onlyChg && extra.length) html += showMore ? `<div class="s-zh">➕ 발주서에 없는 품목 <span>${extra.length}종</span></div><div class="s-rows">${extra.map(rowHtml).join('')}</div>`
+      : `<button class="s-more" data-act="more">➕ 발주서에 없는 품목 ${extra.length}종 보기</button>`;
+    return html;
+  }
+  function rowHtml(p) {
+    const n = qty[p.id] || 0, c = chgOf(p), b = baseOf(p.id);
+    return `<div class="s-row ${c ? 'c-' + c : ''}"><div class="s-rn"><b>${esc(p.name)}${c ? `<i>${CHG[c]}</i>` : ''}</b><small>${esc(p.spec || '')} · ${won(p.price)}/${esc(p.u)}${c && c !== 'new' ? ` · 지난번 ${b}` : ''}</small></div>${c === 'off'
+      ? `<button class="s-revive" data-set="${esc(p.id)}" data-n="${b}">되살리기</button>`
+      : n ? `<div class="s-step sm" role="group" aria-label="${esc(p.name)} 수량"><button data-d="-1" data-id="${esc(p.id)}" aria-label="하나 줄이기">−</button><output>${n}</output><button data-d="1" data-id="${esc(p.id)}" aria-label="하나 늘리기">+</button></div>`
+        : `<button class="s-revive" data-d="1" data-id="${esc(p.id)}">+ 추가</button>`}</div>`;
+  }
+  function barHtml(t, nChg) {
+    if (!t.count) return '';
+    const short = Math.max(0, V.minAmount - t.amount);
+    return `<div class="s-bar"><div class="s-bar-in"><button class="s-cartsum" data-act="cart"><b>📋 ${t.count}품목 · ${nChg ? `바뀐 줄 ${nChg}` : '지난번 그대로'}</b><span>${won(t.amount)}</span>${short ? `<small>최소 발주까지 ${won(short)}</small>` : ''}</button>
+      <button class="s-go" data-act="cart" ${short ? 'disabled' : ''}>확정하기</button></div></div>`;
   }
 
   function itemHtml(p) {
@@ -157,8 +221,14 @@
     if (!ref) ref = 'web-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
     const byCat = {};
     lines.forEach((l) => { (byCat[l.category] = byCat[l.category] || []).push(l); });
-    sheet(`<div class="s-sh"><h2>발주 확인</h2><button class="xbtn" data-close="1" aria-label="닫기">✕</button></div>
-      <div class="s-sb">${Object.entries(byCat).map(([c, ls]) => `<div class="sec-h">${ICON[c]} ${esc((V.categories.find((x) => x.id === c) || {}).short || '')}</div>${ls.map((l) => `
+    const diffOnly = V.mode === 'sheet' && V.sheet;
+    const ch = diffOnly ? changed() : [];
+    const listHtml = diffOnly
+      ? (ch.length ? `<p class="m-note" style="margin:0">지난번과 달라진 ${ch.length}줄만 보여 드려요. 나머지 ${lines.length - ch.filter((p) => qty[p.id]).length}품목은 지난번과 같아요.</p>${ch.map((p) => `<div class="m-line"><div class="nm">${esc(p.name)} <span class="s-tag c-${chgOf(p)}">${CHG[chgOf(p)]}</span></div><b>${baseOf(p.id)} → ${qty[p.id] || 0}${esc(p.u)}</b></div>`).join('')}`
+        : `<p class="m-note" style="margin:0">지난번(${esc(V.sheet.code)})과 똑같이 ${lines.length}품목을 발주해요.</p>`)
+      : null;
+    sheet(`<div class="s-sh"><h2>${diffOnly ? '이대로 확정할까요?' : '발주 확인'}</h2><button class="xbtn" data-close="1" aria-label="닫기">✕</button></div>
+      <div class="s-sb">${listHtml != null ? listHtml : Object.entries(byCat).map(([c, ls]) => `<div class="sec-h">${ICON[c]} ${esc((V.categories.find((x) => x.id === c) || {}).short || '')}</div>${ls.map((l) => `
         <div class="m-line"><div class="nm">${esc(l.name)}<small>${won(l.price)} × ${l.qty} = ${won(l.price * l.qty)}</small></div>
         <div class="s-step sm"><button data-d="-1" data-id="${esc(l.id)}" aria-label="하나 빼기">−</button><output>${l.qty}</output><button data-d="1" data-id="${esc(l.id)}" aria-label="하나 더하기">+</button></div></div>`).join('')}`).join('')}
         <div class="m-total"><span>합계 · ${t.count}품목</span><span>${won(t.amount)}</span></div>
@@ -187,6 +257,12 @@
   async function act(a, el) {
     if (a === 'cart') return cartSheet();
     if (a === 'access') return accessSheet();
+    if (a === 'more') { showMore = true; render(); return; }
+    if (a === 'loadsheet') {
+      el.disabled = true;
+      try { load(await call('POST', '/sheet', {})); render(); toast('지난 발주 수량으로 채웠어요. 바뀐 것만 고쳐 주세요'); } catch (e) { toast(e.message, true); el.disabled = false; }
+      return;
+    }
     if (a === 'reorder') {
       try { load(await call('POST', '/reorder', {})); view = 'shop'; render(); toast('지난 발주 품목을 담았어요'); cartSheet(); } catch (e) { toast(e.message, true); }
       return;
@@ -223,9 +299,11 @@
     if (d.tab) {
       const c = V.categories.find((x) => x.id === d.tab);
       if (c.status !== 'approved') return accessSheet(c.status === 'pending' ? null : c.id);
-      tab = d.tab; render(); return;
+      tab = d.tab; grp = 'ALL'; render(); return;
     }
     if (d.quick) { quick = d.quick; render(); return; }
+    if (d.grp) { grp = d.grp; onlyChg = false; render(); window.scrollTo(0, Math.min(window.scrollY, 200)); return; }
+    if (d.chg) { onlyChg = !onlyChg; render(); return; }
     if (d.d) { setQty(d.id, (qty[d.id] || 0) + Number(d.d)); render(); if (sheetRoot.innerHTML) cartSheet(); return; }
     if (d.set) { setQty(d.set, Number(d.n)); render(); return; }
     if (d.act) act(d.act, el);

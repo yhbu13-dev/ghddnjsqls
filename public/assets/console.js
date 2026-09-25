@@ -1200,7 +1200,10 @@
   const SUBS = [['stores', '매장'], ['kakao', '품목 승인·카카오'], ['skus', 'SKU·메뉴 매핑'], ['drivers', '기사·권역'], ['users', '계정'], ['settings', '운영 설정'], ['integrations', '데이터 연동']];
   async function loadAdmin() {
     state.adm.loading = true;
-    try { state.adm.data = await api('GET', '/api/admin/data'); } catch (e) { toast(esc(e.message), 'alert'); state.adm.data = { error: e.message }; }
+    try {
+      const [data, me] = await Promise.all([api('GET', '/api/admin/data'), can('ops') ? api('GET', '/api/me/kakao').catch(() => null) : null]);
+      state.adm.data = { ...data, meKakao: me };
+    } catch (e) { toast(esc(e.message), 'alert'); state.adm.data = { error: e.message }; }
     state.adm.loading = false;
     if (state.tab === 'admin') render();
   }
@@ -1233,6 +1236,20 @@
     const st = d.biz[s.biz] && d.biz[s.biz].category === cid ? 'approved' : r ? r.status : 'none';
     return st === 'approved' ? `<span title="${esc(c.label)} 이용 중">${c.icon}</span>` : st === 'pending' ? `<span class="badge b-warn nodot" title="${esc(c.label)} 신청">${c.icon} 신청</span>` : '';
   }).join(' ');
+  function myKakaoCard(d) {
+    const m = d.meKakao;
+    if (!m) return '';
+    const DAY = 864e5;
+    const exp = m.refreshExp ? Math.round((m.refreshExp - Date.now()) / DAY) : null;
+    return `<section class="card"><div class="card-h"><h3>내 카톡 알림 <span class="sub">나에게 보내기 · ${esc(DB.user.name)}</span></h3></div><div class="card-b" style="display:flex;flex-direction:column;gap:8px;font-size:12.5px">
+      ${m.linked ? `<div class="hstack"><span class="badge b-ok">연결됨</span><span>${esc(m.nickname || '카카오 계정')}</span>${exp != null ? `<span class="muted">· 로그인 연장까지 ${exp}일${exp < 14 ? ' — 곧 다시 연결해 주세요' : ''}</span>` : ''}</div>
+        ${m.lastError ? `<div class="alert-line bad">${esc(m.lastError)}</div>` : ''}
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 10px">${Object.entries(m.kinds).map(([k, l]) => `<label class="chk"><input type="checkbox" data-kpref="${k}" ${m.prefs[k] ? 'checked' : ''}>${esc(l)}</label>`).join('')}</div>
+        <div class="hstack"><button class="btn sm primary" data-act="kakaotest">${icon('send', 13)}테스트 알림 보내기</button><a class="btn sm" href="/k/admin-login">다시 연결</a><button class="btn sm" data-act="kakaounlink">연결 해제</button></div>`
+      : `<div class="muted" style="line-height:1.6">발주 확정, 미확정 발주서, 오늘 출고 합계를 내 카카오톡(나와의 채팅)으로 받습니다. 운영자마다 각자 연결합니다.</div>
+        ${m.loginReady ? `<a class="btn primary" href="/k/admin-login" style="align-self:flex-start">카카오로 알림 연결하기</a>` : '<div class="alert-line warn">먼저 [운영 설정 → 카카오 REST API 키]를 넣어 주세요.</div>'}`}
+      <div class="muted" style="font-size:11.5px">알림 버튼은 모바일 발주 내역 <span class="code">/a</span>로 열립니다.</div></div></section>`;
+  }
   function admKakao(d) {
     const byId = new Map(d.stores.map((s) => [s.id, s]));
     const pend = d.storeCategories.filter((r) => r.status === 'pending').sort((a, b) => a.requested_at - b.requested_at);
@@ -1253,8 +1270,8 @@
       }).join('');
       const ls = links.get(s.id) || [];
       const lk = ls.length ? ls.map((l) => `<span class="badge b-line nodot" title="${l.last_seen_at ? '최근 사용 ' + when(H(l.last_seen_at)) : ''}">${l.kind === 'chatbot' ? '💬 채널' : '👤 로그인'}${l.nickname ? ' ' + esc(l.nickname) : ''}${can('ops') ? ` <a href="#" data-act="unlink" data-id="${l.id}" aria-label="연결 해제">✕</a>` : ''}</span>`).join(' ') : '<span class="muted">미연결</span>';
-      return `<tr><td><b class="strong">${esc(s.name)}</b><span class="sub2">${esc(s.code)} · ${esc(d.biz[s.biz].label)}</span></td>${cells}<td>${lk}${s.link_code ? `<span class="sub2">연결 코드 <b class="code">${esc(s.link_code)}</b></span>` : ''}</td>
-        <td class="r" style="white-space:nowrap">${can('ops') ? `<button class="btn sm" data-act="linkcode" data-id="${s.id}">연결 코드</button> <button class="btn sm" data-act="orderlink" data-id="${s.id}">${icon('link', 13)}발주 링크</button> <button class="btn sm" data-act="revokelinks" data-id="${s.id}" title="발주 링크 무효화 · 카카오 연결 해제">초기화</button>` : ''}</td></tr>`;
+      return `<tr><td><b class="strong">${esc(s.name)}</b><span class="sub2">${esc(s.code)} · ${esc(d.biz[s.biz].label)}${s.standing_days ? ' · 정기 ' + s.standing_days.split(',').map((x) => DOW[+x]).join('·') : ''}</span></td>${cells}<td>${lk}${s.link_code ? `<span class="sub2">연결 코드 <b class="code">${esc(s.link_code)}</b></span>` : ''}</td>
+        <td class="r" style="white-space:nowrap">${can('ops') ? `${s.standing_days ? `<button class="btn sm" data-act="sheetnow" data-id="${s.id}" title="정기 발주서를 지금 채워서 사장님께 알림톡으로 보냅니다">발주서</button> ` : ''}<button class="btn sm" data-act="linkcode" data-id="${s.id}">연결 코드</button> <button class="btn sm" data-act="orderlink" data-id="${s.id}">${icon('link', 13)}발주 링크</button> <button class="btn sm" data-act="revokelinks" data-id="${s.id}" title="발주 링크 무효화 · 카카오 연결 해제">초기화</button>` : ''}</td></tr>`;
     }).join('');
     const k = d.kakao;
     const chk = (ok, label, hint) => `<div class="sys-row"><span class="d ${ok ? '' : 'warn'}"></span>${label}<em>${ok ? '완료' : esc(hint)}</em></div>`;
@@ -1264,6 +1281,7 @@
         <section class="card"><div class="card-h"><h3>매장별 품목 · 카카오 연결 <span class="sub">품목 칸을 누르면 승인/해제</span></h3><input class="inp" id="admQ" placeholder="매장명·코드 검색" value="${esc(state.adm.q)}" style="width:180px"></div>
           <div class="tbl-wrap" style="max-height:560px"><table class="tbl"><thead><tr><th>매장</th>${Object.values(d.categories).map((c) => `<th class="c">${c.icon} ${esc(c.short)}</th>`).join('')}<th>카카오 연결</th><th class="r"></th></tr></thead><tbody>${matrix}</tbody></table></div></section>
         <div style="display:flex;flex-direction:column;gap:14px">
+          ${myKakaoCard(d)}
           <section class="card"><div class="card-h"><h3>카카오 연동 상태</h3></div><div class="card-b" style="display:flex;flex-direction:column;gap:6px;font-size:12.5px">
             ${chk(!!k.channelId, '카카오톡 채널 ID', '운영 설정에서 입력')}
             ${chk(!!k.blockId, '오픈빌더 발주 블록 ID', '없으면 채팅 버튼 발주가 꺼짐')}
@@ -1284,7 +1302,7 @@
   }
   function admSkus(d) {
     const cf = state.adm.cat || 'ALL';
-    const rows = d.skus.filter((k) => cf === 'ALL' || k.category === cf).map((k) => `<tr><td class="num">${esc(k.id)}</td><td><b class="strong">${esc(k.name)}</b>${k.spec ? `<span class="sub2">${esc(k.spec)}</span>` : ''}</td><td>${esc((d.categories[k.category] || {}).icon || '')} ${esc((d.categories[k.category] || {}).short || '')}</td><td class="r num">${k.pack}${esc(k.unit)}</td><td class="r num">${won(k.price)}</td><td>${k.active ? '<span class="badge b-ok">판매</span>' : '<span class="badge b-mute">중지</span>'}</td><td class="r"><button class="btn sm" data-act="editsku" data-id="${esc(k.id)}">${icon('edit', 13)}편집</button></td></tr>`).join('');
+    const rows = d.skus.filter((k) => cf === 'ALL' || k.category === cf).map((k) => `<tr><td class="num">${esc(k.id)}</td><td><b class="strong">${esc(k.name)}</b>${k.spec || k.grp ? `<span class="sub2">${esc([k.grp, k.spec].filter(Boolean).join(' · '))}</span>` : ''}</td><td>${esc((d.categories[k.category] || {}).icon || '')} ${esc((d.categories[k.category] || {}).short || '')}</td><td class="r num">${k.pack}${esc(k.unit)}</td><td class="r num">${won(k.price)}</td><td>${k.active ? '<span class="badge b-ok">판매</span>' : '<span class="badge b-mute">중지</span>'}</td><td class="r"><button class="btn sm" data-act="editsku" data-id="${esc(k.id)}">${icon('edit', 13)}편집</button></td></tr>`).join('');
     const maps = d.menuMap.map((m) => `<tr><td>${esc(m.menu_name)}</td><td>${m.store_id ? esc(m.store_name) : '<span class="muted">전체 매장</span>'}</td><td>${esc(skuName(m.sku_id))}</td><td class="r num">×${num(m.units, 2)}</td><td class="r"><button class="btn sm" data-act="delmap" data-id="${m.id}">삭제</button></td></tr>`).join('');
     const un = d.unmapped.map((u) => `<tr><td><b class="strong">${esc(u.menu_name)}</b></td><td>${esc(u.store_name)} <span class="muted">${esc(u.store_code)}</span></td><td class="r num">${num(u.qty)}</td><td>${when(H(u.last_seen))}</td><td class="r"><button class="btn sm primary" data-act="addmap" data-menu="${esc(u.menu_name)}" data-store="${u.store_id}">매핑</button></td></tr>`).join('');
     return `<div class="rp-bottom" style="grid-template-columns:minmax(0,1fr) minmax(0,1.2fr)">
@@ -1319,6 +1337,7 @@
     ['정산·지표', ['fee_rate', 'settle_lag_days', 'pilot_start', 'target_approval', 'target_stop', 'target_error']],
     ['연동', ['pay_method', 'notifier', 'webhook_url', 'public_base_url']],
     ['점주 직접 발주 · 카카오', ['order_min_amount', 'order_link_hours', 'kakao_channel_id', 'kakao_block_id', 'kakao_rest_key']],
+    ['정기 발주서 · 관리자 알림', ['sheet_time', 'alert_unconfirmed', 'alert_pick', 'alert_delivery']],
   ];
   function admSettings(d) {
     const { values, spec } = d.settings;
@@ -1464,6 +1483,7 @@
         <label class="chk"><input type="checkbox" id="f-review_required" ${cur.review_required ? 'checked' : ''}>운영자 검수 후 발송 (추정 편차가 큰 매장)</label>
         <label class="chk"><input type="checkbox" id="f-active" ${cur.active ? 'checked' : ''}>운영 중</label>
         <label class="chk"><input type="checkbox" id="f-pay_test_fail" ${cur.pay_test_fail ? 'checked' : ''}>결제 실패 테스트 (샌드박스 카드)</label>
+        <div class="fld full"><span>정기 발주 요일 (이날 ${esc(state.adm.data.settings.values.sheet_time)}에 지난 발주 수량으로 발주서를 채워 사장님께 보냅니다 · 사우나 매점에 권장)</span><div class="chips">${DOW.map((nm, i) => `<label class="chk" style="margin-right:8px"><input type="checkbox" data-sday="${i}" ${String(cur.standing_days || '').split(',').includes(String(i)) ? 'checked' : ''}>${nm}</label>`).join('')}</div></div>
         <label class="fld full"><span>메모</span><textarea id="f-memo" maxlength="500">${esc(cur.memo || '')}</textarea></label>
         ${s ? '' : `<div class="fld full"><span>취급 음료 SKU (식당 · POS 재고 추정 대상)</span><div class="chips">${d.skus.filter((k) => k.active && k.category === 'beverage').map((k) => `<label class="chk" style="margin-right:10px"><input type="checkbox" data-newsku="${esc(k.id)}" ${['CL125', 'SD150'].includes(k.id) ? 'checked' : ''}>${esc(k.name)}</label>`).join('')}</div></div>`}
       </div>`,
@@ -1471,6 +1491,7 @@
       onAction: async (id, root) => {
         const b = {};
         ['code', 'name', 'region_id', 'biz', 'type', 'owner_name', 'owner_phone', 'address', 'lat', 'lng', 'pos_store_id', 'send_pref', 'memo'].forEach((k) => { b[k] = val(root, 'f-' + k); });
+        b.standing_days = $$('[data-sday]', root).filter((x) => x.checked).map((x) => x.dataset.sday).join(',');
         ['review_required', 'active', 'pay_test_fail'].forEach((k) => { b[k] = val(root, 'f-' + k); });
         if (!s) b.skus = $$('[data-newsku]', root).filter((x) => x.checked).map((x) => x.dataset.newsku);
         await api(s ? 'PUT' : 'POST', s ? `/api/admin/stores/${s.id}` : '/api/admin/stores', b);
@@ -1618,7 +1639,7 @@
       const ad = state.adm.data;
       if (a === 'editstore') return storeModal(d.id ? ad.stores.find((s) => s.id === +d.id) : null);
       if (a === 'storeskus') return storeSkuModal(ad.stores.find((s) => s.id === +d.id));
-      if (a === 'editsku') { const k = d.id ? ad.skus.find((x) => x.id === d.id) : null; return simpleForm({ title: k ? 'SKU 편집' : 'SKU 추가', method: k ? 'PUT' : 'POST', url: k ? `/api/admin/skus/${encodeURIComponent(k.id)}` : '/api/admin/skus', fields: [{ k: 'id', label: 'SKU 코드 (영문 대문자·숫자)', v: k ? k.id : '', ro: !!k }, { k: 'name', label: 'SKU명', v: k ? k.name : '' }, { k: 'pack', label: '박스당 입수', v: k ? k.pack : 12 }, { k: 'unit', label: '단위', v: k ? k.unit : '병' }, { k: 'price', label: '박스(발주 단위) 단가 (원)', v: k ? k.price : '' }, { k: 'category', label: '품목 구분', type: 'select', v: k ? k.category : (state.adm.cat && state.adm.cat !== 'ALL' ? state.adm.cat : 'beverage'), options: Object.entries(ad.categories).map(([id, c]) => [id, c.icon + ' ' + c.label]) }, { k: 'spec', label: '규격 설명 (발주 화면 표시, 예: 1L × 12팩)', v: k ? k.spec : '' }, { k: 'sort', label: '정렬 순서', v: k ? k.sort : 0 }, { k: 'active', label: '판매 중', type: 'check', v: k ? k.active : 1 }] }); }
+      if (a === 'editsku') { const k = d.id ? ad.skus.find((x) => x.id === d.id) : null; return simpleForm({ title: k ? 'SKU 편집' : 'SKU 추가', method: k ? 'PUT' : 'POST', url: k ? `/api/admin/skus/${encodeURIComponent(k.id)}` : '/api/admin/skus', fields: [{ k: 'id', label: 'SKU 코드 (영문 대문자·숫자)', v: k ? k.id : '', ro: !!k }, { k: 'name', label: 'SKU명', v: k ? k.name : '' }, { k: 'pack', label: '박스당 입수', v: k ? k.pack : 12 }, { k: 'unit', label: '단위', v: k ? k.unit : '병' }, { k: 'price', label: '박스(발주 단위) 단가 (원)', v: k ? k.price : '' }, { k: 'category', label: '품목 구분', type: 'select', v: k ? k.category : (state.adm.cat && state.adm.cat !== 'ALL' ? state.adm.cat : 'beverage'), options: Object.entries(ad.categories).map(([id, c]) => [id, c.icon + ' ' + c.label]) }, { k: 'spec', label: '규격 설명 (발주 화면 표시, 예: 1L × 12팩)', v: k ? k.spec : '' }, { k: 'grp', label: '매대·소분류 (예: 냉장고 ① 음료, 원두) — 품목이 많을 때 묶어 보여 줌', v: k ? k.grp : '' }, { k: 'sort', label: '정렬 순서', v: k ? k.sort : 0 }, { k: 'active', label: '판매 중', type: 'check', v: k ? k.active : 1 }] }); }
       if (a === 'addmap') return simpleForm({ title: '메뉴 → SKU 매핑', method: 'POST', url: '/api/admin/menu-map', done: '매핑을 추가했습니다 — 이후 판매부터 재고에 반영', fields: [{ k: 'menu_name', label: 'POS 메뉴명 (정확히 일치)', v: d.menu || '', full: true }, { k: 'sku_id', label: 'SKU', type: 'select', options: ad.skus.map((k) => [k.id, k.name]) }, { k: 'units', label: '메뉴 1개당 SKU 수량 (병·캔)', v: 1 }, { k: 'store_id', label: '적용 매장', type: 'select', v: d.store || '', options: [['', '전체 매장 공통'], ...ad.stores.map((s) => [s.id, s.name])] }] });
       if (a === 'delmap') return run(el, async () => { await api('DELETE', `/api/admin/menu-map/${d.id}`); state.adm.data = null; await afterAction('매핑을 삭제했습니다'); });
       if (a === 'editdriver') { const x = d.id ? ad.drivers.find((v) => v.id === +d.id) : null; return simpleForm({ title: x ? '기사 편집' : '기사 추가', method: x ? 'PUT' : 'POST', url: x ? `/api/admin/drivers/${x.id}` : '/api/admin/drivers', fields: [{ k: 'name', label: '이름', v: x ? x.name : '' }, { k: 'phone', label: '휴대폰', v: x ? x.phone : '' }, { k: 'region_id', label: '권역', type: 'select', v: x ? x.region_id : '', options: ad.regions.map((r) => [r.id, r.name]) }, { k: 'vehicle', label: '차량', v: x ? x.vehicle : '' }, { k: 'capacity', label: '1일 용량 (곳)', v: x ? x.capacity : 60 }, { k: 'active', label: '운영 중', type: 'check', v: x ? x.active : 1 }] }); }
@@ -1646,12 +1667,18 @@
         const st = ad.stores.find((x) => x.id === +d.id);
         return run(el, async () => {
           const r = await api('POST', `/api/admin/stores/${d.id}/order-link`, {});
-          modal({ title: '발주 화면 링크', sub: esc(st ? st.name : ''), body: `<p style="font-size:12.5px;margin:0 0 10px">로그인 없이 이 매장으로 발주할 수 있는 링크입니다 (유효 ${esc(DB.settings.orderLinkHours || '')}시간). 사장님께만 전달하세요.</p><div class="copybox"><input readonly id="olink" value="${esc(r.url)}"><button class="btn" data-copy="olink">${icon('copy', 13)}복사</button></div>`,
-            actions: [{ id: 'cancel', label: '닫기' }, { id: 'send', label: '알림톡으로 보내기', cls: 'primary' }],
-            onAction: async (id) => { if (id === 'send') { await api('POST', `/api/admin/stores/${d.id}/order-link`, { send: true }); await afterAction('발주 링크 알림톡을 보냈습니다', 'send'); } } });
+          modal({ title: '발주 화면 링크', sub: esc(st ? st.name : ''), body: `<p style="font-size:12.5px;margin:0 0 10px">로그인 없이 이 매장으로 발주할 수 있는 링크입니다 (유효 ${esc(DB.settings.orderLinkHours || '')}시간). 사장님께만 전달하세요. 사장님이 요청하지 않은 발주 권유는 알림톡으로 보낼 수 없어서(광고로 분류) 복사해 전달합니다.</p><div class="copybox"><input readonly id="olink" value="${esc(r.url)}"><button class="btn" data-copy="olink">${icon('copy', 13)}복사</button></div>`,
+            actions: [{ id: 'cancel', label: '닫기' }], onAction: () => true });
           $('#modalRoot [data-copy]').addEventListener('click', () => copyText(r.url, '발주 링크'));
         });
       }
+      if (a === 'sheetnow') {
+        const st = ad.stores.find((x) => x.id === +d.id);
+        return modal({ title: '정기 발주서 지금 보내기', sub: esc(st ? st.name : ''), body: '<p style="font-size:12.5px;margin:0">지난 발주 수량으로 발주서를 채우고(이미 담긴 장바구니가 있으면 그대로 둠) 사장님께 [발주서 확인하기] 알림톡을 보냅니다.</p>', actions: [{ id: 'cancel', label: '취소' }, { id: 'ok', label: '보내기', cls: 'primary' }],
+          onAction: async () => { const r = await api('POST', `/api/admin/stores/${d.id}/sheet`, { notify: true }); state.adm.data = null; await afterAction(`발주서를 보냈습니다 · ${r.result.count}품목`, 'send'); } });
+      }
+      if (a === 'kakaotest') return run(el, async () => { await api('POST', '/api/me/kakao/test', {}); toast('테스트 알림을 보냈습니다 — 카카오톡 나와의 채팅을 확인하세요', 'send'); });
+      if (a === 'kakaounlink') return run(el, async () => { await api('DELETE', '/api/me/kakao'); state.adm.data = null; await afterAction('카톡 알림 연결을 해제했습니다'); });
       if (a === 'revokelinks') return modal({ title: '발주 링크·카카오 연결 초기화', body: '<p style="font-size:12.5px;margin:0">이 매장에 발급된 발주 화면 링크가 모두 열리지 않게 되고, 연결된 카카오 계정(채널·로그인)이 모두 해제됩니다. 점주 변경·휴대폰 분실 때 사용하세요.</p>', actions: [{ id: 'cancel', label: '취소' }, { id: 'ok', label: '초기화', cls: 'bad' }], onAction: async () => { await api('POST', `/api/admin/stores/${d.id}/revoke-links`, {}); state.adm.data = null; await afterAction('초기화했습니다'); } });
       if (a === 'unlink') { ev.preventDefault(); return run(null, async () => { await api('DELETE', `/api/admin/kakao-links/${d.id}`); state.adm.data = null; await afterAction('카카오 연결을 해제했습니다'); }); }
       if (a === 'copyval') return copyText($('#' + d.src).value, '주소');
@@ -1686,6 +1713,9 @@
   });
   document.addEventListener('change', async (ev) => {
     if (ev.target.id === 'skuSel') { state.inv.sku = ev.target.value; render(); }
+    if (ev.target.dataset && ev.target.dataset.kpref) {
+      try { const m = await api('PUT', '/api/me/kakao', { prefs: { [ev.target.dataset.kpref]: ev.target.checked } }); if (state.adm.data) state.adm.data.meKakao = m; toast('알림 설정을 저장했습니다'); } catch (e) { toast(esc(e.message), 'alert'); }
+    }
     if (ev.target.dataset && ev.target.dataset.userrole) {
       try { await api('PUT', `/api/admin/users/${ev.target.dataset.userrole}`, { role: ev.target.value }); state.adm.data = null; await afterAction('권한을 바꿨습니다'); } catch (e) { toast(esc(e.message), 'alert'); }
     }
@@ -1716,5 +1746,13 @@
   (async () => {
     await sync(true);
     if (DB) $('#boot').classList.add('hide');
+    // 카카오 알림 연결에서 돌아온 경우 (/?kakao=ok 또는 오류 문구)
+    if (location.hash === '#access' && DB) { history.replaceState(null, '', '/'); state.tab = 'admin'; state.adm.sub = 'kakao'; render(); } // 관리자 카톡 알림 [승인하러 가기]
+    const kq = new URLSearchParams(location.search).get('kakao');
+    if (kq && DB) {
+      history.replaceState(null, '', '/');
+      state.tab = 'admin'; state.adm.sub = 'kakao'; render();
+      toast(kq === 'ok' ? '카톡 알림을 연결했습니다 — [테스트 알림 보내기]로 확인하세요' : esc(kq), kq === 'ok' ? 'check' : 'alert');
+    }
   })();
 })();

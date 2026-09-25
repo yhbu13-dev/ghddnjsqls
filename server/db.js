@@ -170,6 +170,27 @@ const MIGRATIONS = [
   INSERT INTO store_categories (store_id, category, status, requested_at, decided_at, decided_by)
     SELECT id, 'beverage', 'approved', created_at, created_at, 'migration' FROM stores;
   `,
+  // v3 — 매대(소분류) · 정기 발주서 · 관리자 카톡 알림(나에게 보내기)
+  `
+  ALTER TABLE skus ADD COLUMN grp TEXT NOT NULL DEFAULT '';
+  ALTER TABLE stores ADD COLUMN standing_days TEXT NOT NULL DEFAULT '';
+  ALTER TABLE stores ADD COLUMN sheet_at INTEGER;
+  ALTER TABLE stores ADD COLUMN sheet_base INTEGER;
+  ALTER TABLE stores ADD COLUMN sheet_seen_at INTEGER;
+
+  CREATE TABLE admin_kakao (
+    user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, kakao_id TEXT NOT NULL, nickname TEXT NOT NULL DEFAULT '',
+    access_token TEXT NOT NULL, access_exp INTEGER NOT NULL, refresh_token TEXT NOT NULL, refresh_exp INTEGER,
+    prefs TEXT NOT NULL DEFAULT '{}', linked_at INTEGER NOT NULL, last_error TEXT
+  );
+  CREATE TABLE admin_notices (
+    id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, kind TEXT NOT NULL, dedupe TEXT NOT NULL,
+    payload TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued','sent','failed')),
+    attempts INTEGER NOT NULL DEFAULT 0, error TEXT, created_at INTEGER NOT NULL, sent_at INTEGER, UNIQUE (user_id, dedupe)
+  );
+  CREATE INDEX admin_notices_status ON admin_notices (status);
+  CREATE TABLE daily_marks (day TEXT NOT NULL, kind TEXT NOT NULL, t INTEGER NOT NULL, PRIMARY KEY (day, kind));
+  `,
 ];
 
 class Db {

@@ -62,14 +62,27 @@ function createServer(ctx, { trustProxy = false, log = console } = {}) {
         res.writeHead(302, { Location: loc, 'Cache-Control': 'no-store' });
         return res.end();
       }
+      if (url.pathname === '/k/admin-login') {
+        let loc;
+        if (!req.user || !['admin', 'ops'].includes(req.user.role)) loc = '/login';
+        else {
+          try {
+            const { url: to, nonce } = kakao.adminLoginStart(ctx, req.user.id);
+            res.setHeader('Set-Cookie', `bf_ks=${nonce}; Path=/k; HttpOnly; SameSite=Lax; Max-Age=600${req.secure ? '; Secure' : ''}`);
+            loc = to;
+          } catch (e) { loc = '/?kakao=' + encodeURIComponent(e.message); }
+        }
+        res.writeHead(302, { Location: loc, 'Cache-Control': 'no-store' });
+        return res.end();
+      }
       if (url.pathname === '/k/callback') {
         let loc;
         try {
-          const r = await kakao.loginCallback(ctx, { code: url.searchParams.get('code'), state: url.searchParams.get('state'), cookieNonce: cookies.bf_ks });
-          loc = r.store ? shop.orderLink(ctx, r.store.id) : '/k/link?l=' + encodeURIComponent(r.pendingToken);
+          const r = await kakao.loginCallback(ctx, { code: url.searchParams.get('code'), state: url.searchParams.get('state'), cookieNonce: cookies.bf_ks, sessionUser: req.user });
+          loc = r.admin ? '/?kakao=ok' : r.store ? shop.orderLink(ctx, r.store.id) : '/k/link?l=' + encodeURIComponent(r.pendingToken);
         } catch (e) {
           log.error('[카카오 로그인]', e.message);
-          loc = '/k/link?err=' + encodeURIComponent(e.message);
+          loc = (req.user ? '/?kakao=' : '/k/link?err=') + encodeURIComponent(e.message);
         }
         res.writeHead(302, { Location: loc, 'Cache-Control': 'no-store', 'Set-Cookie': `bf_ks=; Path=/k; HttpOnly; SameSite=Lax; Max-Age=0${req.secure ? '; Secure' : ''}` });
         return res.end();
@@ -84,6 +97,10 @@ function createServer(ctx, { trustProxy = false, log = console } = {}) {
       else if (/^\/d\/[A-Za-z0-9_\-.]+$/.test(url.pathname)) page = 'driver.html';
       else if (/^\/m\/[A-Za-z0-9_\-.]+$/.test(url.pathname)) page = 'shop.html';
       else if (url.pathname === '/k/link') page = 'kakao-link.html';
+      else if (url.pathname === '/a') {
+        if (!req.user) { res.writeHead(302, { Location: '/login?next=%2Fa' }); return res.end(); }
+        page = 'admin-m.html';
+      }
       else if (/^\/assets\/[a-z0-9_.-]+$/i.test(url.pathname)) page = url.pathname.slice(1);
       if (page && serveFile(res, PUBLIC_DIR, page)) return;
       throw new HttpError(404, '페이지를 찾을 수 없습니다');

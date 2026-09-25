@@ -8,6 +8,7 @@ const catalog = require('./catalog');
 const orders = require('./orders');
 const props = require('./proposals');
 const { logEvent } = require('./events');
+const msg = require('./messages');
 
 const MAX_QTY = 200;
 const won = (n) => Math.round(n).toLocaleString('ko-KR') + '원';
@@ -43,7 +44,7 @@ function revokeLinks(ctx, storeId) {
 function orderable(db, storeId) {
   const cats = catalog.approvedSet(db, storeId);
   if (!cats.size) return [];
-  return db.all(`SELECT id, name, spec, pack, unit, price, category, sort FROM skus WHERE active = 1 AND category IN (${[...cats].map(() => '?').join(',')}) ORDER BY sort, id`, [...cats]);
+  return db.all(`SELECT id, name, spec, pack, unit, price, category, grp, sort FROM skus WHERE active = 1 AND category IN (${[...cats].map(() => '?').join(',')}) ORDER BY sort, id`, [...cats]);
 }
 
 function orderableMap(db, storeId) { return new Map(orderable(db, storeId).map((k) => [k.id, k])); }
@@ -103,6 +104,67 @@ function reorderToCart(ctx, storeId, now = Date.now()) {
   });
   if (!n) throw new Error('지난 발주 품목 중 지금 발주할 수 있는 품목이 없습니다');
   return { from: last.code, cart: cart(db, storeId) };
+}
+
+// ── 정기 발주서 (사우나처럼 품목이 많은 매장: 지난번 수량이 채워진 발주서에서 바뀐 것만 고친다) ──
+/** 발주서 방식 매장인지 (사우나 매점) */
+const sheetMode = (store) => store.biz === 'sauna';
+const DOW = ['일', '월', '화', '수', '목', '금', '토'];
+const daysText = (s) => String(s || '').split(',').filter((x) => x !== '').map((d) => DOW[+d]).join('·');
+
+function lastOrder(db, storeId) {
+  return db.get("SELECT id, code, created_at FROM proposals WHERE store_id = ? AND status IN ('paid','dispatched','delivered') ORDER BY id DESC LIMIT 1", [storeId]);
+}
+
+/**
+ * 발주서 준비: 장바구니가 비어 있으면 지난 발주 수량으로 채우고, 비교 기준(지난 발주)을 기록한다.
+ * notify=true면 점주에게 발주서 준비 알림톡을 보낸다 (정기 발주 요일 아침).
+ */
+function prepareSheet(ctx, storeId, now = Date.now(), { notify = false } = {}) {
+  const { db } = ctx;
+  return db.tx(() => {
+    const store = db.get('SELECT * FROM stores WHERE id = ? AND active = 1', [storeId]);
+    if (!store) throw new Error('매장을 찾을 수 없습니다');
+    const last = lastOrder(db, storeId);
+    if (!last) throw new Error('지난 발주 내역이 없어 발주서를 만들 수 없습니다');
+    let filled = 0;
+    // 지난 확정 이후에 손댄 장바구니가 있으면(작성 중) 그대로 두고, 그 전에 남은 것뿐이면 지난 발주 수량으로 새로 채운다
+    const touched = db.get('SELECT MAX(updated_at) AS t FROM carts WHERE store_id = ?', [storeId]).t;
+    if (touched != null && touched < last.created_at) db.run('DELETE FROM carts WHERE store_id = ?', [storeId]);
+    if (!db.get('SELECT 1 FROM carts WHERE store_id = ?', [storeId])) {
+      const ok = orderableMap(db, storeId);
+      for (const l of db.all('SELECT sku_id, qty FROM proposal_lines WHERE proposal_id = ? AND qty > 0', [last.id])) {
+        if (!ok.has(l.sku_id)) continue;
+        db.run('INSERT INTO carts (store_id, sku_id, qty, updated_at) VALUES (?, ?, ?, ?)', [storeId, l.sku_id, Math.min(MAX_QTY, l.qty), now]);
+        filled++;
+      }
+    }
+    db.run('UPDATE stores SET sheet_at = ?, sheet_base = ?, sheet_seen_at = NULL WHERE id = ?', [now, last.id, storeId]);
+    const c = cart(db, storeId);
+    if (notify) {
+      const link = orderLink(ctx, storeId, now);
+      const d = deliveryPreview(ctx.R, now);
+      msg.enqueueNotice(ctx, storeId, 'sheet_ready', {
+        text: `[BevFlow 정기 발주서]\n${store.owner_name ? store.owner_name + ' 사장님' : '사장님'}, 신청하신 ${daysText(store.standing_days)} 정기 발주서가 준비됐어요.\n지난번(${T.dateStr(last.created_at).slice(5).replace('-', '/')}) 발주 기준 ${c.count}품목 · ${won(c.amount)}\n${ctx.R.cutoff}까지 확정하시면 ${d.word} 오후에 도착해요.\n▶ ${link}`,
+        vars: { who: store.owner_name ? store.owner_name + ' 사장님' : '사장님', days: daysText(store.standing_days), base_date: T.dateStr(last.created_at).slice(5).replace('-', '/'), count: c.count, amount: won(c.amount), cutoff: ctx.R.cutoff, arrive: d.word }, link, button: '발주서 확인하기',
+      }, now);
+    }
+    logEvent(db, { t: now, kind: '발주서', store_id: storeId, region_id: store.region_id, actor: notify ? 'system' : 'owner', message: `${store.name} · 발주서 준비 (${last.code} 기준 ${c.count}품목${filled ? '' : ', 기존 장바구니 유지'})` });
+    return { base: last.code, count: c.count, amount: c.amount };
+  });
+}
+
+/** 점주가 오늘 발주서를 열어 봤다고 기록 (관리자 미확정 알림에 "열어 봄" 표시) */
+function markSheetSeen(ctx, store, now = Date.now()) {
+  if (store.sheet_at && store.sheet_at >= T.kstMidnight(now) && !store.sheet_seen_at) ctx.db.run('UPDATE stores SET sheet_seen_at = ? WHERE id = ?', [now, store.id]);
+}
+
+/** 발주서 비교 기준: 준비할 때 기록한 지난 발주, 없으면 가장 최근 발주 */
+function sheetBase(db, store) {
+  const p = (store.sheet_base && db.get('SELECT id, code, created_at FROM proposals WHERE id = ?', [store.sheet_base])) || lastOrder(db, store.id);
+  if (!p) return null;
+  const base = Object.fromEntries(db.all('SELECT sku_id, qty FROM proposal_lines WHERE proposal_id = ? AND qty > 0', [p.id]).map((l) => [l.sku_id, l.qty]));
+  return { code: p.code, date: T.dateStr(p.created_at), base };
 }
 
 // ── 발주 접수 ──────────────────────────────────────────────
@@ -198,11 +260,14 @@ function view(ctx, store, now = Date.now()) {
   const hist = history(db, store.id, now);
   const products = orderable(db, store.id).map((k) => {
     const h = hist.get(k.id);
-    return { id: k.id, name: k.name, spec: k.spec, pack: k.pack, unit: k.unit, u: unitOf(k), price: k.price, category: k.category, freq: h ? h.n : 0, lastQty: h ? h.lastQty : 0 };
+    return { id: k.id, name: k.name, spec: k.spec, pack: k.pack, unit: k.unit, u: unitOf(k), price: k.price, category: k.category, grp: k.grp, freq: h ? h.n : 0, lastQty: h ? h.lastQty : 0 };
   });
   const pending = db.get("SELECT code FROM proposals WHERE store_id = ? AND source = 'auto' AND status IN ('created','sent') AND responded_at IS NULL AND send_at IS NOT NULL ORDER BY id DESC LIMIT 1", [store.id]);
+  const sheet = sheetMode(store) ? sheetBase(db, store) : null;
   return {
     store: { name: store.name, owner: store.owner_name, biz: store.biz, bizLabel: catalog.BIZ[store.biz].label },
+    mode: sheet ? 'sheet' : 'pick',
+    sheet: sheet ? { ...sheet, preparedAt: store.sheet_at, standing: daysText(store.standing_days) } : null,
     categories: catalog.storeCategories(db, store),
     products,
     cart: cart(db, store.id),
@@ -216,4 +281,4 @@ function view(ctx, store, now = Date.now()) {
   };
 }
 
-module.exports = { MAX_QTY, unitOf, orderLink, storeFromToken, revokeLinks, orderable, cart, setCart, addCart, clearCart, reorderToCart, submit, recentOrders, statusText, deliveryPreview, view, won };
+module.exports = { MAX_QTY, unitOf, markSheetSeen, sheetMode, daysText, prepareSheet, sheetBase, lastOrder, orderLink, storeFromToken, revokeLinks, orderable, cart, setCart, addCart, clearCart, reorderToCart, submit, recentOrders, statusText, deliveryPreview, view, won };

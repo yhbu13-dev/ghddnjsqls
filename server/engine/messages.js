@@ -14,9 +14,9 @@ const TEMPLATES = {
   expire: 'BF_EXPIRE_01',
   delivered: 'BF_DELIVERED_01',
   delivery_failed: 'BF_DLVFAIL_01',
-  access_ok: 'BF_ACCESS_OK_01',
+  access_ok: 'BF_ACCESS_OK_02',
   access_no: 'BF_ACCESS_NO_01',
-  order_link: 'BF_ORDER_LINK_01',
+  sheet_ready: 'BF_SHEET_01',
 };
 
 const won = (n) => Math.round(n).toLocaleString('ko-KR') + '원';
@@ -56,9 +56,9 @@ function build(ctx, p, kind, now) {
   const l0 = lines[0];
   const link = ownerLink(ctx, p);
   const sameDay = T.kstHour(p.sent_at || now) < ctx.R.cutoffH - 0.5;
-  const vars = { store: store.name, owner: store.owner_name, code: p.code, amount: won(p.amount), link };
-  let text = '';
   const who = store.owner_name ? `${store.owner_name} 사장님` : '사장님';
+  const vars = { store: store.name, owner: store.owner_name, who, code: p.code, amount: won(p.amount), link };
+  let text = '';
   switch (kind) {
     case 'propose': {
       const others = lines.slice(1);
@@ -73,7 +73,8 @@ function build(ctx, p, kind, now) {
       break;
     case 'confirm':
       vars.arrive = arrivalText(ctx, p, now);
-      text = `[BevFlow 발주 확정]\n✓ ${p.code} 발주가 확정됐어요 — ${vars.arrive}\n합계 ${vars.amount}${p.pay_method === 'invoice' ? ' (월말 청구)' : ''}\n▶ ${link}`;
+      vars.total = vars.amount + (p.pay_method === 'invoice' ? ' (월말 청구)' : '');
+      text = `[BevFlow 발주 확정]\n✓ ${p.code} 발주가 확정됐어요 — ${vars.arrive}\n합계 ${vars.total}\n▶ ${link}`;
       break;
     case 'payfail':
       text = `[BevFlow 결제 안내]\n${who}, ${p.code} 결제가 완료되지 않았어요 (${p.pay_fail_reason || '카드 승인 거절'}).\n결제 수단을 확인해 주시면 바로 출고할게요.\n▶ ${link}`;
@@ -86,7 +87,8 @@ function build(ctx, p, kind, now) {
       break;
     case 'delivered': {
       const stop = db.get('SELECT departed_at, boxes FROM stops WHERE proposal_id = ? AND status = \'done\' ORDER BY id DESC LIMIT 1', [p.id]);
-      text = `[BevFlow 배송 완료]\n${stop ? T.fmtTime(stop.departed_at) : ''} ${stop ? stop.boxes : ''}박스 하차했어요. 기사님이 음료 잔량도 함께 확인했어요.`;
+      Object.assign(vars, { time: stop ? T.fmtTime(stop.departed_at) : '', boxes: stop ? stop.boxes : '' });
+      text = `[BevFlow 배송 완료]\n${vars.time}에 주문하신 ${vars.boxes}박스를 하차했어요. 확인 부탁드려요.`;
       break;
     }
     case 'delivery_failed':
@@ -106,13 +108,14 @@ function enqueue(ctx, p, kind, now) {
 }
 
 /**
- * 발주 건과 무관한 매장 안내 (품목 승인 결과 · 발주 화면 링크) — 버튼은 발주 화면으로 연결
- * @param kind access_ok | access_no | order_link
+ * 발주 건과 무관한 매장 안내 (품목 승인 결과 · 정기 발주서 준비) — 버튼은 발주 화면으로 연결
+ * 알림톡은 정보성 메시지만 보낼 수 있어서, 점주가 요청하지 않은 발주 권유(링크만 보내기 등)는 만들지 않는다.
+ * @param kind access_ok | access_no | sheet_ready
  */
-function enqueueNotice(ctx, storeId, kind, { text, vars = {}, link = null }, now) {
+function enqueueNotice(ctx, storeId, kind, { text, vars = {}, link = null, button = '확인하기' }, now) {
   const store = ctx.db.get('SELECT * FROM stores WHERE id = ?', [storeId]);
   if (!TEMPLATES[kind]) throw new Error('알 수 없는 메시지 종류: ' + kind);
-  const buttons = link ? [{ name: '발주하기', url: link }] : [];
+  const buttons = link ? [{ name: button, url: link }] : [];
   ctx.db.run(`INSERT INTO messages (proposal_id, store_id, kind, channel, to_phone, template, body, payload, created_at)
               VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?)`,
   [storeId, kind, ctx.R.notifier, store.owner_phone, TEMPLATES[kind], text, JSON.stringify({ variables: { store: store.name, owner: store.owner_name, ...vars, ...(link ? { link } : {}) }, buttons }), now]);

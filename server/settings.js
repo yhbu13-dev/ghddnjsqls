@@ -48,6 +48,10 @@ const SPEC = {
   kakao_rest_key: { def: '', type: 'text', re: /^[A-Za-z0-9]{0,64}$/, label: '카카오 REST API 키 (카카오 로그인)' },
   kakao_channel_id: { def: '', type: 'text', re: /^(_[A-Za-z0-9]{2,20})?$/, label: '카카오톡 채널 ID (예: _xaBcD)' },
   kakao_block_id: { def: '', type: 'text', re: /^[a-f0-9]{0,40}$/, label: '오픈빌더 발주 블록 ID' },
+  sheet_time: { def: '09:00', type: 'time', label: '정기 발주서 준비 시각' },
+  alert_unconfirmed: { def: '11:30', type: 'time', label: '관리자 알림: 미확정 발주서' },
+  alert_pick: { def: '11:50', type: 'time', label: '관리자 알림: 오늘 출고 합계' },
+  alert_delivery: { def: '18:00', type: 'time', label: '관리자 알림: 배송 결과' },
 };
 
 function validate(key, v) {
@@ -98,6 +102,7 @@ function rules(s) {
     nightStartH: T.hhmm(s.night_start), nightEndH: T.hhmm(s.night_end),
     breakFromH: T.hhmm(s.break_from), breakToH: T.hhmm(s.break_to), breakSendH: T.hhmm(s.break_send),
     retryH: T.hhmm(s.retry_at), pilotStart: T.parseDate(s.pilot_start),
+    sheetH: T.hhmm(s.sheet_time), unconfirmedH: T.hhmm(s.alert_unconfirmed), pickH: T.hhmm(s.alert_pick), deliveryAlertH: T.hhmm(s.alert_delivery),
   };
 }
 

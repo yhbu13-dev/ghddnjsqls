@@ -163,8 +163,32 @@ async function skill(ctx, body, now = Date.now()) {
 
 function catLabel(c) { const k = catalog.CATEGORIES[c]; return k ? `${k.icon} ${k.short}` : c; }
 
+/** 매대·소분류 목록 (발주 가능한 품목 기준, 정렬 순서대로) */
+function groupsOf(ctx, store) {
+  const seen = new Map();
+  for (const k of shop.orderable(ctx.db, store.id)) if (k.grp && !seen.has(k.grp)) seen.set(k.grp, k.category);
+  return [...seen.entries()].map(([g, c]) => ({ g, c }));
+}
+
+/** 발주서 방식 매장(사우나)의 첫 화면: 버튼 세 개만 */
+function sheetHome(ctx, U, store, now, notice) {
+  const { db, R } = ctx;
+  const c = shop.cart(db, store.id);
+  const base = shop.sheetBase(db, store);
+  const d = shop.deliveryPreview(R, now);
+  const today = store.sheet_at && store.sheet_at >= T.kstMidnight(now);
+  const desc = (c.count ? `${base ? `지난번(${base.date.slice(5).replace('-', '/')}) 기준 ` : ''}${c.count}품목 · ${won(c.amount)}` : '아직 채워진 발주서가 없어요')
+    + `\n${R.cutoff}까지 확정하면 ${d.word} 오후 도착`;
+  const buttons = [U.link('📋 발주서 확인하기', shop.orderLink(ctx, store.id, now))];
+  if (U.chat) buttons.push(U.btn('✅ 지난번 그대로 확정', { s: 'same' }, '지난번 그대로 확정'), U.btn('➕ 이것만 추가', { s: 'groups' }, '이것만 추가'));
+  const out = notice ? [U.text(notice)] : [];
+  out.push(U.card(today ? '📋 오늘 정기 발주서' : `📋 ${store.name} 발주서`, desc, buttons));
+  return U.res(out, [U.qr('📦 발주 현황', { s: 'status' }, '발주 현황'), U.qr('➕ 품목 추가 신청', { s: 'request' }, '품목 추가 신청')]);
+}
+
 function home(ctx, U, store, now, notice) {
   const { db } = ctx;
+  if (shop.sheetMode(store) && shop.lastOrder(db, store.id)) return sheetHome(ctx, U, store, now, notice);
   const cats = catalog.storeCategories(db, store).filter((c) => c.status === 'approved');
   const c = shop.cart(db, store.id);
   const d = shop.deliveryPreview(ctx.R, now);
@@ -206,6 +230,15 @@ async function step(ctx, U, store, x, userKey, now) {
       if (approved.length === 1) return step(ctx, U, store, { s: 'items', c: approved[0].id }, userKey, now);
       return U.res([U.text('어떤 품목을 발주할까요?')], approved.map((k) => U.qr(`${k.icon} ${k.short}`, { s: 'items', c: k.id }, k.short + ' 품목')));
     }
+    case 'same': {
+      if (!shop.cart(db, store.id).count) shop.prepareSheet(ctx, store.id, now);
+      return step(ctx, U, store, { s: 'confirm' }, userKey, now);
+    }
+    case 'groups': {
+      const gs = groupsOf(ctx, store);
+      if (!gs.length) return step(ctx, U, store, { s: 'cats' }, userKey, now);
+      return U.res([U.text('어느 매대 품목을 더할까요?')], gs.slice(0, 10).map(({ g, c }) => U.qr(g, { s: 'items', c, g }, g)));
+    }
     case 'items': {
       const cat = String(x.c || '');
       if (!approved.some((k) => k.id === cat)) {
@@ -213,7 +246,12 @@ async function step(ctx, U, store, x, userKey, now) {
       }
       const view = shop.view(ctx, store, now);
       const inCart = new Map(view.cart.lines.map((l) => [l.sku, l.qty]));
-      const list = view.products.filter((p) => p.category === cat).sort((a, b) => (b.freq - a.freq) || 0);
+      const grp = x.g ? String(x.g) : '';
+      const all = view.products.filter((p) => p.category === cat && (!grp || p.grp === grp)).sort((a, b) => (b.freq - a.freq) || 0);
+      const gs = groupsOf(ctx, store).filter((v) => v.c === cat);
+      // 품목이 많고 매대·소분류가 있으면: 처음엔 자주 시키는 품목만, 나머지는 소분류 버튼으로
+      const favOnly = !grp && gs.length > 1 && all.length > PAGE;
+      const list = favOnly ? all.slice(0, PAGE) : all;
       if (!list.length) return U.res([U.text('지금 발주할 수 있는 품목이 없어요.')], [U.qr('처음으로', { s: 'home' })]);
       const page = Math.max(0, Number(x.p) || 0);
       const slice = list.slice(page * PAGE, page * PAGE + PAGE);
@@ -221,12 +259,18 @@ async function step(ctx, U, store, x, userKey, now) {
         const q = inCart.get(p.id) || 0;
         return U.card(`${catalog.CATEGORIES[p.category].icon} ${p.name}`,
           `${p.spec || `${p.pack}${p.unit} / 박스`}\n${won(p.price)} / ${p.u}${q ? `\n🛒 담은 수량 ${q}${p.u}` : p.lastQty ? `\n지난번 ${p.lastQty}${p.u}` : ''}`,
-          [U.btn('+1' + p.u, { s: 'add', k: p.id, q: 1, c: cat }, `${p.name} 1${p.u} 담기`), U.btn('+5' + p.u, { s: 'add', k: p.id, q: 5, c: cat }, `${p.name} 5${p.u} 담기`),
-            q ? U.btn('−1' + p.u, { s: 'add', k: p.id, q: -1, c: cat }, `${p.name} 1${p.u} 빼기`) : U.btn('+10' + p.u, { s: 'add', k: p.id, q: 10, c: cat }, `${p.name} 10${p.u} 담기`)]);
+          [U.btn('+1' + p.u, { s: 'add', k: p.id, q: 1, c: cat, g: grp || undefined }, `${p.name} 1${p.u} 담기`), U.btn('+5' + p.u, { s: 'add', k: p.id, q: 5, c: cat, g: grp || undefined }, `${p.name} 5${p.u} 담기`),
+            q ? U.btn('−1' + p.u, { s: 'add', k: p.id, q: -1, c: cat, g: grp || undefined }, `${p.name} 1${p.u} 빼기`) : U.btn('+10' + p.u, { s: 'add', k: p.id, q: 10, c: cat, g: grp || undefined }, `${p.name} 10${p.u} 담기`)]);
       });
-      if (list.length > (page + 1) * PAGE) cards.push(U.card('다음 품목 보기', `${list.length - (page + 1) * PAGE}개 품목이 더 있어요`, [U.btn('다음 ▶', { s: 'items', c: cat, p: page + 1 }, '다음 품목')]));
+      if (favOnly) cards.push(U.card('다른 품목 찾기', `${catLabel(cat)} 품목은 모두 ${all.length}가지예요.\n아래 분류 버튼을 누르거나 발주 화면에서 한 번에 보세요.`, [U.link('📋 발주 화면에서 보기', shop.orderLink(ctx, store.id, now))]));
+      else if (list.length > (page + 1) * PAGE) cards.push(U.card('다음 품목 보기', `${list.length - (page + 1) * PAGE}개 품목이 더 있어요`, [U.btn('다음 ▶', { s: 'items', c: cat, g: grp || undefined, p: page + 1 }, '다음 품목')]));
+      const cartQr = U.qr(view.cart.count ? `🛒 장바구니 ${view.cart.count}` : '🛒 장바구니', { s: 'cart' }, '장바구니');
+      if (gs.length > 1) {
+        return U.res([U.text(grp ? `${grp} ${all.length}가지` : `⭐ 자주 시키는 ${catLabel(cat)} 품목이에요. 다른 품목은 분류 버튼으로 찾아 주세요.`), U.carousel(cards)],
+          [cartQr, U.qr('✅ 발주하기', { s: 'confirm' }, '발주하기'), ...gs.filter((v) => v.g !== grp).slice(0, 8).map((v) => U.qr(v.g, { s: 'items', c: cat, g: v.g }, v.g))]);
+      }
       return U.res([U.text(`${catLabel(cat)} 품목 — 버튼으로 담아 주세요`), U.carousel(cards)],
-        [U.qr(view.cart.count ? `🛒 장바구니 ${view.cart.count}` : '🛒 장바구니', { s: 'cart' }, '장바구니'), U.qr('✅ 발주하기', { s: 'confirm' }, '발주하기'),
+        [cartQr, U.qr('✅ 발주하기', { s: 'confirm' }, '발주하기'),
           ...approved.filter((k) => k.id !== cat).map((k) => U.qr(`${k.icon} ${k.short}`, { s: 'items', c: k.id }, k.short + ' 품목')), U.qr('처음으로', { s: 'home' })]);
     }
     case 'add': case 'set': {
@@ -236,8 +280,8 @@ async function step(ctx, U, store, x, userKey, now) {
       const name = line ? line.name : (db.get('SELECT name FROM skus WHERE id = ?', [sku]) || {}).name || sku;
       const msg = line ? `✓ ${name} ${line.qty}${line.u} 담았어요` : `✓ ${name}을(를) 뺐어요`;
       return U.res([U.text(`${msg}\n🛒 ${c.count}품목 · ${won(c.amount)}`)], [
-        ...(x.c ? [U.qr('계속 고르기', { s: 'items', c: x.c })] : []),
-        U.qr(`${name.slice(0, 6)} +1`, { s: 'add', k: sku, q: 1, c: x.c }, `${name} 하나 더`),
+        ...(x.c ? [U.qr('계속 고르기', { s: 'items', c: x.c, g: x.g })] : []),
+        U.qr(`${name.slice(0, 6)} +1`, { s: 'add', k: sku, q: 1, c: x.c, g: x.g }, `${name} 하나 더`),
         U.qr('🛒 장바구니', { s: 'cart' }, '장바구니'), U.qr('✅ 발주하기', { s: 'confirm' }, '발주하기'),
       ]);
     }
@@ -259,7 +303,7 @@ async function step(ctx, U, store, x, userKey, now) {
       if (!c.count) return cartOut(ctx, U, store, now);
       if (c.amount < R.order_min_amount) return cartOut(ctx, U, store, now, `최소 발주 금액은 ${won(R.order_min_amount)}이에요. ${won(R.order_min_amount - c.amount)}어치 더 담아 주세요.`);
       const d = shop.deliveryPreview(R, now);
-      const lines = c.lines.map((l) => `· ${l.name} ${l.qty}${l.u}`).join('\n');
+      const lines = (c.lines.length > 8 ? c.lines.slice(0, 7) : c.lines).map((l) => `· ${l.name} ${l.qty}${l.u}`).join('\n') + (c.lines.length > 8 ? `\n· 외 ${c.lines.length - 7}품목` : '');
       const ref = 'chat-' + crypto.randomBytes(6).toString('base64url');
       return U.res([U.card('발주 내용을 확인해 주세요', `${lines}\n\n합계 ${won(c.amount)}${R.pay_method === 'invoice' ? ' (월말 청구)' : ''}\n${d.word} 도착 예정`,
         U.chat ? [U.btn('✅ 발주 확정', { s: 'submit', ref, h: cartHash(c) }, '발주 확정'), U.btn('✏️ 수정하기', { s: 'cart' }, '장바구니')] : [U.link('✅ 화면에서 확정', shop.orderLink(ctx, store.id, now))])]);
@@ -327,11 +371,9 @@ function loginStart(ctx, botToken, now = Date.now()) {
  * 인가 코드 → 토큰 → 사용자 정보 → 매장 찾기
  * @returns {{ store?, pendingToken? }} 매장을 못 찾으면 연결 코드 입력용 토큰
  */
-async function loginCallback(ctx, { code, state, cookieNonce }, now = Date.now()) {
-  const { db, R } = ctx;
-  const st = tokens.verify(ctx.secret, state, 'ks', now);
-  if (!st || !cookieNonce || st.r !== cookieNonce) throw new Error('로그인 요청이 만료됐어요. 처음부터 다시 시도해 주세요');
-  if (!code) throw new Error('카카오 로그인을 취소했어요');
+/** 인가 코드 → 토큰 → 사용자 정보 */
+async function exchange(ctx, code) {
+  const { R } = ctx;
   const form = new URLSearchParams({ grant_type: 'authorization_code', client_id: R.kakao_rest_key, redirect_uri: redirectUri(ctx), code });
   if (ctx.env.BEVFLOW_KAKAO_CLIENT_SECRET) form.set('client_secret', ctx.env.BEVFLOW_KAKAO_CLIENT_SECRET);
   const tr = await ctx.fetch(`${KAUTH}/oauth/token`, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded;charset=utf-8' }, body: form.toString(), signal: AbortSignal.timeout(8000) });
@@ -340,6 +382,39 @@ async function loginCallback(ctx, { code, state, cookieNonce }, now = Date.now()
   const ur = await ctx.fetch(`${KAPI}/v2/user/me`, { headers: { authorization: 'Bearer ' + tj.access_token }, signal: AbortSignal.timeout(8000) });
   const me = await ur.json().catch(() => ({}));
   if (!ur.ok || me.id == null) throw new Error('카카오 사용자 정보를 받지 못했어요');
+  return { tj, me };
+}
+
+/** 관리자 카톡 알림 연결 시작: 카카오톡 메시지 전송(talk_message) 동의를 받는다 */
+function adminLoginStart(ctx, userId, now = Date.now()) {
+  if (!ctx.R.kakao_rest_key) throw new Error('카카오 REST API 키를 먼저 운영 설정에 넣어 주세요');
+  const nonce = crypto.randomBytes(12).toString('base64url');
+  const state = tokens.sign(ctx.secret, { k: 'ka', id: userId, r: nonce, e: now + 10 * 60e3 });
+  const q = new URLSearchParams({ response_type: 'code', client_id: ctx.R.kakao_rest_key, redirect_uri: redirectUri(ctx), state, scope: 'talk_message' });
+  return { url: `${KAUTH}/oauth/authorize?${q}`, nonce };
+}
+
+async function loginCallback(ctx, { code, state, cookieNonce, sessionUser = null }, now = Date.now()) {
+  const { db } = ctx;
+  const adm = tokens.verify(ctx.secret, state, 'ka', now);
+  if (adm) {
+    if (!cookieNonce || adm.r !== cookieNonce || !sessionUser || sessionUser.id !== adm.id) throw new Error('연결 요청이 만료됐어요. 콘솔에서 다시 시도해 주세요');
+    if (!code) throw new Error('카카오 연결을 취소했어요');
+    const { tj, me } = await exchange(ctx, code);
+    const scopes = String(tj.scope || '').split(/[ ,]+/);
+    if (tj.scope && !scopes.includes('talk_message')) throw new Error('카카오톡 메시지 전송에 동의해야 알림을 받을 수 있어요');
+    const nick = (me.kakao_account && me.kakao_account.profile && me.kakao_account.profile.nickname) || (me.properties && me.properties.nickname) || '';
+    db.run(`INSERT INTO admin_kakao (user_id, kakao_id, nickname, access_token, access_exp, refresh_token, refresh_exp, linked_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (user_id) DO UPDATE SET kakao_id = excluded.kakao_id, nickname = excluded.nickname, access_token = excluded.access_token, access_exp = excluded.access_exp,
+              refresh_token = excluded.refresh_token, refresh_exp = excluded.refresh_exp, linked_at = excluded.linked_at, last_error = NULL`,
+    [adm.id, String(me.id), nick.slice(0, 40), tj.access_token, now + (Number(tj.expires_in) || 21599) * 1000, tj.refresh_token || '', tj.refresh_token_expires_in ? now + Number(tj.refresh_token_expires_in) * 1000 : null, now]);
+    logEvent(db, { t: now, kind: '카카오 연결', actor: sessionUser.email, message: '관리자 카톡 알림 연결' });
+    return { admin: true };
+  }
+  const st = tokens.verify(ctx.secret, state, 'ks', now);
+  if (!st || !cookieNonce || st.r !== cookieNonce) throw new Error('로그인 요청이 만료됐어요. 처음부터 다시 시도해 주세요');
+  if (!code) throw new Error('카카오 로그인을 취소했어요');
+  const { me } = await exchange(ctx, code);
   const kakaoId = String(me.id);
   const acct = me.kakao_account || {};
   const nickname = (acct.profile && acct.profile.nickname) || (me.properties && me.properties.nickname) || '';
@@ -371,4 +446,4 @@ function linkFromPage(ctx, { t, l, code }, ip, now = Date.now()) {
   return { store: store.name, orderUrl: shop.orderLink(ctx, store.id, now) };
 }
 
-module.exports = { skill, checkSkillKey, issueLinkCode, linkByCode, linkFromPage, loginStart, loginCallback, storeByPhone, normPhone, _attempts: attempts };
+module.exports = { skill, checkSkillKey, issueLinkCode, linkByCode, linkFromPage, loginStart, adminLoginStart, loginCallback, storeByPhone, normPhone, _attempts: attempts };

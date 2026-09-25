@@ -4,6 +4,7 @@
 // - 다른 품목은 점주가 신청하고(카카오톡·발주 화면) 운영자가 승인해야 발주 화면에 나타난다.
 
 const { logEvent } = require('./events');
+const adminNotify = require('../adminNotify');
 
 const CATEGORIES = {
   cafe: { label: '카페 품목', short: '카페', icon: '☕' },
@@ -63,6 +64,7 @@ function requestAccess(ctx, storeId, category, { via = 'web', note = '' } = {}, 
               request_note = excluded.request_note, decided_at = NULL, decided_by = NULL, decide_note = ''`,
     [storeId, category, now, via, String(note || '').slice(0, 200)]);
     logEvent(db, { t: now, kind: '품목 신청', store_id: storeId, region_id: store.region_id, actor: 'owner:' + via, message: `${store.name} · ${CATEGORIES[category].label} 이용 신청` });
+    adminNotify.accessRequest(ctx, store, CATEGORIES[category].label, String(note || '').slice(0, 60), now);
     return { status: 'pending' };
   });
 }

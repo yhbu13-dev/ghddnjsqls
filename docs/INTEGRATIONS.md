@@ -79,9 +79,11 @@ await fetch(URL, { method: 'POST', body, headers: {
 | `BF_EXPIRE_01` | 무응답 만료 안내 | — |
 | `BF_DELIVERED_01` | 배송 완료 | — |
 | `BF_DLVFAIL_01` | 배송 실패 · 재방문 안내 | — |
-| `BF_ACCESS_OK_01` | 품목 이용 승인 안내 (`#{category}`) | 발주하기 |
+| `BF_ACCESS_OK_02` | 품목 이용 승인 안내 (`#{category}`) | 품목 확인하기 |
 | `BF_ACCESS_NO_01` | 품목 이용 미승인 안내 (`#{category}`, `#{reason}`) | — |
-| `BF_ORDER_LINK_01` | 운영자가 보내는 발주 화면 링크 | 발주하기 |
+| `BF_SHEET_01` | 정기 발주서 준비 안내 (사우나 등 정기 발주 매장) | 발주서 확인하기 |
+
+템플릿 문구 전체는 `docs/KAKAO.md` 5장에 있습니다. 운영자가 발주 링크를 알림톡으로 보내는 기능은 없습니다(점주 요청 없는 발주 권유는 광고로 분류돼 반려).
 
 점주 직접 발주(카카오톡 채널·발주 화면)는 접수 즉시 확정되므로 `BF_CONFIRM_02`부터 나갑니다. 카카오톡 채널 챗봇·카카오 로그인 설정은 `docs/KAKAO.md`에 있습니다.
 
