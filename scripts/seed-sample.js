@@ -15,6 +15,8 @@ const delivery = require('../server/engine/delivery');
 const jobs = require('../server/jobs');
 const props = require('../server/engine/proposals');
 const settlement = require('../server/engine/settlement');
+const catalog = require('../server/engine/catalog');
+const shop = require('../server/engine/shop');
 
 const args = process.argv.slice(2);
 const opt = (k, d) => { const i = args.indexOf('--' + k); return i >= 0 ? args[i + 1] : d; };
@@ -48,6 +50,24 @@ const PROFILE = {
   L: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, .02, .14, .20, .12, .04, .02, .03, .10, .14, .11, .06, .02, 0, 0],
   D: [.03, .01, 0, 0, 0, 0, 0, 0, 0, 0, 0, .02, .04, .02, 0, 0, .02, .07, .13, .17, .17, .14, .10, .08],
 };
+// 카페·사우나 스낵 품목 (점주가 카카오톡·발주 화면으로 직접 발주)
+const EXTRA_SKUS = [
+  ['CB1KG', '원두 (하우스 블렌드) 1kg', 1, '봉', 26000, 'cafe', '1kg × 1봉'], ['CBDEC', '디카페인 원두 1kg', 1, '봉', 32000, 'cafe', '1kg × 1봉'],
+  ['MK1L', '우유 1L', 12, '팩', 30000, 'cafe', '1L × 12팩'], ['OMK1L', '오트 음료 1L', 6, '팩', 21000, 'cafe', '1L × 6팩'],
+  ['SYVAN', '바닐라 시럽 1L', 1, '병', 13500, 'cafe', '1L × 1병'], ['CUP16', '아이스컵 16oz', 1000, '개', 52000, 'cafe', '16oz · 1,000개'],
+  ['LID16', '컵 뚜껑 16oz', 1000, '개', 24000, 'cafe', '1,000개'], ['STRAW', '종이 빨대', 5000, '개', 38000, 'cafe', '5,000개'],
+  ['EGGBK', '맥반석 구운란', 30, '개', 15000, 'snack', '30구 × 1판'], ['SIKHE', '식혜 240ml 캔', 30, '캔', 21000, 'snack', '240ml × 30캔'],
+  ['CHIPS', '감자칩 60g', 20, '봉', 22000, 'snack', '60g × 20봉'], ['JERKY', '오징어 땅콩', 30, '봉', 27000, 'snack', '30봉'],
+  ['RAMEN', '컵라면 (소)', 30, '개', 24000, 'snack', '30개'], ['BAR30', '에너지바', 36, '개', 30000, 'snack', '36개'],
+];
+const OWNER_STORES = [
+  ['GN', 'GN-C1', '역삼 모닝브루 카페', 'cafe', ['CB1KG', 'MK1L', 'CUP16', 'LID16', 'SYVAN']],
+  ['MP', 'MP-C1', '연남 오후세시 커피', 'cafe', ['CB1KG', 'CBDEC', 'MK1L', 'OMK1L', 'STRAW']],
+  ['SS', 'SS-C1', '성수 로스터리 공방', 'cafe', ['CB1KG', 'MK1L', 'CUP16']],
+  ['GN', 'GN-S1', '강남 한빛 사우나', 'sauna', ['EGGBK', 'SIKHE', 'RAMEN']],
+  ['MP', 'MP-S1', '망원 황토 찜질방', 'sauna', ['EGGBK', 'SIKHE', 'CHIPS', 'JERKY']],
+  ['SS', 'SS-S1', '뚝섬 온천 사우나', 'sauna', ['EGGBK', 'SIKHE', 'BAR30']],
+];
 const WEEK_APPROVAL = [.83, .865, .89, .905, .918, .925, .925, .93];
 const WEEK_STOP = [8.4, 7.8, 7.35, 7.05, 6.9, 6.78, 6.7, 6.6];
 
@@ -62,7 +82,7 @@ async function main() {
   const now = Date.now();
   const startMid = T.kstMidnight(now) - (WEEKS * 7 - 1) * T.DAY;
   db.tx(() => {
-    for (const t of ['events', 'stops', 'routes', 'messages', 'proposal_lines', 'proposals', 'counts', 'inv_snapshots', 'pos_sale_items', 'pos_sales', 'unmapped_menu', 'menu_map', 'store_skus', 'stores', 'drivers', 'regions', 'skus', 'settlements']) db.run(`DELETE FROM ${t}`);
+    for (const t of ['carts', 'kakao_links', 'store_categories', 'events', 'stops', 'routes', 'messages', 'proposal_lines', 'proposals', 'counts', 'inv_snapshots', 'pos_sale_items', 'pos_sales', 'unmapped_menu', 'menu_map', 'store_skus', 'stores', 'drivers', 'regions', 'skus', 'settlements']) db.run(`DELETE FROM ${t}`);
   });
   settings.save(db, { pilot_start: T.dateStr(startMid + T.HOUR), sample_data: 1 });
   ctx.reload();
@@ -108,6 +128,23 @@ async function main() {
     });
   }
 
+  // ── 카페·사우나 (점주 직접 발주 매장 · 별도 난수로 기존 시뮬레이션과 독립) ──
+  const R1 = mulberry32(777);
+  EXTRA_SKUS.forEach(([id, name, pack, unit, price, category, spec], i) => db.run('INSERT INTO skus (id, name, pack, unit, price, sort, category, spec) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [id, name, pack, unit, price, 100 + i, category, spec]));
+  const owners = [];
+  for (const [rid, code, name, biz, basket] of OWNER_STORES) {
+    const [, , , , hlat, hlng] = REGIONS.find((x) => x[0] === rid);
+    const ang = R1() * Math.PI * 2, rad = (.3 + R1() * .6) * 3;
+    const r = db.run(`INSERT INTO stores (code, name, region_id, type, biz, owner_name, owner_phone, address, lat, lng, created_at) VALUES (?, ?, ?, 'L', ?, '', ?, ?, ?, ?, ?)`,
+      [code, name, rid, biz, `010-0000-${String(phoneSeq++).padStart(4, '0')}`, `(샘플 주소) ${name.split(' ')[0]}동`, hlat + Math.sin(ang) * rad / 111, hlng + Math.cos(ang) * rad / 88.2, startMid]);
+    const sid = Number(r.lastInsertRowid);
+    catalog.ensureDefault(db, { id: sid, biz }, 'sample', startMid);
+    owners.push({ sid, basket, next: startMid + (1 + R1() * 3) * T.DAY + (9 + R1() * 2) * T.HOUR, every: biz === 'cafe' ? 3.5 : 5 });
+  }
+  // 품목 이용 신청 예시: 사우나 1곳은 음료 승인, 카페·사우나 1곳씩 승인 대기
+  catalog.decide(ctx, owners[3].sid, 'beverage', 'approve', { actor: 'sample', note: '매점 음료 함께 공급' }, startMid + 2 * T.DAY);
+  owners[3].basket.push('SD355', 'WT050');
+
   // ── 초기 실사 (파일럿 시작일 10시) ──
   const t0 = startMid + 10 * T.HOUR;
   for (const s of sim) {
@@ -151,6 +188,17 @@ async function main() {
       }
       if (s.name === '연남 이모네포차' && prof > .1 && R0() < .3) inv.applySale(ctx, store, { ext_id: 'S' + (++saleSeq), sold_at: t, menu: '음료 무한리필', qty: 1 }, t + STEP);
     }
+    // 1-1) 카페·사우나 점주 직접 발주 (카카오톡 채팅 또는 발주 화면)
+    for (const o of owners) {
+      if (o.next > t + STEP || o.next >= now) continue;
+      const items = {};
+      for (const k of o.basket) if (R1() < .8) items[k] = 1 + Math.floor(R1() * 3);
+      if (Object.keys(items).length) {
+        try { await shop.submit(ctx, o.sid, { items, source: R1() < .6 ? 'chat' : 'web' }, o.next); } catch { /* 최소 금액 미달 등은 건너뜀 */ }
+      }
+      o.next += o.every * T.DAY * (.8 + R1() * .4);
+      o.next = T.kstMidnight(o.next) + (9 + R1() * 2.5) * T.HOUR;
+    }
     // 2) 스케줄러 (트리거·발송·만료·배차·스냅샷)
     await jobs.tick(ctx, t);
     // 2-1) 운영자 검수: 검수 대상 매장의 제안은 30~60분 뒤(업무 시간) 발송
@@ -183,7 +231,7 @@ async function main() {
     // 4) 기사 도착·하차 (하차 전 잔량 실사)
     for (const st of db.all("SELECT * FROM stops WHERE status IN ('pending','arrived') AND eta <= ?", [t + STEP])) {
       if (doneStop.has(st.id)) continue;
-      const s = sim.find((x) => x.sid === st.store_id);
+      const s = sim.find((x) => x.sid === st.store_id) || null; // 점주 직접 발주 매장은 재고 시뮬레이션 없음
       const boxes = st.boxes;
       const dur = Math.max(3.2, Math.min(14, WEEK_STOP[weekOf(st.eta)] * Math.exp(.17 * N()) + (boxes - 8.6) * .22));
       const arriveAt = st.eta + Math.floor(U(-4, 6) * 60e3);
@@ -191,16 +239,20 @@ async function main() {
       if (doneAt > now) { if (st.status === 'pending' && arriveAt <= now) delivery.arrive(ctx, st.id, { actor: 'driver' }, arriveAt); continue; }
       if (st.status === 'pending') delivery.arrive(ctx, st.id, { actor: 'driver' }, arriveAt);
       const counts = {};
-      for (const [k, it] of Object.entries(s.items)) counts[k] = Math.round(it.true * SKU[k].pack) / SKU[k].pack;
+      if (s) for (const [k, it] of Object.entries(s.items)) counts[k] = Math.round(it.true * SKU[k].pack) / SKU[k].pack;
       delivery.complete(ctx, st.id, { counts, actor: 'driver' }, doneAt);
-      for (const l of db.all('SELECT sku_id, qty FROM proposal_lines WHERE proposal_id = ?', [st.proposal_id])) if (s.items[l.sku_id]) s.items[l.sku_id].true += l.qty;
+      if (s) for (const l of db.all('SELECT sku_id, qty FROM proposal_lines WHERE proposal_id = ?', [st.proposal_id])) if (s.items[l.sku_id]) s.items[l.sku_id].true += l.qty;
       doneStop.add(st.id);
     }
   }
   await jobs.tick(ctx, now);
+  catalog.requestAccess(ctx, owners[1].sid, 'snack', { via: 'chat', note: '디저트용 과자류도 받고 싶어요' }, now - 3 * T.HOUR);
+  catalog.requestAccess(ctx, owners[4].sid, 'cafe', { via: 'web', note: '매점에서 아이스커피 판매 예정' }, now - 50 * 60e3);
   // 지급일이 지난 주차는 지급 완료로 표시
   for (const w of settlement.weeks(ctx, now)) if (w.status === 'closed' && T.parseDate(w.pay_date) < T.kstMidnight(now)) settlement.markPaid(ctx, w.start, 'sample', T.parseDate(w.pay_date) + 10 * T.HOUR);
   const n = (sql) => db.get(sql).c;
+  const direct = n("SELECT COUNT(*) AS c FROM proposals WHERE source != 'auto'");
+  if (!direct) throw new Error('점주 직접 발주가 만들어지지 않았습니다');
   console.log(`샘플 데이터 생성 완료 (${((Date.now() - started) / 1000).toFixed(1)}초): 매장 ${n('SELECT COUNT(*) AS c FROM stores')} · POS 판매 ${n('SELECT COUNT(*) AS c FROM pos_sales')} · 발주 ${n('SELECT COUNT(*) AS c FROM proposals')} · 배송 ${n("SELECT COUNT(*) AS c FROM stops WHERE status = 'done'")} · 실사 ${n('SELECT COUNT(*) AS c FROM counts')}`);
   console.log(`파일럿 시작일 ${T.dateStr(startMid + T.HOUR)} · DB ${file}`);
   db.close();

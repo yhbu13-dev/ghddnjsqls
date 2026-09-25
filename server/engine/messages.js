@@ -14,6 +14,9 @@ const TEMPLATES = {
   expire: 'BF_EXPIRE_01',
   delivered: 'BF_DELIVERED_01',
   delivery_failed: 'BF_DLVFAIL_01',
+  access_ok: 'BF_ACCESS_OK_01',
+  access_no: 'BF_ACCESS_NO_01',
+  order_link: 'BF_ORDER_LINK_01',
 };
 
 const won = (n) => Math.round(n).toLocaleString('ko-KR') + '원';
@@ -102,6 +105,19 @@ function enqueue(ctx, p, kind, now) {
   [p.id, p.store_id, kind, ctx.R.notifier, m.store.owner_phone, m.template, m.text, JSON.stringify({ variables: m.vars, buttons: m.buttons }), now]);
 }
 
+/**
+ * 발주 건과 무관한 매장 안내 (품목 승인 결과 · 발주 화면 링크) — 버튼은 발주 화면으로 연결
+ * @param kind access_ok | access_no | order_link
+ */
+function enqueueNotice(ctx, storeId, kind, { text, vars = {}, link = null }, now) {
+  const store = ctx.db.get('SELECT * FROM stores WHERE id = ?', [storeId]);
+  if (!TEMPLATES[kind]) throw new Error('알 수 없는 메시지 종류: ' + kind);
+  const buttons = link ? [{ name: '발주하기', url: link }] : [];
+  ctx.db.run(`INSERT INTO messages (proposal_id, store_id, kind, channel, to_phone, template, body, payload, created_at)
+              VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  [storeId, kind, ctx.R.notifier, store.owner_phone, TEMPLATES[kind], text, JSON.stringify({ variables: { store: store.name, owner: store.owner_name, ...vars, ...(link ? { link } : {}) }, buttons }), now]);
+}
+
 /** 대기 중인 메시지 발송 (최대 5회 재시도) */
 async function flushOutbox(ctx, now) {
   const { db } = ctx;
@@ -115,4 +131,4 @@ async function flushOutbox(ctx, now) {
   return queued.length;
 }
 
-module.exports = { enqueue, flushOutbox, ownerLink, build, TEMPLATES, linesOf };
+module.exports = { enqueue, enqueueNotice, flushOutbox, ownerLink, build, TEMPLATES, linesOf };

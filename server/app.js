@@ -4,6 +4,8 @@
 const http = require('node:http');
 const path = require('node:path');
 const auth = require('./auth');
+const kakao = require('./kakao');
+const shop = require('./engine/shop');
 const { buildRoutes } = require('./routes');
 const { HttpError, parseCookies, send, serveFile } = require('./http');
 
@@ -49,6 +51,29 @@ function createServer(ctx, { trustProxy = false, log = console } = {}) {
       }
 
       if (req.method !== 'GET' && req.method !== 'HEAD') throw new HttpError(405, '허용되지 않는 메서드입니다');
+      // 카카오 로그인: 인가 요청 → 콜백 (리다이렉트만 하는 경로)
+      if (url.pathname === '/k/login') {
+        let loc;
+        try {
+          const { url: to, nonce } = kakao.loginStart(ctx, url.searchParams.get('t'));
+          res.setHeader('Set-Cookie', `bf_ks=${nonce}; Path=/k; HttpOnly; SameSite=Lax; Max-Age=600${req.secure ? '; Secure' : ''}`);
+          loc = to;
+        } catch (e) { loc = '/k/link?err=' + encodeURIComponent(e.message); }
+        res.writeHead(302, { Location: loc, 'Cache-Control': 'no-store' });
+        return res.end();
+      }
+      if (url.pathname === '/k/callback') {
+        let loc;
+        try {
+          const r = await kakao.loginCallback(ctx, { code: url.searchParams.get('code'), state: url.searchParams.get('state'), cookieNonce: cookies.bf_ks });
+          loc = r.store ? shop.orderLink(ctx, r.store.id) : '/k/link?l=' + encodeURIComponent(r.pendingToken);
+        } catch (e) {
+          log.error('[카카오 로그인]', e.message);
+          loc = '/k/link?err=' + encodeURIComponent(e.message);
+        }
+        res.writeHead(302, { Location: loc, 'Cache-Control': 'no-store', 'Set-Cookie': `bf_ks=; Path=/k; HttpOnly; SameSite=Lax; Max-Age=0${req.secure ? '; Secure' : ''}` });
+        return res.end();
+      }
       // 페이지 라우팅
       let page = null;
       if (url.pathname === '/') {
@@ -57,6 +82,8 @@ function createServer(ctx, { trustProxy = false, log = console } = {}) {
       } else if (url.pathname === '/login') page = 'login.html';
       else if (/^\/o\/[A-Za-z0-9_\-.]+$/.test(url.pathname)) page = 'owner.html';
       else if (/^\/d\/[A-Za-z0-9_\-.]+$/.test(url.pathname)) page = 'driver.html';
+      else if (/^\/m\/[A-Za-z0-9_\-.]+$/.test(url.pathname)) page = 'shop.html';
+      else if (url.pathname === '/k/link') page = 'kakao-link.html';
       else if (/^\/assets\/[a-z0-9_.-]+$/i.test(url.pathname)) page = url.pathname.slice(1);
       if (page && serveFile(res, PUBLIC_DIR, page)) return;
       throw new HttpError(404, '페이지를 찾을 수 없습니다');

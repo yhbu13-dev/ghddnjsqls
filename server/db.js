@@ -137,6 +137,39 @@ const MIGRATIONS = [
   );
   CREATE INDEX events_t ON events (t);
   `,
+  // v2 — 업종별 품목(카페·사우나 스낵·식당 음료) · 품목 이용 승인 · 점주 직접 발주 · 카카오 연결
+  `
+  ALTER TABLE skus ADD COLUMN category TEXT NOT NULL DEFAULT 'beverage' CHECK (category IN ('cafe','snack','beverage'));
+  ALTER TABLE skus ADD COLUMN spec TEXT NOT NULL DEFAULT '';
+  ALTER TABLE stores ADD COLUMN biz TEXT NOT NULL DEFAULT 'restaurant' CHECK (biz IN ('cafe','sauna','restaurant'));
+  ALTER TABLE stores ADD COLUMN link_code TEXT;
+  ALTER TABLE stores ADD COLUMN order_nonce TEXT NOT NULL DEFAULT '';
+  CREATE UNIQUE INDEX stores_link_code ON stores (link_code) WHERE link_code IS NOT NULL;
+  ALTER TABLE proposals ADD COLUMN source TEXT NOT NULL DEFAULT 'auto' CHECK (source IN ('auto','web','chat'));
+  ALTER TABLE proposals ADD COLUMN client_ref TEXT;
+  CREATE UNIQUE INDEX proposals_client_ref ON proposals (store_id, client_ref) WHERE client_ref IS NOT NULL;
+
+  CREATE TABLE store_categories (
+    store_id INTEGER NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
+    category TEXT NOT NULL CHECK (category IN ('cafe','snack','beverage')),
+    status TEXT NOT NULL CHECK (status IN ('approved','pending','rejected')),
+    requested_at INTEGER NOT NULL, requested_via TEXT NOT NULL DEFAULT 'ops', request_note TEXT NOT NULL DEFAULT '',
+    decided_at INTEGER, decided_by TEXT, decide_note TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (store_id, category)
+  );
+  CREATE TABLE carts (
+    store_id INTEGER NOT NULL REFERENCES stores(id) ON DELETE CASCADE, sku_id TEXT NOT NULL REFERENCES skus(id) ON DELETE CASCADE,
+    qty INTEGER NOT NULL CHECK (qty > 0), updated_at INTEGER NOT NULL,
+    PRIMARY KEY (store_id, sku_id)
+  );
+  CREATE TABLE kakao_links (
+    id INTEGER PRIMARY KEY, store_id INTEGER NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL CHECK (kind IN ('chatbot','login')), user_key TEXT NOT NULL, nickname TEXT NOT NULL DEFAULT '',
+    linked_at INTEGER NOT NULL, last_seen_at INTEGER, UNIQUE (kind, user_key)
+  );
+  INSERT INTO store_categories (store_id, category, status, requested_at, decided_at, decided_by)
+    SELECT id, 'beverage', 'approved', created_at, created_at, 'migration' FROM stores;
+  `,
 ];
 
 class Db {

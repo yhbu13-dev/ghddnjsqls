@@ -42,6 +42,12 @@ const SPEC = {
   webhook_url: { def: '', type: 'url', label: '알림 웹훅 URL (webhook 방식)' },
   public_base_url: { def: 'http://localhost:8080', type: 'url', label: '외부 접속 주소 (사장님·기사 링크)' },
   sample_data: { def: 0, type: 'num', min: 0, max: 1, label: '샘플 데이터 여부' },
+  // 점주 직접 발주 · 카카오
+  order_min_amount: { def: 30000, type: 'num', min: 0, max: 10000000, label: '최소 발주 금액 (원)' },
+  order_link_hours: { def: 24, type: 'num', min: 1, max: 720, label: '발주 화면 링크 유효 시간 (시간)' },
+  kakao_rest_key: { def: '', type: 'text', re: /^[A-Za-z0-9]{0,64}$/, label: '카카오 REST API 키 (카카오 로그인)' },
+  kakao_channel_id: { def: '', type: 'text', re: /^(_[A-Za-z0-9]{2,20})?$/, label: '카카오톡 채널 ID (예: _xaBcD)' },
+  kakao_block_id: { def: '', type: 'text', re: /^[a-f0-9]{0,40}$/, label: '오픈빌더 발주 블록 ID' },
 };
 
 function validate(key, v) {
@@ -57,6 +63,7 @@ function validate(key, v) {
       return n;
     }
     case 'enum': if (!s.values.includes(v)) throw new Error(`${s.label}: ${s.values.join(', ')} 중 하나`); return v;
+    case 'text': if (!s.re.test(String(v))) throw new Error(`${s.label}: 형식이 올바르지 않습니다`); return String(v);
     case 'url': if (v !== '' && !/^https?:\/\/[^\s]+$/.test(String(v))) throw new Error(`${s.label}: http(s):// 로 시작하는 주소`); return String(v).replace(/\/+$/, '');
     default: return v;
   }

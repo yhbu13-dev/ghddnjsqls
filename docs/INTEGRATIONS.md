@@ -79,6 +79,11 @@ await fetch(URL, { method: 'POST', body, headers: {
 | `BF_EXPIRE_01` | 무응답 만료 안내 | — |
 | `BF_DELIVERED_01` | 배송 완료 | — |
 | `BF_DLVFAIL_01` | 배송 실패 · 재방문 안내 | — |
+| `BF_ACCESS_OK_01` | 품목 이용 승인 안내 (`#{category}`) | 발주하기 |
+| `BF_ACCESS_NO_01` | 품목 이용 미승인 안내 (`#{category}`, `#{reason}`) | — |
+| `BF_ORDER_LINK_01` | 운영자가 보내는 발주 화면 링크 | 발주하기 |
+
+점주 직접 발주(카카오톡 채널·발주 화면)는 접수 즉시 확정되므로 `BF_CONFIRM_02`부터 나갑니다. 카카오톡 채널 챗봇·카카오 로그인 설정은 `docs/KAKAO.md`에 있습니다.
 
 실제 문구는 `server/engine/messages.js`에 있습니다. 템플릿 심사 결과에 맞춰 이 파일의 문구를 고치면 됩니다.
 
@@ -97,11 +102,12 @@ await fetch(URL, { method: 'POST', body, headers: {
 **매장** (`code` 기준으로 있으면 수정, 없으면 추가)
 
 ```csv
-code,name,region_id,type,owner_name,owner_phone,address,lat,lng,pos_store_id,send_pref,skus
-GN-01,역삼 달빛포차,GN,D,홍길동,010-1234-5678,서울 강남구 …,37.5012,127.0391,TO-GN-01,immediate,CL125;SD150;WT200
+code,name,region_id,biz,type,owner_name,owner_phone,address,lat,lng,pos_store_id,send_pref,skus
+GN-01,역삼 달빛포차,GN,restaurant,D,홍길동,010-1234-5678,서울 강남구 …,37.5012,127.0391,TO-GN-01,immediate,CL125;SD150;WT200
+GN-C1,역삼 모닝브루 카페,GN,cafe,L,김카페,010-2222-3333,서울 강남구 …,37.5021,127.0377,,immediate,
 ```
 
-`type`: `L`(점심 중심) / `D`(저녁 중심) · `send_pref`: `immediate` / `break` · `skus`: SKU 코드를 `;`로 구분
+`biz`(선택): `restaurant`(식당 → 음료 품목, 기본값) / `cafe`(카페 → 카페 품목) / `sauna`(사우나 → 스낵 품목) · `type`: `L`(점심 중심) / `D`(저녁 중심) · `send_pref`: `immediate` / `break` · `skus`: SKU 코드를 `;`로 구분
 
 **메뉴 매핑** (`store_code`를 비우면 전체 매장 공통)
 
@@ -122,4 +128,6 @@ TO-GN-01,20260924-000123-1,2026-09-24 12:31,콜라 1.25L,2
 
 - 사장님 링크 `/o/{토큰}`: 발주마다 발급하며 7일간 유효합니다. 처음 열면 **열람**으로 기록됩니다. 콘솔의 [사장님 화면 열기] 미리보기는 열람으로 치지 않습니다.
 - 기사 링크 `/d/{토큰}`: 배차된 라우트마다 발급하며 배송일 다음 날까지 유효합니다.
-- 두 링크 모두 [링크 서명 키 재발급]으로 한꺼번에 무효로 만들 수 있습니다.
+- 점주 발주 화면 `/m/{토큰}`: 매장 단위로 발급하며 [운영 설정 → 발주 화면 링크 유효 시간](기본 24시간) 동안 유효합니다. 카카오톡 채널의 [한눈에 발주하기] 버튼을 누를 때마다 새로 발급됩니다. [품목 승인·카카오 → 초기화]로 그 매장의 링크만 무효로 만들 수 있습니다.
+- 매장 연결 `/k/link`: 카카오톡 채널에서 처음 들어온 점주가 연결 코드 6자리를 넣는 화면입니다 (30분 유효).
+- 모든 링크는 [링크 서명 키 재발급]으로 한꺼번에 무효로 만들 수 있습니다.

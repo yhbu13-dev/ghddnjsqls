@@ -13,6 +13,9 @@ const orders = require('./engine/orders');
 const delivery = require('./engine/delivery');
 const settlement = require('./engine/settlement');
 const msg = require('./engine/messages');
+const catalog = require('./engine/catalog');
+const shop = require('./engine/shop');
+const kakao = require('./kakao');
 const { logEvent } = require('./engine/events');
 const { parseCsv } = require('./csv');
 const { HttpError, createRouter, readJson, readBody } = require('./http');
@@ -47,9 +50,9 @@ function parseTime(v) {
   return t;
 }
 
-const STORE_INSERT = `INSERT INTO stores (code, name, region_id, type, owner_name, owner_phone, address, lat, lng, pos_store_id, send_pref, review_required, pay_test_fail, active, beta, memo, created_at)
-  VALUES ($code, $name, $region_id, $type, $owner_name, $owner_phone, $address, $lat, $lng, $pos_store_id, $send_pref, $review_required, $pay_test_fail, $active, $beta, $memo, $now)`;
-const STORE_UPDATE = `UPDATE stores SET code=$code, name=$name, region_id=$region_id, type=$type, owner_name=$owner_name, owner_phone=$owner_phone, address=$address,
+const STORE_INSERT = `INSERT INTO stores (code, name, region_id, type, biz, owner_name, owner_phone, address, lat, lng, pos_store_id, send_pref, review_required, pay_test_fail, active, beta, memo, created_at)
+  VALUES ($code, $name, $region_id, $type, $biz, $owner_name, $owner_phone, $address, $lat, $lng, $pos_store_id, $send_pref, $review_required, $pay_test_fail, $active, $beta, $memo, $now)`;
+const STORE_UPDATE = `UPDATE stores SET code=$code, name=$name, region_id=$region_id, type=$type, biz=$biz, owner_name=$owner_name, owner_phone=$owner_phone, address=$address,
   lat=$lat, lng=$lng, pos_store_id=$pos_store_id, send_pref=$send_pref, review_required=$review_required, pay_test_fail=$pay_test_fail,
   active=$active, beta=$beta, memo=$memo WHERE id=$id`;
 
@@ -151,6 +154,14 @@ function buildRoutes(ctx) {
       settings: { values: ctx.settings, spec: settings.SPEC },
       ingest: admin ? { endpoint: ctx.R.public_base_url + '/api/ingest/pos', secret: ctx.getSecret('ingest'), webhookSecret: ctx.getSecret('webhook') } : null,
       outbox: db.all("SELECT id, kind, status, attempts, error, created_at FROM messages WHERE status != 'sent' ORDER BY id DESC LIMIT 50"),
+      categories: catalog.CATEGORIES, biz: catalog.BIZ,
+      storeCategories: db.all('SELECT * FROM store_categories'),
+      kakaoLinks: db.all('SELECT id, store_id, kind, nickname, linked_at, last_seen_at FROM kakao_links ORDER BY id DESC'),
+      kakao: {
+        skillUrl: ctx.R.public_base_url + '/api/kakao/skill' + (admin ? '?key=' + encodeURIComponent(ctx.getSecret('kakao')) : ''),
+        redirectUri: ctx.R.public_base_url + '/k/callback', loginUrl: ctx.R.public_base_url + '/k/login',
+        restKey: !!ctx.R.kakao_rest_key, clientSecret: !!ctx.env.BEVFLOW_KAKAO_CLIENT_SECRET, blockId: ctx.R.kakao_block_id, channelId: ctx.R.kakao_channel_id,
+      },
     };
   }, { role: 'ops' });
 
@@ -160,6 +171,7 @@ function buildRoutes(ctx) {
       name: str(b.name ?? cur.name, '매장명', { max: 60 }),
       region_id: str(b.region_id ?? cur.region_id, '권역', { max: 20 }),
       type: (b.type ?? cur.type) === 'D' ? 'D' : 'L',
+      biz: catalog.BIZ[b.biz || cur.biz] ? (b.biz || cur.biz) : 'restaurant', // CSV의 빈 칸은 기존 값 유지
       owner_name: str(b.owner_name ?? cur.owner_name, '사장님 성함', { max: 30, required: false }),
       owner_phone: str(b.owner_phone ?? cur.owner_phone, '사장님 연락처', { max: 20, required: false, re: PHONE }),
       address: str(b.address ?? cur.address, '주소', { max: 200, required: false }),
@@ -184,6 +196,7 @@ function buildRoutes(ctx) {
     const sid = uniq(() => db.tx(() => {
       const res = db.run(STORE_INSERT, { ...o, now });
       const newId = Number(res.lastInsertRowid);
+      catalog.ensureDefault(db, { id: newId, biz: o.biz }, req.user.email, now);
       for (const sku of Array.isArray(b.skus) ? b.skus : []) {
         if (db.get('SELECT 1 FROM skus WHERE id = ?', [sku])) db.run('INSERT OR IGNORE INTO store_skus (store_id, sku_id) VALUES (?, ?)', [newId, sku]);
       }
@@ -196,7 +209,11 @@ function buildRoutes(ctx) {
     const cur = db.get('SELECT * FROM stores WHERE id = ?', [id(p.id)]);
     if (!cur) throw new HttpError(404, '매장을 찾을 수 없습니다');
     const o = storeFields(await readJson(req), cur);
-    uniq(() => db.run(STORE_UPDATE, { ...o, id: cur.id }));
+    uniq(() => db.tx(() => {
+      catalog.ensureDefault(db, cur, req.user.email, Date.now()); // 업종을 바꿔도 이전 기본 품목은 승인 상태로 남긴다 (필요하면 운영자가 해제)
+      db.run(STORE_UPDATE, { ...o, id: cur.id });
+      catalog.ensureDefault(db, { id: cur.id, biz: o.biz }, req.user.email, Date.now());
+    }));
     logEvent(db, { t: Date.now(), kind: '매장 수정', store_id: cur.id, region_id: o.region_id, actor: req.user.email, message: `${o.name} 정보 수정` });
     return { ok: true };
   }, { role: 'ops' });
@@ -224,19 +241,21 @@ function buildRoutes(ctx) {
     price: num(b.price ?? cur.price, '박스 단가', { min: 0, max: 10000000, int: true }),
     active: b.active === undefined ? (cur.active ?? 1) : bool(b.active),
     sort: num(b.sort ?? cur.sort ?? 0, '정렬', { min: 0, max: 9999, int: true }),
+    category: catalog.CATEGORIES[b.category ?? cur.category] ? (b.category ?? cur.category) : 'beverage',
+    spec: str(b.spec ?? cur.spec, '규격 설명', { max: 60, required: false }),
   });
   r.post('/api/admin/skus', async (req) => {
     const b = await readJson(req);
     const skuId = str(b.id, 'SKU 코드', { re: SKU_ID });
     const o = skuFields(b);
-    uniq(() => db.run('INSERT INTO skus (id, name, pack, unit, price, active, sort) VALUES ($id, $name, $pack, $unit, $price, $active, $sort)', { ...o, id: skuId }));
+    uniq(() => db.run('INSERT INTO skus (id, name, pack, unit, price, active, sort, category, spec) VALUES ($id, $name, $pack, $unit, $price, $active, $sort, $category, $spec)', { ...o, id: skuId }));
     return { ok: true };
   }, { role: 'ops' });
   r.put('/api/admin/skus/:id', async (req, p) => {
     const cur = db.get('SELECT * FROM skus WHERE id = ?', [p.id]);
     if (!cur) throw new HttpError(404, 'SKU를 찾을 수 없습니다');
     const o = skuFields(await readJson(req), cur);
-    db.run('UPDATE skus SET name=$name, pack=$pack, unit=$unit, price=$price, active=$active, sort=$sort WHERE id=$id', { ...o, id: cur.id });
+    db.run('UPDATE skus SET name=$name, pack=$pack, unit=$unit, price=$price, active=$active, sort=$sort, category=$category, spec=$spec WHERE id=$id', { ...o, id: cur.id });
     return { ok: true };
   }, { role: 'ops' });
 
@@ -330,7 +349,7 @@ function buildRoutes(ctx) {
     return { ok: true, settings: ctx.settings };
   }, { role: 'admin' });
   r.post('/api/admin/secrets/:name/rotate', async (req, p) => {
-    if (!['ingest', 'webhook', 'link'].includes(p.name)) throw new HttpError(400, '알 수 없는 키');
+    if (!['ingest', 'webhook', 'link', 'kakao'].includes(p.name)) throw new HttpError(400, '알 수 없는 키');
     ctx.rotateSecret(p.name);
     logEvent(db, { t: Date.now(), kind: '보안', actor: req.user.email, message: `${p.name} 키 재발급` });
     return { ok: true };
@@ -339,13 +358,72 @@ function buildRoutes(ctx) {
     const b = await readJson(req);
     if (b.confirm !== '샘플 삭제') throw new HttpError(400, "확인 문구 '샘플 삭제'를 입력해 주세요");
     db.tx(() => {
-      for (const t of ['events', 'stops', 'routes', 'messages', 'proposal_lines', 'proposals', 'counts', 'inv_snapshots', 'pos_sale_items', 'pos_sales', 'unmapped_menu', 'menu_map', 'store_skus', 'stores', 'drivers', 'regions', 'skus', 'settlements']) db.run(`DELETE FROM ${t}`);
+      for (const t of ['carts', 'kakao_links', 'store_categories', 'events', 'stops', 'routes', 'messages', 'proposal_lines', 'proposals', 'counts', 'inv_snapshots', 'pos_sale_items', 'pos_sales', 'unmapped_menu', 'menu_map', 'store_skus', 'stores', 'drivers', 'regions', 'skus', 'settlements']) db.run(`DELETE FROM ${t}`);
     });
     settings.save(db, { sample_data: 0 });
     ctx.reload();
     logEvent(db, { t: Date.now(), kind: '데이터', actor: req.user.email, message: '샘플 데이터 전체 삭제' });
     return { ok: true };
   }, { role: 'admin' });
+
+  // ── 관리: 품목 이용 승인 · 카카오 연결 ─────────────────────────
+  r.post('/api/admin/access/:store/:cat', async (req, p) => {
+    const b = await readJson(req);
+    const sid = id(p.store);
+    const now = Date.now();
+    const action = str(b.action, '처리', { max: 10 });
+    const note = str(b.note, '메모', { max: 100, required: false });
+    try {
+      db.tx(() => {
+        catalog.decide(ctx, sid, p.cat, action, { actor: req.user.email, note }, now);
+        const cat = catalog.CATEGORIES[p.cat].label;
+        if (action === 'approve') {
+          const link = shop.orderLink(ctx, sid, now);
+          msg.enqueueNotice(ctx, sid, 'access_ok', { text: `[BevFlow]\n요청하신 ${cat} 이용이 승인됐어요. 이제 발주 화면과 카카오톡 채널에서 바로 발주할 수 있어요.\n▶ ${link}`, vars: { category: cat }, link }, now);
+        } else if (action === 'reject') {
+          msg.enqueueNotice(ctx, sid, 'access_no', { text: `[BevFlow]\n요청하신 ${cat} 이용은 이번에 승인되지 않았어요.${note ? '\n사유: ' + note : ''}\n궁금한 점은 카카오톡 채널로 문의해 주세요.`, vars: { category: cat, reason: note } }, now);
+        }
+      });
+    } catch (e) { throw new HttpError(409, e.message); }
+    return { ok: true };
+  }, { role: 'ops' });
+  r.post('/api/admin/stores/:id/link-code', async (req, p) => {
+    const sid = id(p.id);
+    if (!db.get('SELECT 1 FROM stores WHERE id = ?', [sid])) throw new HttpError(404, '매장을 찾을 수 없습니다');
+    const code = kakao.issueLinkCode(ctx, sid);
+    logEvent(db, { t: Date.now(), kind: '카카오 연결', store_id: sid, actor: req.user.email, message: '연결 코드 발급' });
+    return { code };
+  }, { role: 'ops' });
+  r.post('/api/admin/stores/:id/order-link', async (req, p) => {
+    const sid = id(p.id);
+    const b = await readJson(req);
+    const st = db.get('SELECT * FROM stores WHERE id = ? AND active = 1', [sid]);
+    if (!st) throw new HttpError(404, '운영 중인 매장이 아닙니다');
+    const now = Date.now();
+    const url = shop.orderLink(ctx, sid, now);
+    if (b.send) {
+      msg.enqueueNotice(ctx, sid, 'order_link', { text: `[BevFlow 발주]\n${st.owner_name ? st.owner_name + ' 사장님' : '사장님'}, 아래 버튼으로 필요한 품목을 골라 바로 발주하세요.\n▶ ${url}`, link: url }, now);
+      logEvent(db, { t: now, kind: '알림톡', store_id: sid, region_id: st.region_id, actor: req.user.email, message: `${st.name} · 발주 화면 링크 발송` });
+    }
+    return { url };
+  }, { role: 'ops' });
+  r.post('/api/admin/stores/:id/revoke-links', async (req, p) => {
+    const sid = id(p.id);
+    db.tx(() => {
+      shop.revokeLinks(ctx, sid);
+      db.run('DELETE FROM kakao_links WHERE store_id = ?', [sid]);
+      db.run('UPDATE stores SET link_code = NULL WHERE id = ?', [sid]);
+      logEvent(db, { t: Date.now(), kind: '보안', store_id: sid, actor: req.user.email, message: '발주 링크 무효화 · 카카오 연결 전체 해제' });
+    });
+    return { ok: true };
+  }, { role: 'ops' });
+  r.del('/api/admin/kakao-links/:id', async (req, p) => {
+    const l = db.get('SELECT * FROM kakao_links WHERE id = ?', [id(p.id)]);
+    if (!l) throw new HttpError(404, '연결을 찾을 수 없습니다');
+    db.run('DELETE FROM kakao_links WHERE id = ?', [l.id]);
+    logEvent(db, { t: Date.now(), kind: '카카오 연결', store_id: l.store_id, actor: req.user.email, message: `카카오 연결 해제 (${l.kind === 'chatbot' ? '채널 챗봇' : '카카오 로그인'}${l.nickname ? ' · ' + l.nickname : ''})` });
+    return { ok: true };
+  }, { role: 'ops' });
 
   // CSV 일괄 가져오기
   r.post('/api/admin/import/:kind', async (req, p) => {
@@ -363,6 +441,7 @@ function buildRoutes(ctx) {
         if (cur.id) db.run(STORE_UPDATE, { ...o, id: cur.id });
         else db.run(STORE_INSERT, { ...o, now });
         const sid = db.get('SELECT id FROM stores WHERE code = ?', [o.code]).id;
+        catalog.ensureDefault(db, { id: sid, biz: o.biz }, 'csv', now);
         for (const sku of String(row.skus || '').split(/[;|]/).map((x) => x.trim()).filter(Boolean)) {
           if (!db.get('SELECT 1 FROM skus WHERE id = ?', [sku])) throw new Error('없는 SKU: ' + sku);
           db.run('INSERT OR IGNORE INTO store_skus (store_id, sku_id) VALUES (?, ?)', [sid, sku]);
@@ -475,7 +554,7 @@ function buildRoutes(ctx) {
         id: s.id, seq: s.seq, status: s.status, eta: s.eta, arrivedAt: s.arrived_at, departedAt: s.departed_at, boxes: s.boxes, failReason: s.fail_reason,
         store: s.name, address: s.address, phone: s.owner_phone, lat: s.lat, lng: s.lng,
         unload: db.all('SELECT l.sku_id AS sku, k.name, l.qty FROM proposal_lines l JOIN skus k ON k.id = l.sku_id WHERE l.proposal_id = ? AND l.qty > 0 ORDER BY k.sort', [s.proposal_id]),
-        count: db.all('SELECT ss.sku_id AS sku, k.name, k.pack, k.unit FROM store_skus ss JOIN skus k ON k.id = ss.sku_id WHERE ss.store_id = ? AND ss.carried = 1 AND k.active = 1 ORDER BY k.sort', [s.store_id]),
+        count: db.all('SELECT ss.sku_id AS sku, k.name, k.pack, k.unit FROM store_skus ss JOIN skus k ON k.id = ss.sku_id WHERE ss.store_id = ? AND ss.carried = 1 AND k.active = 1 AND k.category = \'beverage\' ORDER BY k.sort', [s.store_id]),
       })),
     };
   };
@@ -489,6 +568,52 @@ function buildRoutes(ctx) {
   r.post('/api/driver/:token/stops/:id/arrive', drvAct((sid, route, b, now) => delivery.arrive(ctx, sid, { routeId: route.id, actor: 'driver' }, now)), { public: true });
   r.post('/api/driver/:token/stops/:id/complete', drvAct((sid, route, b, now) => delivery.complete(ctx, sid, { counts: b.counts || null, routeId: route.id, actor: 'driver' }, now)), { public: true });
   r.post('/api/driver/:token/stops/:id/fail', drvAct((sid, route, b, now) => delivery.fail(ctx, sid, { reason: str(b.reason, '실패 사유', { max: 100 }), routeId: route.id, actor: 'driver' }, now)), { public: true });
+
+  // ── 외부: 점주 발주 화면 (/m/…) ─────────────────────────────
+  const shopStore = (token) => {
+    const st = shop.storeFromToken(ctx, token);
+    if (!st) throw new HttpError(404, '링크가 만료됐어요. 카카오톡 채널에서 [발주하기]를 다시 눌러 주세요');
+    return st;
+  };
+  const shopAct = (fn) => async (req, p) => {
+    const st = shopStore(p.token);
+    const b = await readJson(req, 64 << 10);
+    try { await fn(st, b, Date.now()); } catch (e) { if (e instanceof HttpError) throw e; throw new HttpError(409, e.message); }
+    return shop.view(ctx, db.get('SELECT * FROM stores WHERE id = ?', [st.id]), Date.now());
+  };
+  r.get('/api/shop/:token', async (req, p) => shop.view(ctx, shopStore(p.token), Date.now()), { public: true });
+  r.put('/api/shop/:token/cart', shopAct((st, b, now) => {
+    if (b.clear) return shop.clearCart(ctx, st.id);
+    const items = b.items && typeof b.items === 'object' ? b.items : { [b.sku]: b.qty };
+    if (Object.keys(items).length > 300) throw new HttpError(400, '품목이 너무 많습니다');
+    db.tx(() => { for (const [sku, q] of Object.entries(items)) shop.setCart(ctx, st.id, String(sku), q, now); });
+  }), { public: true });
+  r.post('/api/shop/:token/reorder', shopAct((st, b, now) => shop.reorderToCart(ctx, st.id, now)), { public: true });
+  r.post('/api/shop/:token/access', shopAct((st, b, now) => catalog.requestAccess(ctx, st.id, str(b.category, '품목', { max: 20 }), { via: 'web', note: str(b.note, '메모', { max: 200, required: false }) }, now)), { public: true });
+  r.post('/api/shop/:token/order', async (req, p) => {
+    const st = shopStore(p.token);
+    const b = await readJson(req, 64 << 10);
+    let out;
+    try { out = await shop.submit(ctx, st.id, { items: b.items, source: 'web', ref: b.ref ? str(b.ref, 'ref', { max: 64 }) : null }, Date.now()); } catch (e) { if (e instanceof HttpError) throw e; throw new HttpError(409, e.message); }
+    const pr = out.proposal;
+    return { order: { code: pr.code, status: pr.status, statusText: shop.statusText(pr, Date.now()), amount: pr.amount, deliverDate: pr.deliver_date, payMethod: pr.pay_method, payFailReason: pr.pay_fail_reason, duplicate: out.duplicate },
+      view: shop.view(ctx, db.get('SELECT * FROM stores WHERE id = ?', [st.id]), Date.now()) };
+  }, { public: true });
+
+  // ── 외부: 카카오 (오픈빌더 스킬 · 매장 연결) ─────────────────────
+  r.post('/api/kakao/skill', async (req, p, url) => {
+    if (!kakao.checkSkillKey(ctx, req.headers['x-bevflow-skill-key'] || url.searchParams.get('key'))) throw new HttpError(401, '스킬 키가 올바르지 않습니다');
+    const b = await readJson(req, 256 << 10);
+    try { return await kakao.skill(ctx, b, Date.now()); } catch (e) {
+      console.error('[카카오 스킬]', e);
+      return { version: '2.0', template: { outputs: [{ simpleText: { text: '잠시 문제가 생겼어요. 조금 뒤 다시 시도해 주세요.' } }] } };
+    }
+  }, { public: true, noCsrf: true });
+  r.get('/api/kakao/link-info', async (req, p, url) => ({ login: !!ctx.R.kakao_rest_key, t: !!url.searchParams.get('t'), l: !!url.searchParams.get('l') }), { public: true });
+  r.post('/api/kakao/link', async (req) => {
+    const b = await readJson(req, 8 << 10);
+    try { return kakao.linkFromPage(ctx, { t: b.t, l: b.l, code: b.code }, req.ip, Date.now()); } catch (e) { throw new HttpError(409, e.message); }
+  }, { public: true });
 
   r.get('/healthz', async () => ({ ok: true, version: db.version }), { public: true });
   return r;
