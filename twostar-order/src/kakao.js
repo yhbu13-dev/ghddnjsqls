@@ -21,24 +21,14 @@ function ui(blockId) {
   const card = (title, description, buttons = []) => ({
     textCard: { title: cut(title, 50), description: cut(description, 400), buttons: buttons.slice(0, 3) },
   });
-  // 사진 카드 (basicCard: 썸네일 필수, 정사각형)
-  const photo = (title, description, imageUrl, buttons = []) => ({
-    basicCard: {
-      title: cut(title, 50), description: cut(description, 76),
-      thumbnail: { imageUrl, fixedRatio: true, width: 600, height: 600 },
-      buttons: buttons.slice(0, 3),
-    },
+  const carousel = (cards) => ({
+    carousel: { type: 'textCard', items: cards.slice(0, 10).map((c) => c.textCard) },
   });
-  // 한 캐러셀 안의 카드는 모두 같은 종류여야 한다
-  const carousel = (cards) => {
-    const type = cards[0] && cards[0].basicCard ? 'basicCard' : 'textCard';
-    return { carousel: { type, items: cards.slice(0, 10).map((c) => c[type]) } };
-  };
   const res = (outputs, quickReplies = []) => ({
     version: '2.0',
     template: { outputs: outputs.slice(0, 3), quickReplies: quickReplies.slice(0, 10) },
   });
-  return { btn, link, text, card, photo, carousel, res };
+  return { btn, link, text, card, carousel, res };
 }
 
 function lineText(l) {
@@ -146,26 +136,19 @@ function step(ctx, U, store, x, now) {
       const cart = O.cartOf(db, store);
       const inCart = new Map(cart.lines.map((l) => [l.item_id, l.qty]));
       const page = all.slice(o, o + PAGE);
-      // 이 묶음에 사진이 하나라도 있으면 사진 카드로 (사진 없는 품목은 기본 그림)
-      const withPhoto = ctx.imageUrl && page.some((i) => i.image);
       const cards = page.map((i, k) => {
         const at = o + k;
         const q = inCart.get(i.id);
-        const title = `${q ? '✅ ' : ''}${i.name}`;
-        const desc = `${i.spec ? `${i.spec} · ` : ''}${O.won(i.price)}${withPhoto ? (q ? ` · 🛒${q}${i.unit}` : '') : `\n${q ? `🛒 담음 ${q}${i.unit}` : '　'}`}`;
-        const buttons = [
-          U.btn(`+1${i.unit}`, { s: 'add', i: i.id, n: 1, c, g, o: at }, `${i.name} +1`),
-          U.btn(`+5${i.unit}`, { s: 'add', i: i.id, n: 5, c, g, o: at }, `${i.name} +5`),
-          U.btn(q ? '빼기' : `+10${i.unit}`, q ? { s: 'add', i: i.id, n: -999, c, g, o: at } : { s: 'add', i: i.id, n: 10, c, g, o: at },
-            q ? `${i.name} 빼기` : `${i.name} +10`),
-        ];
-        return withPhoto ? U.photo(title, desc, ctx.imageUrl(i.image), buttons) : U.card(title, desc, buttons);
+        return U.card(`${q ? '✅ ' : ''}${i.name}`,
+          `${i.spec ? `${i.spec} · ` : ''}${O.won(i.price)}\n${q ? `🛒 담음 ${q}${i.unit}` : '　'}`, [
+            U.btn(`+1${i.unit}`, { s: 'add', i: i.id, n: 1, c, g, o: at }, `${i.name} +1`),
+            U.btn(`+5${i.unit}`, { s: 'add', i: i.id, n: 5, c, g, o: at }, `${i.name} +5`),
+            U.btn(q ? '빼기' : `+10${i.unit}`, q ? { s: 'add', i: i.id, n: -999, c, g, o: at } : { s: 'add', i: i.id, n: 10, c, g, o: at },
+              q ? `${i.name} 빼기` : `${i.name} +10`),
+          ]);
       });
-      const more = (n) => (withPhoto
-        ? U.photo('다음 품목', `${n}개 더 있어요`, ctx.imageUrl(''), [U.btn('다음 보기', { s: 'items', c, g, o: o + PAGE }, '다음 품목')])
-        : U.card('다음 품목', `${n}개 더 있어요`, [U.btn('다음 보기', { s: 'items', c, g, o: o + PAGE }, '다음 품목')]));
       const rest = all.length - (o + page.length);
-      if (rest > 0) cards.push(more(rest));
+      if (rest > 0) cards.push(U.card('다음 품목', `${rest}개 더 있어요`, [U.btn('다음 보기', { s: 'items', c, g, o: o + PAGE }, '다음 품목')]));
       const head = x.msg ? `${x.msg}\n` : '';
       return U.res([
         U.text(`${head}${g} ${o + 1}~${o + page.length} / ${all.length}${cart.count ? `  ·  🛒 ${cart.count}품목 ${O.won(cart.total)}` : ''}`),

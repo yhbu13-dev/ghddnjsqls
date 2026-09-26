@@ -110,8 +110,6 @@ function safeEq(a, b) {
 function createApp(cfg) {
   const db = open(cfg.dbFile);
   const imageDir = cfg.imageDir || path.join(os.tmpdir(), `twostar-img-${process.pid}`);
-  // 사진 주소 (카카오가 가져가므로 외부 주소). 이름이 없으면 기본 그림
-  const imageUrl = (name) => `${cfg.publicUrl}/img/${name || 'blank.png'}`;
   const tk = tokens.make(cfg.secret);
   const orderLink = (storeId) => `${cfg.publicUrl}/o/${tk.sign('o', storeId, LINK_TTL)}`;
   const events = []; // 관리자 화면 새 소식 (새 주문·승인 요청)
@@ -224,7 +222,6 @@ function createApp(cfg) {
     if (m === 'GET' && p.startsWith('/img/')) {
       const name = p.slice(5);
       const long = { 'cache-control': 'public, max-age=31536000, immutable' };
-      if (name === 'blank.png') return send(res, 200, images.PLACEHOLDER, 'image/png', long);
       const buf = images.read(imageDir, name);
       return buf ? send(res, 200, buf, images.typeOf(name), long) : send(res, 404, 'not found', 'text/plain');
     }
@@ -234,7 +231,7 @@ function createApp(cfg) {
       if (m !== 'POST') return send(res, 405, { error: 'POST only' });
       if (!cfg.skillKey || !safeEq(url.searchParams.get('key') || '', cfg.skillKey)) return send(res, 403, { error: 'forbidden' });
       const body = await readJson(req);
-      const out = skill({ db, blockId: cfg.blockId, orderLink, imageUrl, minAmount: cfg.minAmount, guest: cfg.guest, ...hooks }, body);
+      const out = skill({ db, blockId: cfg.blockId, orderLink, minAmount: cfg.minAmount, guest: cfg.guest, ...hooks }, body);
       return send(res, 200, out);
     }
 

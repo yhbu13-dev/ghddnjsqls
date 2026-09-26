@@ -164,7 +164,7 @@ test('엑셀 붙여넣기로 품목 한꺼번에 넣기', () => {
   assert.equal(db.get("SELECT unit FROM items WHERE name = '헤이즐넛 시럽'").unit, '병');
 });
 
-test('품목 사진: 올리기 · 카톡 사진 카드 · 발주서 · 위조 파일 거절 · 예전 DB 업그레이드', async () => {
+test('품목 사진: 올리기 · 발주서 표시 · 위조 파일 거절 · 예전 DB 업그레이드', async () => {
   const fs = require('node:fs');
   const os = require('node:os');
   const path = require('node:path');
@@ -199,23 +199,19 @@ test('품목 사진: 올리기 · 카톡 사진 카드 · 발주서 · 위조 �
     assert.match(img, /^\d+-[0-9a-f]{8}\.jpg$/);
     r = await fetch(`${base}/img/${img}`);
     assert.equal(r.headers.get('content-type'), 'image/jpeg');
-    assert.equal((await fetch(`${base}/img/blank.png`)).headers.get('content-type'), 'image/png');
     assert.equal((await fetch(`${base}/img/..%2Fsecret`)).status, 404);
 
-    // 카톡: 사진이 있는 묶음은 사진 카드(basicCard), 사진 없는 품목은 기본 그림
+    // 발주서에 사진 이름이 실려 나가고, 카톡 카드는 글자 카드 그대로
     const s = O.createStore(db, { name: '사우나', biz: 'sauna' });
     const talk = (extra, u = '버튼') => fetch(`${base}/kakao/skill?key=k`, { method: 'POST', body: JSON.stringify({ userRequest: { user: { id: 'p' }, utterance: u }, action: { clientExtra: extra } }) }).then((x) => x.json());
-    await talk({}, s.code);
-    const out = (await talk({ s: 'items', c: 'snack', g: '과자' })).template.outputs[1].carousel;
-    assert.equal(out.type, 'basicCard');
-    assert.equal(out.items[0].thumbnail.imageUrl, `https://demo.example/img/${img}`);
-    assert.equal(out.items[1].thumbnail.imageUrl, 'https://demo.example/img/blank.png');
-    assert.ok(out.items.every((c) => c.description.length <= 76));
+    const link = (await talk({}, s.code)).template.outputs[1].textCard.buttons[0].webLinkUrl;
+    const sheet = await (await fetch(link.replace('https://demo.example/o/', `${base}/api/o/`))).json();
+    assert.equal(sheet.items.find((i) => i.id === a).image, img);
+    assert.equal((await talk({ s: 'items', c: 'snack', g: '과자' })).template.outputs[1].carousel.type, 'textCard');
 
     r = await fetch(`${base}/api/admin/item-image`, { method: 'POST', headers: H, body: JSON.stringify({ id: a, remove: true }) });
     assert.equal((await r.json()).items.find((i) => i.id === a).image, '');
     assert.equal(fs.existsSync(path.join(dir, 'images', img)), false, '지운 사진 파일도 삭제');
-    assert.equal((await talk({ s: 'items', c: 'snack', g: '과자' })).template.outputs[1].carousel.type, 'textCard');
   } finally {
     server.close();
     fs.rmSync(dir, { recursive: true, force: true });
