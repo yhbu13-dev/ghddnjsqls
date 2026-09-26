@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS items (
   spec TEXT NOT NULL DEFAULT '',          -- 규격 (예: 1박스 20입)
   unit TEXT NOT NULL DEFAULT '개',
   price INTEGER NOT NULL CHECK (price >= 0),
+  image TEXT NOT NULL DEFAULT '',          -- 품목 사진 파일 이름 (data/images/)
   sort INTEGER NOT NULL DEFAULT 0,
   active INTEGER NOT NULL DEFAULT 1
 );
@@ -79,6 +80,10 @@ function open(file) {
   raw.exec('PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 3000;');
   if (file !== ':memory:') raw.exec('PRAGMA journal_mode = WAL;');
   raw.exec(SCHEMA);
+  // 이전 버전 DB 업그레이드
+  if (!raw.prepare('PRAGMA table_info(items)').all().some((c) => c.name === 'image')) {
+    raw.exec("ALTER TABLE items ADD COLUMN image TEXT NOT NULL DEFAULT ''");
+  }
 
   const cache = new Map();
   const stmt = (sql) => {

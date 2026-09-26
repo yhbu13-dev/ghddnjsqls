@@ -163,3 +163,61 @@ test('엑셀 붙여넣기로 품목 한꺼번에 넣기', () => {
   assert.equal(db.get("SELECT price FROM items WHERE name = '새우깡'").price, 1300);
   assert.equal(db.get("SELECT unit FROM items WHERE name = '헤이즐넛 시럽'").unit, '병');
 });
+
+test('품목 사진: 올리기 · 카톡 사진 카드 · 발주서 · 위조 파일 거절 · 예전 DB 업그레이드', async () => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-'));
+  // 예전 DB (image 칸 없음) → 열면 자동으로 칸이 생겨야 함
+  const { DatabaseSync } = require('node:sqlite');
+  const oldFile = path.join(dir, 'old.db');
+  const raw = new DatabaseSync(oldFile);
+  raw.exec("CREATE TABLE items (id INTEGER PRIMARY KEY, category TEXT NOT NULL, grp TEXT NOT NULL DEFAULT '기타', name TEXT NOT NULL, spec TEXT NOT NULL DEFAULT '', unit TEXT NOT NULL DEFAULT '개', price INTEGER NOT NULL, sort INTEGER NOT NULL DEFAULT 0, active INTEGER NOT NULL DEFAULT 1)");
+  raw.close();
+  const up = open(oldFile);
+  assert.equal(up.get('SELECT image FROM items LIMIT 1'), undefined);
+  assert.ok(up.raw.prepare('PRAGMA table_info(items)').all().some((c) => c.name === 'image'));
+  up.close();
+
+  const { server, db } = createApp({
+    port: 0, publicUrl: 'https://demo.example', adminPassword: 'pw', skillKey: 'k', blockId: 'B', minAmount: 0,
+    guest: {}, dbFile: ':memory:', secret: 's', imageDir: path.join(dir, 'images'),
+  });
+  await new Promise((r) => server.listen(0, r));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  try {
+    const a = Number(db.run("INSERT INTO items (category, grp, name, price) VALUES ('snack', '과자', '새우깡', 1200)").lastInsertRowid);
+    db.run("INSERT INTO items (category, grp, name, price) VALUES ('snack', '과자', '양파링', 1300)");
+    let r = await fetch(`${base}/admin/login`, { method: 'POST', body: JSON.stringify({ password: 'pw' }) });
+    const H = { cookie: r.headers.get('set-cookie').split(';')[0], 'x-ts': '1' };
+    const jpg = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(100)]);
+    r = await fetch(`${base}/api/admin/item-image`, { method: 'POST', headers: H, body: JSON.stringify({ id: a, data: `data:image/jpeg;base64,${Buffer.from('<svg onload=x>').toString('base64')}` }) });
+    assert.equal(r.status, 400, '사진이 아닌 파일은 거절');
+    r = await fetch(`${base}/api/admin/item-image`, { method: 'POST', headers: H, body: JSON.stringify({ id: a, data: `data:image/jpeg;base64,${jpg.toString('base64')}` }) });
+    const img = (await r.json()).items.find((i) => i.id === a).image;
+    assert.match(img, /^\d+-[0-9a-f]{8}\.jpg$/);
+    r = await fetch(`${base}/img/${img}`);
+    assert.equal(r.headers.get('content-type'), 'image/jpeg');
+    assert.equal((await fetch(`${base}/img/blank.png`)).headers.get('content-type'), 'image/png');
+    assert.equal((await fetch(`${base}/img/..%2Fsecret`)).status, 404);
+
+    // 카톡: 사진이 있는 묶음은 사진 카드(basicCard), 사진 없는 품목은 기본 그림
+    const s = O.createStore(db, { name: '사우나', biz: 'sauna' });
+    const talk = (extra, u = '버튼') => fetch(`${base}/kakao/skill?key=k`, { method: 'POST', body: JSON.stringify({ userRequest: { user: { id: 'p' }, utterance: u }, action: { clientExtra: extra } }) }).then((x) => x.json());
+    await talk({}, s.code);
+    const out = (await talk({ s: 'items', c: 'snack', g: '과자' })).template.outputs[1].carousel;
+    assert.equal(out.type, 'basicCard');
+    assert.equal(out.items[0].thumbnail.imageUrl, `https://demo.example/img/${img}`);
+    assert.equal(out.items[1].thumbnail.imageUrl, 'https://demo.example/img/blank.png');
+    assert.ok(out.items.every((c) => c.description.length <= 76));
+
+    r = await fetch(`${base}/api/admin/item-image`, { method: 'POST', headers: H, body: JSON.stringify({ id: a, remove: true }) });
+    assert.equal((await r.json()).items.find((i) => i.id === a).image, '');
+    assert.equal(fs.existsSync(path.join(dir, 'images', img)), false, '지운 사진 파일도 삭제');
+    assert.equal((await talk({ s: 'items', c: 'snack', g: '과자' })).template.outputs[1].carousel.type, 'textCard');
+  } finally {
+    server.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

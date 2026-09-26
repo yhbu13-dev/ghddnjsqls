@@ -120,6 +120,7 @@
         g.items.map((it) => {
           const q = qty[it.id] || 0;
           return h('div', { class: `row${q ? ' on' : ''}`, 'data-id': it.id },
+            it.image ? h('img', { class: 'thumb', src: `/img/${it.image}`, alt: '', loading: 'lazy' }) : null,
             h('div', { class: 'info' },
               h('div', { class: 'name' }, it.name),
               h('div', { class: 'desc' }, [it.spec, won(it.price)].filter(Boolean).join(' · ')),

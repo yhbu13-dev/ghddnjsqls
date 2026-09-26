@@ -178,6 +178,45 @@
 
   // ── 품목 ──
   let editing = null;
+  // 사진: 브라우저에서 600×600 JPEG로 줄여서 올림 (휴대폰 원본 사진도 OK)
+  function shrink(file) {
+    return new Promise((resolve, reject) => {
+      // blob: 주소는 보안 정책(CSP)에 막히므로 data: 로 읽는다
+      const fr = new FileReader();
+      fr.onerror = () => reject(new Error('사진 파일을 읽지 못했어요'));
+      fr.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          const S = 600;
+          const cv = document.createElement('canvas');
+          cv.width = S; cv.height = S;
+          const g = cv.getContext('2d');
+          g.fillStyle = '#fff'; g.fillRect(0, 0, S, S);
+          const k = Math.min(S / img.width, S / img.height);
+          const w = img.width * k; const hh = img.height * k;
+          g.drawImage(img, (S - w) / 2, (S - hh) / 2, w, hh);
+          resolve(cv.toDataURL('image/jpeg', 0.85));
+        };
+        img.onerror = () => reject(new Error('이 사진 형식은 열 수 없어요 (JPG·PNG 권장)'));
+        img.src = fr.result;
+      };
+      fr.readAsDataURL(file);
+    });
+  }
+  function photoCell(i) {
+    const input = h('input', { type: 'file', accept: 'image/*', class: 'hidden' });
+    input.addEventListener('change', async () => {
+      const f = input.files[0];
+      if (!f) return;
+      try { await act('/api/admin/item-image', { id: i.id, data: await shrink(f) }, `${i.name} 사진을 올렸습니다`); } catch (e) { toast(e.message); }
+    });
+    return h('div', { class: 'photo' },
+      i.image ? h('img', { class: 'thumb', src: `/img/${i.image}`, alt: '' }) : h('span', { class: 'thumb empty' }, '사진 없음'),
+      h('div', null,
+        h('button', { class: 'btn small', onclick: () => input.click() }, i.image ? '바꾸기' : '사진 올리기'),
+        i.image ? h('button', { class: 'btn small', onclick: () => confirm(`${i.name} 사진을 지울까요?`) && act('/api/admin/item-image', { id: i.id, remove: true }, '사진을 지웠습니다') }, '지우기') : null),
+      input);
+  }
   let bulkText = '';
   function items() {
     const L = D.labels;
@@ -228,8 +267,9 @@
           editing ? h('button', { class: 'btn', onclick: () => { editing = null; render(); } }, '취소') : null)),
       byCat.map(([c, list]) => h('div', { class: 'panel' }, h('h2', null, `${L.categories[c]} (${list.length})`),
         h('table', null,
-          h('tr', null, h('th', null, '묶음'), h('th', null, '품목'), h('th', null, '규격'), h('th', { class: 'num' }, '단가'), h('th', null, '')),
+          h('tr', null, h('th', null, '사진'), h('th', null, '묶음'), h('th', null, '품목'), h('th', null, '규격'), h('th', { class: 'num' }, '단가'), h('th', null, '')),
           list.map((i) => h('tr', { style: i.active ? null : 'opacity:.45' },
+            h('td', null, photoCell(i)),
             h('td', null, i.grp), h('td', null, i.name), h('td', null, i.spec), h('td', { class: 'num' }, won(i.price)),
             h('td', null,
               h('button', { class: 'btn', onclick: () => { editing = i; render(); window.scrollTo(0, 0); } }, '수정'), ' ',

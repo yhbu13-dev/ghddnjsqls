@@ -16,6 +16,8 @@ const O = require('./order');
 const { skill } = require('./kakao');
 const { open } = require('./db');
 const tokens = require('./tokens');
+const images = require('./images');
+const os = require('node:os');
 
 const ROOT = path.join(__dirname, '..');
 const LINK_TTL = 30 * 24 * 3600e3; // 발주서 링크 30일
@@ -41,6 +43,7 @@ function config(env = process.env) {
     minAmount: Number(env.MIN_ORDER || 0),
     guest: { label: env.GUEST_LABEL || '쇼핑몰 문의하기', url: env.GUEST_URL || '' },
     dbFile: env.DB_FILE || path.join(dataDir, 'order.db'),
+    imageDir: path.join(dataDir, 'images'),
     secret: env.SECRET || loadSecret(path.join(dataDir, 'secret')),
   };
 }
@@ -106,6 +109,9 @@ function safeEq(a, b) {
 // ── 앱 ──────────────────────────────────────────────
 function createApp(cfg) {
   const db = open(cfg.dbFile);
+  const imageDir = cfg.imageDir || path.join(os.tmpdir(), `twostar-img-${process.pid}`);
+  // 사진 주소 (카카오가 가져가므로 외부 주소). 이름이 없으면 기본 그림
+  const imageUrl = (name) => `${cfg.publicUrl}/img/${name || 'blank.png'}`;
   const tk = tokens.make(cfg.secret);
   const orderLink = (storeId) => `${cfg.publicUrl}/o/${tk.sign('o', storeId, LINK_TTL)}`;
   const events = []; // 관리자 화면 새 소식 (새 주문·승인 요청)
@@ -141,7 +147,7 @@ function createApp(cfg) {
     const lastQty = {};
     if (last) for (const l of last.lines) lastQty[l.item_id] = l.qty;
     const items = O.itemsFor(db, store).map((i) => ({
-      id: i.id, category: i.category, grp: i.grp, name: i.name, spec: i.spec, unit: i.unit, price: i.price, last: lastQty[i.id] || 0,
+      id: i.id, category: i.category, grp: i.grp, name: i.name, spec: i.spec, unit: i.unit, price: i.price, image: i.image, last: lastQty[i.id] || 0,
     }));
     return {
       store: { name: store.name, biz: O.BIZ[store.biz].label },
@@ -215,13 +221,20 @@ function createApp(cfg) {
     }
     if (m === 'GET' && p === '/') return send(res, 302, '', 'text/plain', { location: '/admin' });
     if (m === 'GET' && p === '/health') return send(res, 200, { ok: true });
+    if (m === 'GET' && p.startsWith('/img/')) {
+      const name = p.slice(5);
+      const long = { 'cache-control': 'public, max-age=31536000, immutable' };
+      if (name === 'blank.png') return send(res, 200, images.PLACEHOLDER, 'image/png', long);
+      const buf = images.read(imageDir, name);
+      return buf ? send(res, 200, buf, images.typeOf(name), long) : send(res, 404, 'not found', 'text/plain');
+    }
 
     // ── 카카오 스킬 ──
     if (p === '/kakao/skill') {
       if (m !== 'POST') return send(res, 405, { error: 'POST only' });
       if (!cfg.skillKey || !safeEq(url.searchParams.get('key') || '', cfg.skillKey)) return send(res, 403, { error: 'forbidden' });
       const body = await readJson(req);
-      const out = skill({ db, blockId: cfg.blockId, orderLink, minAmount: cfg.minAmount, guest: cfg.guest, ...hooks }, body);
+      const out = skill({ db, blockId: cfg.blockId, orderLink, imageUrl, minAmount: cfg.minAmount, guest: cfg.guest, ...hooks }, body);
       return send(res, 200, out);
     }
 
@@ -285,7 +298,7 @@ function createApp(cfg) {
       if (m !== 'GET' && req.headers['x-ts'] !== '1') return send(res, 403, { error: 'forbidden' });
       const sub = p.slice('/api/admin/'.length);
       if (sub === 'data' && m === 'GET') return send(res, 200, adminData());
-      const b = m === 'GET' ? {} : await readJson(req);
+      const b = m === 'GET' ? {} : await readJson(req, sub === 'item-image' ? 3 * 1024 * 1024 : undefined);
       if (sub === 'status' && m === 'POST') O.setStatus(db, Number(b.id), String(b.status));
       else if (sub === 'access' && m === 'POST') O.decideAccess(db, Number(b.store_id), String(b.category), String(b.decision));
       else if (sub === 'stores' && m === 'POST') {
@@ -301,7 +314,13 @@ function createApp(cfg) {
         const r = O.importItems(db, b.text);
         return send(res, 200, { ...r, data: adminData() });
       } else if (sub === 'items' && m === 'POST') saveItem(b);
-      else if (sub === 'item-active' && m === 'POST') db.run('UPDATE items SET active = ? WHERE id = ?', [b.active ? 1 : 0, Number(b.id)]);
+      else if (sub === 'item-image' && m === 'POST') {
+        const it = db.get('SELECT id, image FROM items WHERE id = ?', [Number(b.id)]);
+        if (!it) throw new O.UserError('품목을 찾을 수 없습니다');
+        const name = b.remove ? '' : images.save(imageDir, it.id, b.data);
+        db.run('UPDATE items SET image = ? WHERE id = ?', [name, it.id]);
+        images.remove(imageDir, it.image);
+      } else if (sub === 'item-active' && m === 'POST') db.run('UPDATE items SET active = ? WHERE id = ?', [b.active ? 1 : 0, Number(b.id)]);
       else return send(res, 404, { error: 'not found' });
       return send(res, 200, adminData());
     }
