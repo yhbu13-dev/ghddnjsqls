@@ -147,6 +147,58 @@ function orderableItem(db, store, itemId) {
   return it;
 }
 
+// ── 품목 한꺼번에 넣기 (엑셀에서 복사해 붙여넣기) ────────────
+// 한 줄에 한 품목: 분류 | 묶음 | 품목명 | 규격 | 단위 | 단가  (엑셀 복사 = 탭 구분, 쉼표도 가능)
+// 같은 분류에 같은 이름이 있으면 고치고, 없으면 새로 넣는다. 한 줄이라도 틀리면 아무것도 넣지 않는다.
+const CAT_ALIAS = {
+  cafe: 'cafe', '카페': 'cafe', '카페품목': 'cafe',
+  snack: 'snack', '스낵': 'snack', '사우나': 'snack', '사우나스낵': 'snack',
+  beverage: 'beverage', '음료': 'beverage', '식당': 'beverage', '식당음료': 'beverage',
+};
+
+function parseItems(text) {
+  const rows = [];
+  const errors = [];
+  String(text || '').split(/\r?\n/).forEach((line, i) => {
+    if (!line.trim()) return;
+    const cols = (line.includes('\t') ? line.split('\t') : line.split(',')).map((c) => c.trim().replace(/^"|"$/g, ''));
+    const [catRaw = '', grp = '', name = '', spec = '', unit = '', priceRaw = ''] = cols;
+    const category = CAT_ALIAS[catRaw.replace(/\s/g, '').toLowerCase()];
+    const price = Number(String(priceRaw).replace(/[,원\s]/g, ''));
+    if (!category && i === 0 && !Number.isFinite(price)) return; // 제목 줄
+    const n = i + 1;
+    if (!category) return errors.push(`${n}번째 줄: 분류는 카페·스낵·음료 중 하나로 적어 주세요 ("${catRaw}")`);
+    if (!name || name.length > 40) return errors.push(`${n}번째 줄: 품목명을 1~40자로 적어 주세요`);
+    if (priceRaw === '' || !Number.isInteger(price) || price < 0 || price > 10_000_000) return errors.push(`${n}번째 줄: 단가가 숫자가 아닙니다 ("${priceRaw}")`);
+    rows.push({ category, grp: grp.slice(0, 20) || '기타', name, spec: spec.slice(0, 40), unit: unit.slice(0, 4) || '개', price });
+  });
+  if (rows.length > 2000) errors.push('한 번에 2000줄까지 넣을 수 있어요');
+  return { rows, errors };
+}
+
+function importItems(db, text) {
+  const { rows, errors } = parseItems(text);
+  if (errors.length) return { added: 0, updated: 0, errors };
+  if (!rows.length) return { added: 0, updated: 0, errors: ['붙여넣은 내용이 없어요'] };
+  let added = 0;
+  let updated = 0;
+  db.tx(() => {
+    let sort = db.get('SELECT COALESCE(MAX(sort), 0) AS s FROM items').s;
+    for (const r of rows) {
+      const cur = db.get('SELECT id FROM items WHERE category = ? AND name = ?', [r.category, r.name]);
+      if (cur) {
+        db.run('UPDATE items SET grp = ?, spec = ?, unit = ?, price = ?, active = 1 WHERE id = ?', [r.grp, r.spec, r.unit, r.price, cur.id]);
+        updated++;
+      } else {
+        db.run('INSERT INTO items (category, grp, name, spec, unit, price, sort) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [r.category, r.grp, r.name, r.spec, r.unit, r.price, sort += 10]);
+        added++;
+      }
+    }
+  });
+  return { added, updated, errors: [] };
+}
+
 // ── 장바구니 ─────────────────────────────────────────
 function bump(db, storeId) {
   db.run('UPDATE stores SET cart_rev = cart_rev + 1 WHERE id = ?', [storeId]);
@@ -283,7 +335,7 @@ module.exports = {
   CATEGORIES, BIZ, STATUS, FLOW, MAX_QTY, UserError, won,
   createStore, reissueCode, storeOf, storeByUser, linkUser,
   categoriesOf, accessStates, requestAccess, decideAccess,
-  itemsFor, groupsFor, orderableItem,
+  itemsFor, groupsFor, orderableItem, parseItems, importItems,
   cartOf, setQty, addQty, replaceCart, clearCart, lastOrder, reorder,
   submit, ordersOf, setStatus, kstDay,
 };

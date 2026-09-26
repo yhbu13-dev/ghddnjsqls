@@ -99,3 +99,7 @@ td.num, th.num { text-align: right; }
 .err { color: var(--bad); min-height: 20px; }
 .wide { width: 100%; padding: 12px; }
 .pad24 { padding: 24px; }
+a.btn { display: inline-block; text-decoration: none; text-align: center; box-sizing: border-box; border-radius: 10px; }
+.done .wide { max-width: 320px; }
+.bulk textarea { min-height: 160px; font: 13px/1.5 ui-monospace, Menlo, monospace; }
+.bulk .errs { color: var(--bad); font-size: 13px; white-space: pre-wrap; }

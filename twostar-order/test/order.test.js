@@ -74,7 +74,13 @@ test('카카오 스킬: 연결 코드 → 버튼으로 담고 주문', () => {
   const card = r.template.outputs[1].carousel.items[0];
   assert.equal(card.buttons.length, 3);
   assert.ok(card.buttons.every((b) => b.label.length <= 14 && b.blockId === 'B1'));
-  req({ s: 'add', i: ids.snack, n: 5 });
+  // 담기 → 같은 캐러셀을 방금 누른 품목부터 다시 (대화 맨 아래에 새로 뜸)
+  r = req(card.buttons[1].extra);
+  assert.match(r.template.outputs[0].simpleText.text, /새우깡 5개 담았어요/);
+  assert.equal(r.template.outputs[1].carousel.items[0].title, '✅ 새우깡');
+  r = req(r.template.outputs[1].carousel.items[1].buttons[0].extra); // 양파링 +1
+  assert.equal(r.template.outputs[1].carousel.items[0].title, '✅ 양파링');
+  req({ s: 'add', i: ids.snack2, n: -999 });
   r = req({ s: 'add', i: ids.cafe, n: 1 });
   assert.match(JSON.stringify(r), /발주할 수 없는/);
   r = req({ s: 'confirm' });
@@ -140,4 +146,20 @@ test('HTTP: 스킬 키 · 발주서 링크 · 관리자 로그인', async () => 
   } finally {
     server.close();
   }
+});
+
+test('엑셀 붙여넣기로 품목 한꺼번에 넣기', () => {
+  const { db } = setup();
+  const bad = O.importItems(db, '분류\t묶음\t품목명\t규격\t단위\t단가\n간식\t과자\t꼬북칩\t\t개\t1500');
+  assert.equal(bad.added, 0);
+  assert.match(bad.errors[0], /2번째 줄: 분류/);
+  const r = O.importItems(db, [
+    '분류\t묶음\t품목명\t규격\t단위\t단가',
+    '스낵\t과자\t꼬북칩\t\t개\t1,500',
+    '스낵\t과자\t새우깡\t\t개\t1300원', // 이미 있음 → 가격 수정
+    '카페,시럽,헤이즐넛 시럽,1L,병,11000',
+  ].join('\n'));
+  assert.deepEqual([r.added, r.updated, r.errors], [2, 1, []]);
+  assert.equal(db.get("SELECT price FROM items WHERE name = '새우깡'").price, 1300);
+  assert.equal(db.get("SELECT unit FROM items WHERE name = '헤이즐넛 시럽'").unit, '병');
 });

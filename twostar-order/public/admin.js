@@ -178,6 +178,7 @@
 
   // ── 품목 ──
   let editing = null;
+  let bulkText = '';
   function items() {
     const L = D.labels;
     const e = editing || { category: 'snack', grp: '', name: '', spec: '', unit: '개', price: '', sort: 0 };
@@ -198,8 +199,28 @@
       if (!(await act('/api/admin/items', body, was ? '수정했습니다' : '추가했습니다'))) editing = was;
     };
     const byCat = Object.keys(L.categories).map((c) => [c, D.items.filter((i) => i.category === c)]);
+    // 엑셀에서 복사해 붙여넣기
+    const bulkBox = h('textarea', { placeholder: '분류\t묶음\t품목명\t규격\t단위\t단가\n스낵\t과자\t새우깡\t\t개\t1200\n카페\t시럽\t바닐라 시럽 1L\t1L\t병\t11000' });
+    bulkBox.value = bulkText;
+    bulkBox.addEventListener('input', () => { bulkText = bulkBox.value; });
+    const bulkErr = h('div', { class: 'errs' });
+    const runBulk = async () => {
+      try {
+        const r = await call('/api/admin/items-bulk', { text: bulkBox.value });
+        if (r.errors.length) { bulkErr.textContent = r.errors.slice(0, 20).join('\n'); return; }
+        D = r.data;
+        bulkText = '';
+        toast(`새 품목 ${r.added}개 추가 · ${r.updated}개 수정`);
+        render();
+      } catch (e) { toast(e.message); }
+    };
+    const bulk = h('div', { class: 'panel bulk' }, h('h2', null, '엑셀에서 한꺼번에 넣기'),
+      h('p', { class: 'small muted' }, '엑셀에서 [분류 · 묶음 · 품목명 · 규격 · 단위 · 단가] 6칸을 순서대로 선택해 복사(⌘C)한 뒤 아래에 붙여넣기(⌘V) 하세요. 분류는 카페 / 스낵 / 음료. 같은 분류에 같은 이름이 있으면 가격 등을 고칩니다.'),
+      bulkBox, bulkErr,
+      h('button', { class: 'btn primary', onclick: runBulk }, '붙여넣은 품목 저장'));
     return [
-      h('div', { class: 'panel' }, h('h2', null, editing ? `품목 수정 — ${editing.name}` : '품목 추가'),
+      bulk,
+      h('div', { class: 'panel' }, h('h2', null, editing ? `품목 수정 — ${editing.name}` : '품목 한 개 추가'),
         h('div', { class: 'form' },
           h('label', null, '분류', F.category), h('label', null, '진열대·묶음', F.grp), h('label', null, '품목 이름', F.name),
           h('label', null, '규격', F.spec), h('label', null, '단위', F.unit), h('label', null, '단가(원)', F.price), h('label', null, '순서', F.sort),

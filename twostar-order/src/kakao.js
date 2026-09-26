@@ -80,17 +80,18 @@ function homeCard(ctx, U, store) {
   const cart = O.cartOf(ctx.db, store);
   const desc = cart.count
     ? `🛒 장바구니 ${cart.count}품목 · ${O.won(cart.total)}`
-    : '버튼을 눌러 발주를 시작하세요.';
+    : '[📋 발주하기]를 누르면 전체 품목이 한 화면에 나와요.';
+  // 주 경로는 발주서(한 화면에서 +/−). 대화창에 메시지가 쌓이지 않는다
   return U.card(`${store.name} 사장님, 안녕하세요`, desc, [
-    U.link('📋 발주서 열기', ctx.orderLink(store.id)),
-    U.btn('품목 골라 담기', { s: 'cats' }),
+    U.link('📋 발주하기', ctx.orderLink(store.id)),
     U.btn(cart.count ? `장바구니 (${cart.count})` : '장바구니', { s: 'cart' }),
+    U.btn('지난 발주 그대로', { s: 'reorder' }),
   ]);
 }
 
 function homeQuick(U) {
   return [
-    U.btn('지난 발주 그대로', { s: 'reorder' }),
+    U.btn('카톡에서 고르기', { s: 'cats' }),
     U.btn('발주 내역', { s: 'history' }),
     U.btn('품목 추가 신청', { s: 'req' }),
   ];
@@ -125,29 +126,38 @@ function step(ctx, U, store, x, now) {
     }
 
     case 'items': {
+      // o = 캐러셀 첫 장이 될 품목 순번. 담기 버튼을 누르면 그 품목부터 다시 보여줘서
+      // 새 캐러셀이 항상 대화 맨 아래 · 방금 누른 품목이 첫 장에 온다 (위로 올려서 찾을 필요 없음)
       const c = String(x.c || '');
       const g = String(x.g || '');
-      const p = Math.max(0, Number(x.p) || 0);
       const all = O.itemsFor(db, store, c).filter((i) => i.grp === g);
       if (!all.length) return U.res([U.text('품목이 없어요.')], [home]);
+      const o = Math.min(Math.max(0, Math.trunc(Number(x.o ?? (Number(x.p) || 0) * PAGE) || 0)), all.length - 1);
       const cart = O.cartOf(db, store);
       const inCart = new Map(cart.lines.map((l) => [l.item_id, l.qty]));
-      const page = all.slice(p * PAGE, p * PAGE + PAGE);
-      const cards = page.map((i) => U.card(i.name,
-        `${i.spec ? `${i.spec} · ` : ''}${O.won(i.price)}${inCart.get(i.id) ? `\n🛒 담음 ${inCart.get(i.id)}${i.unit}` : ''}`, [
-          U.btn(`+1${i.unit}`, { s: 'add', i: i.id, n: 1, c, g, p }, `${i.name} +1`),
-          U.btn(`+5${i.unit}`, { s: 'add', i: i.id, n: 5, c, g, p }, `${i.name} +5`),
-          U.btn('빼기', { s: 'add', i: i.id, n: -999, c, g, p }, `${i.name} 빼기`),
-        ]));
-      const more = all.length > (p + 1) * PAGE;
-      if (more) cards.push(U.card('다음 품목', `${all.length - (p + 1) * PAGE}개 더 있어요`, [U.btn('다음 보기', { s: 'items', c, g, p: p + 1 }, '다음 품목')]));
+      const page = all.slice(o, o + PAGE);
+      const cards = page.map((i, k) => {
+        const at = o + k;
+        const q = inCart.get(i.id);
+        return U.card(`${q ? '✅ ' : ''}${i.name}`,
+          `${i.spec ? `${i.spec} · ` : ''}${O.won(i.price)}\n${q ? `🛒 담음 ${q}${i.unit}` : '　'}`, [
+            U.btn(`+1${i.unit}`, { s: 'add', i: i.id, n: 1, c, g, o: at }, `${i.name} +1`),
+            U.btn(`+5${i.unit}`, { s: 'add', i: i.id, n: 5, c, g, o: at }, `${i.name} +5`),
+            U.btn(q ? '빼기' : '+10', q ? { s: 'add', i: i.id, n: -999, c, g, o: at } : { s: 'add', i: i.id, n: 10, c, g, o: at },
+              q ? `${i.name} 빼기` : `${i.name} +10`),
+          ]);
+      });
+      const rest = all.length - (o + page.length);
+      if (rest > 0) cards.push(U.card('다음 품목', `${rest}개 더 있어요`, [U.btn('다음 보기', { s: 'items', c, g, o: o + PAGE }, '다음 품목')]));
+      const head = x.msg ? `${x.msg}\n` : '';
       return U.res([
-        U.text(`${g} (${p * PAGE + 1}~${p * PAGE + page.length} / ${all.length})`),
+        U.text(`${head}${g} ${o + 1}~${o + page.length} / ${all.length}${cart.count ? `  ·  🛒 ${cart.count}품목 ${O.won(cart.total)}` : ''}`),
         U.carousel(cards),
       ], [
         ...(cart.count ? [U.btn('주문하기', { s: 'confirm' })] : []),
-        toCart(cart),
+        ...(o > 0 ? [U.btn('처음 품목부터', { s: 'items', c, g, o: 0 })] : []),
         U.btn('다른 분류', { s: 'groups', c }),
+        toCart(cart),
         home,
       ]);
     }
@@ -156,10 +166,11 @@ function step(ctx, U, store, x, now) {
       const it = O.orderableItem(db, store, Number(x.i));
       if (!it) throw new O.UserError('발주할 수 없는 품목입니다');
       const qty = O.addQty(db, store, it.id, Math.trunc(Number(x.n) || 0));
+      const msg = qty ? `✔ ${it.name} ${qty}${it.unit} 담았어요` : `✔ ${it.name} 뺐어요`;
+      // 같은 캐러셀을 방금 누른 품목부터 다시 보여줌
+      if (x.g) return step(ctx, U, store, { s: 'items', c: x.c || it.category, g: x.g, o: x.o, msg }, now);
       const cart = O.cartOf(db, store);
-      const msg = qty ? `🛒 ${it.name} ${qty}${it.unit} 담았어요` : `${it.name} 뺐어요`;
       return U.res([U.text(`${msg}\n장바구니 ${cart.count}품목 · ${O.won(cart.total)}`)], [
-        U.btn('더 담기', { s: 'items', c: x.c, g: x.g, p: x.p }),
         ...(cart.count ? [U.btn('주문하기', { s: 'confirm' })] : []),
         toCart(cart),
         home,

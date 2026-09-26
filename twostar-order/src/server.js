@@ -297,6 +297,9 @@ function createApp(cfg) {
       } else if (sub === 'link' && m === 'POST') {
         if (!O.storeOf(db, Number(b.id))) throw new O.UserError('매장을 찾을 수 없습니다');
         return send(res, 200, { link: orderLink(Number(b.id)) });
+      } else if (sub === 'items-bulk' && m === 'POST') {
+        const r = O.importItems(db, b.text);
+        return send(res, 200, { ...r, data: adminData() });
       } else if (sub === 'items' && m === 'POST') saveItem(b);
       else if (sub === 'item-active' && m === 'POST') db.run('UPDATE items SET active = ? WHERE id = ?', [b.active ? 1 : 0, Number(b.id)]);
       else return send(res, 404, { error: 'not found' });

@@ -204,8 +204,10 @@
         h('div', { class: 'big' }, '✅'),
         h('h2', null, r.duplicate ? '이미 접수된 주문이에요' : '주문이 접수되었어요'),
         h('p', null, `주문번호 ${r.no}`, h('br'), `합계 ${won(r.total)}`),
-        h('p', { class: 'muted small' }, '카카오톡으로 돌아가셔도 됩니다.'),
-        h('button', { class: 'btn', onclick: render }, '발주서로 돌아가기')));
+        h('p', { class: 'muted small' }, '카카오톡 채팅방에서 [발주 내역]으로 상태를 볼 수 있어요.'),
+        // 카카오톡 인앱 브라우저 닫기 (카톡 밖에서 열었으면 아무 일 없음)
+        h('a', { class: 'btn yellow wide', href: 'kakaotalk://inappbrowser/close' }, '카카오톡으로 돌아가기'),
+        h('p', null, h('button', { class: 'btn', onclick: render }, '발주서 다시 보기'))));
       window.scrollTo(0, 0);
     } catch (e) {
       btn.disabled = false;
