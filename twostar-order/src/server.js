@@ -228,7 +228,7 @@ function createApp(cfg) {
     // ── 점주 발주서 ──
     let mm = p.match(/^\/o\/([\w.-]{10,200})$/);
     if (mm && m === 'GET') {
-      if (!storeFromToken(mm[1])) return send(res, 404, '<meta charset="utf-8"><p style="font:16px sans-serif;padding:24px">링크가 만료되었어요. 카카오톡 채널에서 [발주서 열기]를 다시 눌러 주세요.</p>', 'text/html; charset=utf-8');
+      if (!storeFromToken(mm[1])) return send(res, 404, '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/assets/app.css"><p class="pad24">링크가 만료되었어요. 카카오톡 채널에서 [발주서 열기]를 다시 눌러 주세요.</p>', 'text/html; charset=utf-8');
       return send(res, 200, page('order'), 'text/html; charset=utf-8');
     }
     mm = p.match(/^\/api\/o\/([\w.-]{10,200})(?:\/(cart|submit|reorder|request))?$/);
