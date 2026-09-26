@@ -17,27 +17,19 @@
 
 ## 1. 내 Mac에서 켜기 (데모)
 
+1. https://nodejs.org 에서 **LTS** 버전을 내려받아 설치합니다 (처음 한 번)
+2. 터미널에서 이 폴더로 이동한 뒤 실행합니다:
+
 ```bash
-brew install node cloudflared          # 처음 한 번 (Node 22.13 이상)
-cd twostar-order
-npm run seed                           # 샘플 품목 69개·매장 3곳 (선택)
-
-# 터미널 1: 외부에서 들어올 https 주소 만들기
-cloudflared tunnel --url http://localhost:8080
-#  → https://xxxx-xxxx.trycloudflare.com 주소가 나옵니다
-
-# 터미널 2: 서버 켜기 (위 주소를 PUBLIC_URL 에)
-PUBLIC_URL=https://xxxx-xxxx.trycloudflare.com \
-ADMIN_PASSWORD=관리자비밀번호 \
-SKILL_KEY=아무도모르는긴문자열 \
-BLOCK_ID=6ab764d9f6804a5978559653 \
-npm start
+bash start-mac.sh
 ```
 
-- 관리자 화면: `https://xxxx-xxxx.trycloudflare.com/admin`
-- 서버가 알려주는 **카카오 스킬 URL** 을 다음 단계에 씁니다.
-- 임시 터널 주소는 cloudflared 를 다시 켤 때마다 바뀝니다. 바뀌면 오픈빌더 스킬 URL도 바꿔 주세요. 실제 운영은 고정 주소(서버·도메인)로 옮깁니다.
-- 데이터는 `twostar-order/data/` 에 저장됩니다 (DB 파일 하나).
+스크립트가 알아서 cloudflared 를 내려받고, 외부 https 주소를 만들고, 관리자 비밀번호와 스킬 키를 만들고(`data/settings.env`), 서버를 켭니다.
+화면에 나오는 **관리자 주소 · 비밀번호 · 오픈빌더 스킬 URL** 을 사용하세요. 스킬 URL 은 클립보드에 복사되어 있습니다.
+
+- 창을 닫거나 Mac 이 잠들면 챗봇이 멈춥니다 (실행 중에는 잠자기를 막아 둡니다).
+- 다시 켤 때마다 주소가 바뀝니다 → 오픈빌더 스킬 URL 을 다시 붙여넣고 배포해 주세요. 실제 운영은 고정 주소(서버·도메인)로 옮깁니다.
+- 처음부터 다시 하려면 `data` 폴더를 지웁니다 (주문·매장 데이터도 지워집니다).
 
 ## 2. 카카오 i 오픈빌더 연결 (투스타발주봇)
 
