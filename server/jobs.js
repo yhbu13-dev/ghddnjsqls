@@ -6,6 +6,8 @@ const inv = require('./engine/inventory');
 const props = require('./engine/proposals');
 const delivery = require('./engine/delivery');
 const msg = require('./engine/messages');
+const standing = require('./engine/standing');
+const adminNotify = require('./adminNotify');
 
 async function tick(ctx, now, { flush = true } = {}) {
   const { db, R } = ctx;
@@ -24,8 +26,12 @@ async function tick(ctx, now, { flush = true } = {}) {
       st.dispatchDay = mid;
     }
     if (st.snapHour !== hourTs) { inv.snapshot(ctx, now); st.snapHour = hourTs; }
+    standing.tick(ctx, now);
   });
-  if (flush) await msg.flushOutbox(ctx, now);
+  if (flush) {
+    await msg.flushOutbox(ctx, now);
+    await adminNotify.flush(ctx, now);
+  }
 }
 
 /** 오래된 세션·스냅샷 정리 (하루 1회 정도) */
@@ -33,6 +39,8 @@ function housekeeping(ctx, now) {
   const { db } = ctx;
   db.run('DELETE FROM sessions WHERE expires_at < ?', [now]);
   db.run('DELETE FROM inv_snapshots WHERE t < ?', [now - 90 * T.DAY]);
+  db.run("DELETE FROM admin_notices WHERE created_at < ? AND status != 'queued'", [now - 30 * T.DAY]);
+  db.run('DELETE FROM daily_marks WHERE t < ?', [now - 30 * T.DAY]);
 }
 
 function start(ctx, { intervalMs = 60e3, log = console } = {}) {

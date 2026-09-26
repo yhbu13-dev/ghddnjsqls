@@ -42,6 +42,18 @@ const SPEC = {
   webhook_url: { def: '', type: 'url', label: '알림 웹훅 URL (webhook 방식)' },
   public_base_url: { def: 'http://localhost:8080', type: 'url', label: '외부 접속 주소 (사장님·기사 링크)' },
   sample_data: { def: 0, type: 'num', min: 0, max: 1, label: '샘플 데이터 여부' },
+  // 점주 직접 발주 · 카카오
+  order_min_amount: { def: 30000, type: 'num', min: 0, max: 10000000, label: '최소 발주 금액 (원)' },
+  order_link_hours: { def: 24, type: 'num', min: 1, max: 720, label: '발주 화면 링크 유효 시간 (시간)' },
+  kakao_rest_key: { def: '', type: 'text', re: /^[A-Za-z0-9]{0,64}$/, label: '카카오 REST API 키 (카카오 로그인)' },
+  kakao_channel_id: { def: '', type: 'text', re: /^(_[A-Za-z0-9]{2,20})?$/, label: '카카오톡 채널 ID (예: _xaBcD)' },
+  kakao_block_id: { def: '', type: 'text', re: /^[a-f0-9]{0,40}$/, label: '오픈빌더 발주 블록 ID' },
+  kakao_guest_label: { def: '쇼핑몰 문의하기', type: 'text', re: /^[^<>]{0,14}$/, label: '거래처가 아닌 고객용 버튼 이름 (14자)' },
+  kakao_guest_url: { def: '', type: 'url', label: '거래처가 아닌 고객용 버튼 주소 (쇼핑몰·고객센터, 비우면 버튼 없음)' },
+  sheet_time: { def: '09:00', type: 'time', label: '정기 발주서 준비 시각' },
+  alert_unconfirmed: { def: '11:30', type: 'time', label: '관리자 알림: 미확정 발주서' },
+  alert_pick: { def: '11:50', type: 'time', label: '관리자 알림: 오늘 출고 합계' },
+  alert_delivery: { def: '18:00', type: 'time', label: '관리자 알림: 배송 결과' },
 };
 
 function validate(key, v) {
@@ -57,6 +69,7 @@ function validate(key, v) {
       return n;
     }
     case 'enum': if (!s.values.includes(v)) throw new Error(`${s.label}: ${s.values.join(', ')} 중 하나`); return v;
+    case 'text': if (!s.re.test(String(v))) throw new Error(`${s.label}: 형식이 올바르지 않습니다`); return String(v);
     case 'url': if (v !== '' && !/^https?:\/\/[^\s]+$/.test(String(v))) throw new Error(`${s.label}: http(s):// 로 시작하는 주소`); return String(v).replace(/\/+$/, '');
     default: return v;
   }
@@ -91,6 +104,7 @@ function rules(s) {
     nightStartH: T.hhmm(s.night_start), nightEndH: T.hhmm(s.night_end),
     breakFromH: T.hhmm(s.break_from), breakToH: T.hhmm(s.break_to), breakSendH: T.hhmm(s.break_send),
     retryH: T.hhmm(s.retry_at), pilotStart: T.parseDate(s.pilot_start),
+    sheetH: T.hhmm(s.sheet_time), unconfirmedH: T.hhmm(s.alert_unconfirmed), pickH: T.hhmm(s.alert_pick), deliveryAlertH: T.hhmm(s.alert_delivery),
   };
 }
 

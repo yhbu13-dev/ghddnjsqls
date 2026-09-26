@@ -18,7 +18,8 @@
     try {
       const j = await post('/api/auth/login', { email: $('#email').value.trim(), password: $('#password').value });
       if (j.user.must_change) { $('#cur').value = $('#password').value; showChange(); return; }
-      location.href = '/';
+      const next = new URLSearchParams(location.search).get('next') || '';
+      location.href = /^\/[a-z]{0,10}$/.test(next) ? next : '/'; // 관리자 카톡 알림 버튼(/a)에서 온 경우 되돌아간다
     } catch (err) { $('#err').textContent = err.message; }
   });
   $('#changeForm').addEventListener('submit', async (e) => {

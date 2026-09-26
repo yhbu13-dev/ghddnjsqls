@@ -5,6 +5,7 @@
 const T = require('../time');
 const msg = require('./messages');
 const { logEvent } = require('./events');
+const adminNotify = require('../adminNotify');
 
 /** 결제 시각 기준 배송일: 컷오프 전이면 그날(배송 요일일 때), 아니면 다음 배송일 */
 function deliverDate(paidAt, R) {
@@ -62,12 +63,14 @@ async function charge(ctx, p, actor, now) {
         [now, res.ref || null, res.method || ctx.R.pay_method, dd, p.id]);
       const q = load(db, p.id);
       msg.enqueue(ctx, q, 'confirm', now);
+      adminNotify.orderResult(ctx, q, now);
       logEvent(db, { t: now, kind: '결제 완료', store_id: p.store_id, proposal_id: p.id, region_id: store.region_id, actor, message: `${store.name} · ${res.method === 'invoice' ? '후불 청구 확정' : '자동결제'} · ${dd} 배송` });
       return q;
     }
     db.run("UPDATE proposals SET status = 'payfail', pay_failed_at = ?, pay_fail_reason = ? WHERE id = ?", [now, String(res.reason || '결제 실패').slice(0, 200), p.id]);
     const q = load(db, p.id);
     msg.enqueue(ctx, q, 'payfail', now);
+    adminNotify.orderResult(ctx, q, now);
     logEvent(db, { t: now, kind: '결제 실패', store_id: p.store_id, proposal_id: p.id, region_id: store.region_id, actor, message: `${store.name} · ${q.pay_fail_reason}` });
     return q;
   });
