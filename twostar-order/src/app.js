@@ -86,9 +86,6 @@ function createHandler({ db, cfg, assets, log = console.log, fetch: fetchImpl = 
     return { tk: tokens.make(secret), skillKey };
   })().catch((e) => { setup = null; throw e; }));
 
-  // 최소 주문 금액: 관리자 [설정] 값이 있으면 그것, 없으면 서버 설정(MIN_ORDER)
-  const minOf = (s) => s.minOrder || cfg.minAmount || 0;
-
   async function route(request, info, S) {
     const url = new URL(request.url);
     const p = url.pathname;
@@ -146,8 +143,7 @@ function createHandler({ db, cfg, assets, log = console.log, fetch: fetchImpl = 
       log(`[카톡 ${new Date().toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul', hour12: false })}] 사용자 ${who} · ${what}`);
       let out;
       try {
-        const minAmount = minOf(await O.getSettings(db));
-        out = await skill({ db, blockId: cfg.blockId, orderLink, docLink, minAmount, guest: cfg.guest, ...hooks }, body);
+        out = await skill({ db, blockId: cfg.blockId, orderLink, docLink, minAmount: cfg.minAmount, guest: cfg.guest, ...hooks }, body);
       } catch (e) {
         // 어떤 오류가 나도 카카오에는 규격에 맞는 답을 보낸다 (500을 보내면 '스킬 응답 오류'로 끝남)
         console.error(`[카톡 오류] ${what}:`, e);
@@ -209,7 +205,7 @@ function createHandler({ db, cfg, assets, log = console.log, fetch: fetchImpl = 
       }
       if (act === 'submit' && m === 'POST') {
         const s = await O.getSettings(db);
-        const { order, duplicate } = await O.submit(db, store, b.rev, { via: 'web', memo: b.memo, minAmount: minOf(s) });
+        const { order, duplicate } = await O.submit(db, store, b.rev, { via: 'web', memo: b.memo, minAmount: cfg.minAmount });
         await hooks.onOrder(order, duplicate);
         if (!duplicate) await notifyOrder(order.id, 'received');
         return json(200, { no: order.no, total: order.total, duplicate, doc: docLink(order.id), eta: O.eta(Date.now(), s), view: await sheetView(store) });
@@ -344,20 +340,18 @@ function createHandler({ db, cfg, assets, log = console.log, fetch: fetchImpl = 
   async function sheetView(store, prefill = false, docLink = null) {
     let cart = await O.cartOf(db, store);
     let prefilled = false;
-    // 매번 지난 발주를 채운 발주서로 시작 (빈 장바구니일 때만) — 바뀐 것만 고치면 끝
-    if (prefill && !cart.count && (await O.lastOrder(db, store))) {
+    // 사우나: 품목이 많아 매번 지난 발주를 채운 발주서로 시작 (빈 장바구니일 때만)
+    if (prefill && store.biz === 'sauna' && !cart.count && (await O.lastOrder(db, store))) {
       await O.reorder(db, store);
       cart = await O.cartOf(db, store);
       prefilled = cart.count > 0;
     }
     const last = await O.lastOrder(db, store);
     const lastQty = {};
-    const lastPrice = {};
-    if (last) for (const l of last.lines) { lastQty[l.item_id] = l.qty; lastPrice[l.item_id] = l.price; }
+    if (last) for (const l of last.lines) lastQty[l.item_id] = l.qty;
     const cats = await O.categoriesOf(db, store);
     const items = (await O.itemsFor(db, store, null, cats)).map((i) => ({
       id: i.id, category: i.category, grp: i.grp, name: i.name, spec: i.spec, unit: i.unit, price: i.price, image: i.image, last: lastQty[i.id] || 0,
-      was: lastPrice[i.id] && lastPrice[i.id] !== i.price ? lastPrice[i.id] : 0, // 지난 주문 때와 단가가 다르면 그때 단가
     }));
     const s = await O.getSettings(db);
     return {
@@ -368,9 +362,9 @@ function createHandler({ db, cfg, assets, log = console.log, fetch: fetchImpl = 
       cart: Object.fromEntries(cart.lines.map((l) => [l.item_id, l.qty])),
       rev: cart.rev,
       prefilled,
-      minAmount: minOf(s),
+      minAmount: cfg.minAmount,
       // 발주서 상단 '마감까지 ○시간' · 도착 예정일 계산용
-      rules: { cutoffHour: s.cutoffHour, deliveryMin: s.deliveryMin, deliveryMax: s.deliveryMax, skipWeekend: s.skipWeekend, vat: s.vat },
+      rules: { cutoffHour: s.cutoffHour, deliveryMin: s.deliveryMin, deliveryMax: s.deliveryMax, skipWeekend: s.skipWeekend },
       eta: O.eta(Date.now(), s),
       last: last ? { no: last.no, at: last.created_at, total: last.total } : null,
       orders: (await O.ordersOf(db, store, 5)).map((o) => ({

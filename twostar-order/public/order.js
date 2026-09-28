@@ -147,30 +147,22 @@
     const bar = document.getElementById('bar');
     if (!bar) return;
     const t = totals();
-    const min = V.minAmount || 0;
-    const short = min - t.total;
     const D = deadline();
-    const vat = { included: '부가세 포함', excluded: '부가세 별도', none: '면세' }[V.rules.vat] || '';
-    const note = t.count && short > 0
-      ? h('div', { class: 'note-l warn' }, `${won(short)} 더 담아야 주문할 수 있어요`)
-      : h('div', { class: 'note-l' }, [vat, `${D.range} 도착 예정`].filter(Boolean).join(' · '));
+    const note = h('div', { class: 'note-l' }, `부가세 별도 · ${D.range} 도착 예정`);
     bar.replaceChildren(
       h('div', { class: 'acc' },
         h('div', { class: 'sumline' }, h('span', null, t.count ? `${t.count}개 품목` : '담은 품목 없음'), h('b', null, won(t.total))),
         note),
-      h('button', { class: 'btn cta', disabled: !t.count || short > 0, onclick: confirmSheet },
-        !t.count ? '품목을 담아 주세요' : short > 0 ? `최소 주문 금액 ${won(min)}` : D.cta));
+      h('button', { class: 'btn cta', disabled: !t.count, onclick: confirmSheet }, t.count ? D.cta : '품목을 담아 주세요'));
   }
 
   function row(it) {
     const q = qty[it.id] || 0;
-    const diff = it.was ? it.price - it.was : 0;
     return h('div', { class: `row${q ? ' on' : ''}`, 'data-id': it.id },
       it.image ? h('img', { class: 'thumb', src: `/img/${it.image}`, alt: '', loading: 'lazy' }) : null,
       h('div', { class: 'info' },
         h('div', { class: 'name' }, it.name),
-        h('div', { class: 'desc' }, [it.spec, won(it.price)].filter(Boolean).join(', '),
-          diff ? h('span', { class: diff > 0 ? 'pup' : 'pdown' }, ` (${won(Math.abs(diff))} ${diff > 0 ? '올랐어요' : '내렸어요'})`) : null),
+        h('div', { class: 'desc' }, [it.spec, won(it.price)].filter(Boolean).join(', ')),
         tab === 'all' && it.last ? h('div', { class: 'was' }, `지난번 ${it.last}${it.unit}`) : null),
       h('div', { class: 'step' },
         h('button', { class: 'minus', disabled: !q, 'aria-label': `${it.name} 수량 줄이기`, onclick: () => setQ(it.id, (qty[it.id] || 0) - 1) }, '−'),
@@ -180,14 +172,10 @@
 
   function render() {
     const D = deadline();
-    const lastDay = V.last ? md(kst(V.last.at)).replace(/\(.\)$/, '') : '';
-    const same = V.last && usual().every((i) => (qty[i.id] || 0) === i.last);
+    const vat = h('span', { class: 'vat' }, '*부가세 별도');
     const body = [];
     if (tab === 'usual') {
-      body.push(h('div', { class: 'inforow' },
-        h('span', null, same ? `지난 주문(${lastDay}) 수량으로 채워뒀어요` : `지난 주문(${lastDay})과 수량이 달라요`),
-        h('button', { class: 'btn soft small', onclick: loadLast }, '지난번과 똑같이')));
-      body.push(h('section', { class: 'group' }, usual().map(row)));
+      body.push(h('section', { class: 'group' }, h('h2', null, '자주 시키는 품목', h('span', { class: 'muted' }, usual().length), vat), usual().map(row)));
     } else {
       const items = V.items.filter((i) => i.category === cat);
       const groups = [];
@@ -208,7 +196,7 @@
         }, g.name, h('span', { class: 'n' }, g.items.length)))));
       }
       groups.forEach((g, i) => body.push(h('section', { class: 'group', id: gid(i) },
-        h('h2', null, g.name, h('span', { class: 'muted' }, g.items.length)), g.items.map(row))));
+        h('h2', null, g.name, h('span', { class: 'muted' }, g.items.length), vat.cloneNode(true)), g.items.map(row))));
     }
     app.replaceChildren(...[
       h('div', { class: 'hero' },
@@ -255,7 +243,7 @@
     return [
       h('section', { class: 'block' },
         h('h3', null, '빠르게 채우기'),
-        cell('지난번과 똑같이', V.last ? `${V.last.no} · ${won(V.last.total)}` : '지난 발주가 없어요', null, V.last ? loadLast : null),
+        cell('지난 발주 그대로 불러오기', V.last ? `${V.last.no} · ${won(V.last.total)}` : '지난 발주가 없어요', null, V.last ? loadLast : null),
         cell('모두 0으로 비우기', null, null, () => { for (const k of Object.keys(qty)) delete qty[k]; render(); scheduleSave(); })),
       V.orders.length ? h('section', { class: 'block' },
         h('h3', null, '최근 발주'),

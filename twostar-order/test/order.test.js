@@ -644,8 +644,9 @@ test('주문 확인 → 카톡 알림(Event API · 채팅방) · 발주 확인�
   r = await call(`/admin/doc/statement?order=${order.id}`, { headers: H });
   html = await r.text();
   assert.match(html, /거래명세서/);
-  assert.match(html, /금 일만일천원정/);
-  assert.match(html, /10,000원/); // 공급가액 11000/1.1
+  assert.match(html, /금 일만이천일백원정/); // 부가세 별도: 11,000 + 1,100
+  assert.match(html, /1,100원/);
+  assert.match(html, /부가세 별도 금액입니다/);
   assert.match(html, /국민 000-000/);
   const today = O.kstYmd(Date.now());
   r = await call(`/admin/doc/statement?store=${st.id}&from=${today.slice(0, 8)}01&to=${today}`, { headers: H });
@@ -673,7 +674,7 @@ test('배송 예정일 · 금액 한글 · 부가세 나누기', () => {
   assert.deepEqual(docs.vatSplit(10000, 'excluded'), { supply: 10000, tax: 1000, total: 11000 });
 });
 
-test('주문 마감 시각 · 최소 주문 금액(설정) · 지난 발주 자동 채우기 · 단가 변동', async () => {
+test('주문 마감 시각 · 부가세 별도 고정 · 발주서 규칙', async () => {
   // 2026-09-28(월) 15:59 KST 는 오늘 접수, 16:00 은 다음 날 접수 → 2~3일(주말 제외)
   const s = { deliveryMin: 2, deliveryMax: 3, skipWeekend: true, cutoffHour: 16 };
   assert.equal(O.eta(Date.UTC(2026, 8, 28, 6, 59), s).range, '9/30(수)~10/1(목)');
@@ -689,22 +690,12 @@ test('주문 마감 시각 · 최소 주문 금액(설정) · 지난 발주 자�
   await post('items', { category: 'cafe', grp: '시럽', name: '바닐라', price: 30000 });
   const st = await (await post('stores', { name: '카페', biz: 'cafe' })).json();
   assert.equal((await post('settings', { cutoffHour: 24 })).status, 400);
-  await post('settings', { minOrder: '100,000', cutoffHour: 16 });
+  await post('settings', { cutoffHour: 15, vat: 'included' });
   const tk = new URL(st.link).pathname.split('/').pop();
-  const api = (p, m = 'GET', body) => call(`/api/o/${tk}${p}`, { method: m, headers: { 'x-ts': '1' }, body: body && JSON.stringify(body) });
-  let v = await (await api('?fresh=1')).json();
-  assert.equal(v.minAmount, 100000);
-  assert.equal(v.rules.cutoffHour, 16);
-  const id = v.items[0].id;
-  v = await (await api('/cart', 'PUT', { cart: { [id]: 3 } })).json();
-  r = await api('/submit', 'POST', { rev: v.rev });
-  assert.match((await r.json()).error, /최소 발주 금액은 100,000원/);
-  v = await (await api('/cart', 'PUT', { cart: { [id]: 4 } })).json();
-  assert.equal((await api('/submit', 'POST', { rev: v.rev })).status, 200);
-  // 단가가 바뀌면 지난 단가를 알려 주고, 다음에 열면 지난 발주 수량이 채워져 있음 (카페도)
-  await post('items', { id, category: 'cafe', grp: '시럽', name: '바닐라', price: 30280 });
-  v = await (await api('?fresh=1')).json();
-  assert.equal(v.prefilled, true);
-  assert.equal(v.cart[id], 4);
-  assert.equal(v.items[0].was, 30000);
+  const v = await (await call(`/api/o/${tk}?fresh=1`)).json();
+  assert.equal(v.rules.cutoffHour, 15);
+  assert.equal(v.minAmount, 0);
+  assert.equal(v.items[0].was, undefined);
+  const d = await (await call('/api/admin/data', { headers: H })).json();
+  assert.equal(d.settings.vat, 'excluded', '부가세는 항상 별도');
 });

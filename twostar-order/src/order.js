@@ -480,8 +480,7 @@ const SETTINGS = {
   company: '투스타글로벌(주)', bizNo: '', ceo: '', address: '', tel: '', bizType: '', bizItem: '', account: '',
   deliveryMin: 2, deliveryMax: 3, skipWeekend: true,
   cutoffHour: 16, // 이 시각(한국 시간) 이후 주문은 다음 날 접수로 계산. 0 = 마감 없음
-  minOrder: 0, // 최소 주문 금액(원). 0 = 서버 설정(MIN_ORDER)을 따름
-  vat: 'included', // included: 단가에 부가세 포함 · excluded: 별도 · none: 면세
+  vat: 'excluded', // 단가는 부가세 별도 (확인서·명세서에 10% 세액을 더해 표시)
   kakaoBotId: '', kakaoRestKey: '', kakaoEvent: 'order_notice',
 };
 
@@ -489,7 +488,7 @@ async function getSettings(db) {
   const row = await db.get("SELECT value FROM meta WHERE key = 'settings'");
   let v = {};
   try { v = row ? JSON.parse(row.value) : {}; } catch { /* 깨진 값은 기본값으로 */ }
-  return { ...SETTINGS, ...v };
+  return { ...SETTINGS, ...v, vat: 'excluded' }; // 부가세는 항상 별도
 }
 
 async function saveSettings(db, patch) {
@@ -509,15 +508,6 @@ async function saveSettings(db, patch) {
     const h = Math.trunc(Number(patch.cutoffHour));
     if (!(h >= 0 && h <= 23)) throw new UserError('마감 시각은 0~23시로 적어 주세요 (0 = 마감 없음)');
     next.cutoffHour = h;
-  }
-  if (patch.minOrder !== undefined) {
-    const n = Math.trunc(Number(String(patch.minOrder).replace(/[,원\s]/g, '')));
-    if (!(n >= 0 && n <= 100_000_000)) throw new UserError('최소 주문 금액을 확인해 주세요');
-    next.minOrder = n;
-  }
-  if (patch.vat !== undefined) {
-    if (!['included', 'excluded', 'none'].includes(patch.vat)) throw new UserError('부가세 방식을 골라 주세요');
-    next.vat = patch.vat;
   }
   if (patch.kakaoBotId !== undefined) {
     const id = String(patch.kakaoBotId).trim();
