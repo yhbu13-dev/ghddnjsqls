@@ -4,6 +4,8 @@ name = "twostar-order"
 main = "src/worker.mjs"
 compatibility_date = "2025-09-01"
 compatibility_flags = ["nodejs_compat"]   # node:crypto · Buffer 사용
+workers_dev = true      # 예비 주소(…workers.dev)도 켜 둠 — 회사 주소 인증서 발급 전 점검용
+preview_urls = false
 
 # 회사 주소 (카카오는 workers.dev 주소를 링크로 열어 주지 않아 자체 도메인 사용)
 routes = [
