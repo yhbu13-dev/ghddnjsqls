@@ -231,13 +231,21 @@ function createApp(cfg) {
     if (p === '/kakao/skill') {
       if (m !== 'POST') return send(res, 405, { error: 'POST only' });
       if (!cfg.skillKey || !safeEq(url.searchParams.get('key') || '', cfg.skillKey)) return send(res, 403, { error: 'forbidden' });
-      const body = await readJson(req);
+      const body = await readJson(req).catch(() => ({}));
       // 검은 창에 한 줄씩: 카톡에서 무엇을 눌렀는지 (사용자는 짧은 별칭으로만)
       const who = crypto.createHash('sha256').update(String(body?.userRequest?.user?.id || '')).digest('hex').slice(0, 6);
       const ex = body?.action?.clientExtra || {};
       const what = ex.s ? `버튼 ${ex.s}` : `입력 "${String(body?.userRequest?.utterance || '').slice(0, 20).replace(/\d{6}/, '******')}"`;
       console.log(`[카톡 ${new Date().toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul', hour12: false })}] 사용자 ${who} · ${what}`);
-      const out = skill({ db, blockId: cfg.blockId, orderLink, minAmount: cfg.minAmount, guest: cfg.guest, ...hooks }, body);
+      let out;
+      try {
+        out = skill({ db, blockId: cfg.blockId, orderLink, minAmount: cfg.minAmount, guest: cfg.guest, ...hooks }, body);
+      } catch (e) {
+        // 어떤 오류가 나도 카카오에는 규격에 맞는 답을 보낸다 (500을 보내면 '스킬 응답 오류'로 끝남)
+        console.error(`[카톡 오류] ${what}:`, e);
+        out = { version: '2.0', template: { outputs: [{ simpleText: { text: '⚠️ 잠시 문제가 생겼어요. [처음으로]를 눌러 다시 시도해 주세요.' } }],
+          quickReplies: cfg.blockId ? [{ label: '처음으로', action: 'block', blockId: cfg.blockId, messageText: '처음으로', extra: { s: 'home' } }] : [] } };
+      }
       return send(res, 200, out);
     }
 

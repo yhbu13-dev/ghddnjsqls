@@ -260,3 +260,64 @@ test('카톡 한 계정에 여러 지점: 새 코드 입력 → 그 지점 추�
   r = req({ s: 'cart', st: other.id });
   assert.ok(!J(r).includes('남의 매장'));
 });
+
+test('모든 카톡 화면이 오픈빌더 응답 규격을 지킨다 (42품목 사우나 · 여러 지점)', () => {
+  const db = open(':memory:');
+  let n = 0;
+  for (const g of ['과자', '초콜릿·사탕', '빵·간식', '라면·컵', '음료', '아이스크림']) {
+    for (let i = 0; i < 7; i++) db.run("INSERT INTO items (category, grp, name, spec, price, sort) VALUES ('snack', ?, ?, '1박스 24입 대용량 기획', 1200, ?)", [g, `아주긴이름의스낵품목${++n}호 오리지널 대용량`, n]);
+  }
+  db.run("INSERT INTO items (category, grp, name, price) VALUES ('cafe', '시럽', '바닐라 시럽', 11000)");
+  const a = O.createStore(db, { name: '아주아주긴이름의해오름사우나본점', biz: 'sauna' });
+  const b = O.createStore(db, { name: '카페 온도', biz: 'cafe' });
+  const ctx = { db, blockId: 'B1', orderLink: (id) => `https://x.example/o/${id}`, minAmount: 0 };
+  const len = (s) => [...String(s)].length;
+  const seen = new Set();
+  function check(r, where) {
+    assert.equal(r.version, '2.0', where);
+    const t = r.template;
+    assert.ok(t.outputs.length >= 1 && t.outputs.length <= 3, where);
+    assert.ok(t.quickReplies.length <= 10, where);
+    const btn = (x, quick) => {
+      assert.ok(len(x.label) >= 1 && len(x.label) <= 14, `${where}: 버튼 글자 ${x.label}`);
+      assert.ok((quick ? ['block', 'message'] : ['block', 'message', 'webLink']).includes(x.action), `${where}: ${x.action}`);
+      if (x.action === 'block') { assert.equal(x.blockId, 'B1'); assert.equal(typeof x.extra, 'object'); seen.add(JSON.stringify(x.extra)); }
+      if (x.action === 'webLink') assert.match(x.webLinkUrl, /^https:\/\//);
+    };
+    t.quickReplies.forEach((q) => btn(q, true));
+    const card = (c) => {
+      assert.ok(len(c.title || '') <= 50, `${where}: 제목 ${c.title}`);
+      assert.ok(len(c.description || '') <= 400, `${where}: 설명`);
+      assert.ok((c.buttons || []).length <= 3, where);
+      (c.buttons || []).forEach((x) => btn(x, false));
+    };
+    for (const o of t.outputs) {
+      const keys = Object.keys(o);
+      assert.equal(keys.length, 1, where);
+      if (o.simpleText) assert.ok(len(o.simpleText.text) >= 1 && len(o.simpleText.text) <= 1000, `${where}: 글자수`);
+      else if (o.textCard) card(o.textCard);
+      else if (o.carousel) {
+        assert.equal(o.carousel.type, 'textCard', where);
+        assert.ok(o.carousel.items.length >= 1 && o.carousel.items.length <= 10, where);
+        o.carousel.items.forEach(card);
+      } else assert.fail(`${where}: 모르는 출력 ${keys}`);
+    }
+    return r;
+  }
+  const say = (extra, u = '버튼') => check(skill(ctx, { userRequest: { user: { id: 'v' }, utterance: u }, action: { clientExtra: extra } }), JSON.stringify(extra) + u);
+  say({}); say({ s: 'cart' });                       // 연결 전
+  say({}, a.code); say({}, b.code);                  // 두 지점 연결
+  say({ s: 'use', to: a.id });
+  const steps = [{}, { s: 'home' }, { s: 'cats' }, { s: 'groups', c: 'snack' }, { s: 'cart' }, { s: 'reorder' }, { s: 'history' },
+    { s: 'req' }, { s: 'stores' }, { s: 'confirm' }, { s: 'items', c: 'snack', g: '과자' }, { s: 'items', c: 'snack', g: '과자', o: 5 },
+    { s: 'items', c: 'snack', g: '없는묶음' }, { s: 'add', i: 999, n: 1 }, { s: 'what' }];
+  for (const x of steps) say(x);
+  for (let i = 1; i <= 42; i++) say({ s: 'add', i, n: 3, c: 'snack', g: '과자', o: 0 });   // 42품목 모두 담기
+  say({ s: 'cart' });                                  // 긴 장바구니 (1000자 넘으면 잘림)
+  const c = say({ s: 'confirm' });
+  say(c.template.outputs[0].textCard.buttons[0].extra); // 주문 확정
+  say({ s: 'history' }); say({ s: 'reorder' }); say({ s: 'clear' });
+  say({ s: 'reqgo', c: 'cafe' }); say({ s: 'reqgo', c: 'cafe' }); say({ s: 'reqgo', c: 'nope' });
+  say({}, '123456'); say({ s: 'use', to: 99999 });
+  assert.ok(seen.size > 20);
+});
