@@ -107,3 +107,8 @@ a.btn { display: inline-block; text-decoration: none; text-align: center; box-si
 .thumb.empty { display: inline-flex; align-items: center; justify-content: center; font-size: 11px; color: var(--sub); }
 .photo { display: flex; gap: 8px; align-items: center; }
 .photo .btn.small { padding: 4px 8px; font-size: 12px; margin: 2px; }
+/* PC 처럼 넓은 화면에서는 발주서를 휴대폰 폭으로 가운데 정렬 (읽기 쉽게) */
+@media (min-width: 760px) {
+  body:not(.admin) #app { max-width: 640px; margin: 0 auto; background: var(--bg); min-height: 100vh; box-shadow: 0 0 0 1px var(--line); }
+  body:not(.admin) .bar { max-width: 640px; margin: 0 auto; }
+}
