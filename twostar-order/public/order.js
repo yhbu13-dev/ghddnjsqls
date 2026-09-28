@@ -41,11 +41,15 @@
     return j;
   }
 
+  let tab = null; // 'usual' 자주 시키는 품목 · 'all' 전체 상품
   function take(v) {
     V = v;
     qty = { ...v.cart };
     if (!cat || !v.categories.some((c) => c.id === cat)) cat = v.categories[0] ? v.categories[0].id : null;
+    if (!tab) tab = usual().length ? 'usual' : 'all';
+    if (tab === 'usual' && !usual().length) tab = 'all';
   }
+  const usual = () => V.items.filter((i) => i.last > 0);
 
   // 수량을 바꾸면 0.6초 뒤 장바구니에 저장 (카톡 장바구니와 같은 것)
   function scheduleSave() {
@@ -71,68 +75,157 @@
     return { count, total };
   };
 
+  // ── 마감 · 도착 예정 (한국 시간 기준, 서버 [설정]의 마감 시각·배송 기간) ──
+  const DOW = ['일', '월', '화', '수', '목', '금', '토'];
+  const kst = (ms) => new Date(ms + 9 * 3600e3); // getUTC* 로 읽으면 한국 날짜·시각
+  const md = (d) => `${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일(${DOW[d.getUTCDay()]})`;
+  const hourText = (hh) => (hh === 12 ? '낮 12시' : hh > 12 ? `오후 ${hh - 12}시` : `오전 ${hh}시`);
+  function addDays(ms, n) {
+    const d = kst(ms);
+    for (let left = n; left > 0;) {
+      d.setUTCDate(d.getUTCDate() + 1);
+      const w = d.getUTCDay();
+      if (V.rules.skipWeekend && (w === 0 || w === 6)) continue;
+      left--;
+    }
+    return d;
+  }
+  function deadline() {
+    const R = V.rules;
+    const now = Date.now();
+    const d = kst(now);
+    const w = d.getUTCDay();
+    const off = R.skipWeekend && (w === 0 || w === 6);
+    const left = R.cutoffHour > 0 ? R.cutoffHour * 60 - (d.getUTCHours() * 60 + d.getUTCMinutes()) : null;
+    const open = left == null || (!off && left > 0);
+    let base = now; // 접수일: 마감 전 평일이면 오늘, 아니면 다음 영업일
+    if (!open) {
+      const isOff = (t) => { const x = kst(t).getUTCDay(); return R.skipWeekend && (x === 0 || x === 6); };
+      do base += 86400e3; while (isOff(base));
+    }
+    const a = addDays(base, R.deliveryMin);
+    const b = addDays(base, R.deliveryMax);
+    const range = R.deliveryMin === R.deliveryMax ? md(a) : `${md(a)}~${md(b).replace(/^\d+월 /, a.getUTCMonth() === b.getUTCMonth() ? '' : '$&')}`;
+    const cta = R.deliveryMin === R.deliveryMax ? `${md(a)}에 받기` : '주문하기';
+    if (left == null) return { title: '필요한 만큼 담아 주세요', sub: `지금 주문하면 ${range}에 받아요`, range, cta };
+    if (open) {
+      return {
+        title: left >= 60 ? `마감까지 ${Math.floor(left / 60)}시간 ${left % 60}분` : `마감까지 ${left}분`,
+        sub: `오늘 ${hourText(R.cutoffHour)}까지 주문하면 ${range}에 받아요`, range, cta, soon: left < 60,
+      };
+    }
+    return { title: off ? '오늘은 쉬는 날이에요' : '오늘 마감 지났어요', sub: `지금 주문하면 ${range}에 받아요`, range, cta };
+  }
+  let tick = null;
+  function startTick() {
+    clearInterval(tick);
+    tick = setInterval(() => {
+      const t = document.getElementById('dl-title');
+      if (!t) return clearInterval(tick);
+      const D = deadline();
+      t.textContent = D.title;
+      t.classList.toggle('soon', !!D.soon);
+      document.getElementById('dl-sub').textContent = D.sub;
+      renderBar();
+    }, 30000);
+  }
+
   function setQ(id, q) {
     q = Math.max(0, Math.min(999, q));
     if (q) qty[id] = q; else delete qty[id];
-    const row = document.querySelector(`[data-id="${id}"]`);
-    if (row) {
+    for (const row of document.querySelectorAll(`[data-id="${id}"]`)) {
       row.classList.toggle('on', q > 0);
       row.querySelector('.q').textContent = q;
+      row.querySelector('.minus').disabled = !q;
     }
     renderBar();
     scheduleSave();
   }
 
+  // 하단 고정: 담은 품목 · 합계 · 안내 한 줄 + 큰 버튼 (최소 금액 미달이면 잠김)
   function renderBar() {
     const bar = document.getElementById('bar');
     if (!bar) return;
     const t = totals();
-    bar.replaceChildren(h('button', { class: 'btn cta', disabled: !t.count, onclick: confirmSheet },
-      t.count ? [h('span', { class: 'cnt' }, t.count), `${won(t.total)} 주문하기`] : '품목을 담아 주세요'));
+    const min = V.minAmount || 0;
+    const short = min - t.total;
+    const D = deadline();
+    const vat = { included: '부가세 포함', excluded: '부가세 별도', none: '면세' }[V.rules.vat] || '';
+    const note = t.count && short > 0
+      ? h('div', { class: 'note-l warn' }, `${won(short)} 더 담아야 주문할 수 있어요`)
+      : h('div', { class: 'note-l' }, [vat, `${D.range} 도착 예정`].filter(Boolean).join(' · '));
+    bar.replaceChildren(
+      h('div', { class: 'acc' },
+        h('div', { class: 'sumline' }, h('span', null, t.count ? `${t.count}개 품목` : '담은 품목 없음'), h('b', null, won(t.total))),
+        note),
+      h('button', { class: 'btn cta', disabled: !t.count || short > 0, onclick: confirmSheet },
+        !t.count ? '품목을 담아 주세요' : short > 0 ? `최소 주문 금액 ${won(min)}` : D.cta));
+  }
+
+  function row(it) {
+    const q = qty[it.id] || 0;
+    const diff = it.was ? it.price - it.was : 0;
+    return h('div', { class: `row${q ? ' on' : ''}`, 'data-id': it.id },
+      it.image ? h('img', { class: 'thumb', src: `/img/${it.image}`, alt: '', loading: 'lazy' }) : null,
+      h('div', { class: 'info' },
+        h('div', { class: 'name' }, it.name),
+        h('div', { class: 'desc' }, [it.spec, won(it.price)].filter(Boolean).join(', '),
+          diff ? h('span', { class: diff > 0 ? 'pup' : 'pdown' }, ` (${won(Math.abs(diff))} ${diff > 0 ? '올랐어요' : '내렸어요'})`) : null),
+        tab === 'all' && it.last ? h('div', { class: 'was' }, `지난번 ${it.last}${it.unit}`) : null),
+      h('div', { class: 'step' },
+        h('button', { class: 'minus', disabled: !q, 'aria-label': `${it.name} 수량 줄이기`, onclick: () => setQ(it.id, (qty[it.id] || 0) - 1) }, '−'),
+        h('span', { class: 'q', 'aria-live': 'polite' }, q),
+        h('button', { class: 'plus', 'aria-label': `${it.name} 수량 늘리기`, onclick: () => setQ(it.id, (qty[it.id] || 0) + 1) }, '+')));
   }
 
   function render() {
-    const items = V.items.filter((i) => i.category === cat);
-    const groups = [];
-    for (const it of items) {
-      let g = groups.find((x) => x.name === it.grp);
-      if (!g) groups.push(g = { name: it.grp, items: [] });
-      g.items.push(it);
+    const D = deadline();
+    const lastDay = V.last ? md(kst(V.last.at)).replace(/\(.\)$/, '') : '';
+    const same = V.last && usual().every((i) => (qty[i.id] || 0) === i.last);
+    const body = [];
+    if (tab === 'usual') {
+      body.push(h('div', { class: 'inforow' },
+        h('span', null, same ? `지난 주문(${lastDay}) 수량으로 채워뒀어요` : `지난 주문(${lastDay})과 수량이 달라요`),
+        h('button', { class: 'btn soft small', onclick: loadLast }, '지난번과 똑같이')));
+      body.push(h('section', { class: 'group' }, usual().map(row)));
+    } else {
+      const items = V.items.filter((i) => i.category === cat);
+      const groups = [];
+      for (const it of items) {
+        let g = groups.find((x) => x.name === it.grp);
+        if (!g) groups.push(g = { name: it.grp, items: [] });
+        g.items.push(it);
+      }
+      const gid = (i) => `g${i}`;
+      if (V.categories.length > 1) {
+        body.push(h('div', { class: 'tabs' }, V.categories.map((c) => h('button', {
+          class: c.id === cat ? 'on' : null, onclick: () => { cat = c.id; render(); },
+        }, c.label))));
+      }
+      if (groups.length > 1) {
+        body.push(h('div', { class: `chips${V.categories.length > 1 ? ' under' : ''}` }, groups.map((g, i) => h('button', {
+          onclick: () => document.getElementById(gid(i)).scrollIntoView({ behavior: 'smooth' }),
+        }, g.name, h('span', { class: 'n' }, g.items.length)))));
+      }
+      groups.forEach((g, i) => body.push(h('section', { class: 'group', id: gid(i) },
+        h('h2', null, g.name, h('span', { class: 'muted' }, g.items.length)), g.items.map(row))));
     }
-    const gid = (i) => `g${i}`;
-    const multi = V.categories.length > 1;
     app.replaceChildren(...[
       h('div', { class: 'hero' },
-        h('div', { class: 'cap' }, `${V.store.name} · ${V.store.biz}`),
-        h('h1', null, V.prefilled ? '지난번처럼 채워 뒀어요' : '필요한 만큼 담아 주세요')),
-      V.prefilled ? h('div', { class: 'note blue' }, h('span', null, '📋'), h('span', null, h('b', null, '지난 발주 수량이 들어가 있어요.'), h('br'), '바뀐 것만 고치고 주문하세요.')) : null,
+        h('div', { class: 'cap' }, V.store.name),
+        h('h1', { id: 'dl-title', class: D.soon ? 'soon' : null }, D.title),
+        h('p', { id: 'dl-sub', class: 'sub' }, D.sub)),
       homeTip(),
-      multi ? h('div', { class: 'tabs' }, V.categories.map((c) => h('button', {
-        class: c.id === cat ? 'on' : null, onclick: () => { cat = c.id; render(); window.scrollTo(0, 0); },
-      }, c.label))) : null,
-      groups.length > 1 ? h('div', { class: `chips${multi ? ' under' : ''}` }, groups.map((g, i) => h('button', {
-        onclick: () => document.getElementById(gid(i)).scrollIntoView({ behavior: 'smooth' }),
-      }, g.name, h('span', { class: 'n' }, g.items.length)))) : null,
-      groups.map((g, i) => h('section', { class: 'group', id: gid(i) },
-        h('h2', null, g.name, h('span', { class: 'muted' }, g.items.length)),
-        g.items.map((it) => {
-          const q = qty[it.id] || 0;
-          return h('div', { class: `row${q ? ' on' : ''}`, 'data-id': it.id },
-            it.image ? h('img', { class: 'thumb', src: `/img/${it.image}`, alt: '', loading: 'lazy' }) : null,
-            h('div', { class: 'info' },
-              h('div', { class: 'name' }, it.name),
-              h('div', { class: 'desc' }, h('span', { class: 'price' }, won(it.price)), it.spec ? ` · ${it.spec}` : ''),
-              it.last ? h('div', { class: 'was' }, `지난번 ${it.last}${it.unit}`) : null),
-            h('div', { class: 'step' },
-              h('button', { class: 'minus', 'aria-label': '빼기', onclick: () => setQ(it.id, (qty[it.id] || 0) - 1) }, '−'),
-              h('span', { class: 'q' }, q),
-              h('button', { class: 'plus', 'aria-label': '더하기', onclick: () => setQ(it.id, (qty[it.id] || 0) + 1) }, '+')));
-        }))),
+      usual().length ? h('div', { class: 'seg2' }, [['usual', '자주 시키는 품목'], ['all', '전체 상품']].map(([k, l]) => h('button', {
+        class: tab === k ? 'on' : null, 'aria-pressed': tab === k ? 'true' : 'false', onclick: () => { tab = k; render(); window.scrollTo(0, 0); },
+      }, l))) : null,
+      body,
       extras(),
       h('div', { class: 'pad' }),
       h('div', { class: 'bar', id: 'bar' }),
     ].flat().filter(Boolean));
     renderBar();
+    startTick();
   }
 
   // 홈 화면에 붙여 두기 안내 (이미 홈 화면 아이콘으로 열었거나 [닫기]를 눌렀으면 숨김)
@@ -151,23 +244,23 @@
     return box;
   }
 
-  const cell = (label, sub, right, onclick, attrs = {}) => h(onclick ? 'button' : 'div', { class: 'cell', onclick, ...attrs },
+  const cell = (label, sub, right, onclick) => h(onclick ? 'button' : 'div', { class: 'cell', onclick },
     h('span', { class: 'l' }, label, sub ? h('small', null, sub) : null),
-    h('span', { class: 'r' }, right, onclick || attrs.href ? h('span', { class: 'chev' }, '›') : null));
+    h('span', { class: 'r' }, right, onclick ? h('span', { class: 'chev' }, '›') : null));
 
   function extras() {
     const more = V.access.filter((a) => a.state !== 'base');
     const label = { none: '신청하기', pending: '승인 대기 중', approved: '이용 중', rejected: '다시 신청' };
-    const date = (ms) => new Date(ms).toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric' });
+    const date = (ms) => { const d = kst(ms); return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`; };
     return [
       h('section', { class: 'block' },
         h('h3', null, '빠르게 채우기'),
-        cell('지난 발주 그대로 불러오기', V.last ? `${V.last.no} · ${won(V.last.total)}` : '지난 발주가 없어요', null, V.last ? loadLast : null),
+        cell('지난번과 똑같이', V.last ? `${V.last.no} · ${won(V.last.total)}` : '지난 발주가 없어요', null, V.last ? loadLast : null),
         cell('모두 0으로 비우기', null, null, () => { for (const k of Object.keys(qty)) delete qty[k]; render(); scheduleSave(); })),
       V.orders.length ? h('section', { class: 'block' },
         h('h3', null, '최근 발주'),
         V.orders.map((o) => h(o.doc ? 'a' : 'div', { class: 'cell', href: o.doc },
-          h('span', { class: 'l' }, `${won(o.total)}`, h('small', null, `${date(o.at)} · ${o.no}`)),
+          h('span', { class: 'l' }, won(o.total), h('small', null, `${date(o.at)} · ${o.no}`)),
           h('span', { class: 'r' }, h('span', { class: 'tag' }, o.status), o.doc ? h('span', { class: 'chev' }, '›') : null)))) : null,
       more.length ? h('section', { class: 'block' },
         h('h3', null, '다른 품목도 발주하기'),
@@ -179,6 +272,8 @@
   }
 
   async function loadLast() {
+    const same = usual().every((i) => (qty[i.id] || 0) === i.last) && Object.keys(qty).every((id) => V.items.find((i) => i.id === Number(id))?.last);
+    if (same) return toast('이미 지난번과 똑같아요');
     if (Object.keys(qty).length && !window.confirm('지금 고른 수량을 지우고 지난 발주로 바꿀까요?')) return;
     try { await saving; take(await api('/reorder', 'POST')); render(); toast('지난 발주를 불러왔어요'); } catch (e) { toast(e.message); }
   }
@@ -219,21 +314,28 @@
     try {
       if (saveTimer) save();
       await saving;
+      const chosen = V.items.filter((i) => qty[i.id] > 0).map((i) => ({ ...i, q: qty[i.id] }));
       const r = await api('/submit', 'POST', { rev: V.rev });
       document.querySelector('.sheet')?.remove();
       take(r.view);
-      app.replaceChildren(h('div', { class: 'done' },
-        h('div', { class: 'check' }, '✓'),
-        h('h2', null, r.duplicate ? '이미 접수된 발주예요' : '발주가 접수되었어요'),
-        h('p', { class: 'lead' }, '담당자가 확인하면 카카오톡으로 알려 드려요'),
-        h('div', { class: 'kv' },
-          h('div', null, h('span', null, '주문번호'), h('b', null, r.no)),
-          h('div', null, h('span', null, '합계'), h('b', null, won(r.total))),
-          r.eta ? h('div', null, h('span', null, '도착 예정'), h('b', { class: 'hl' }, r.eta.range, h('br'), h('span', { class: 'small' }, `확인 후 ${r.eta.days}`))) : null),
-        // 카카오톡 인앱 브라우저 닫기 (카톡 밖에서 열었으면 아무 일 없음)
-        h('a', { class: 'btn cta big', href: 'kakaotalk://inappbrowser/close' }, '카카오톡으로 돌아가기'),
-        r.doc ? h('a', { class: 'btn big', href: r.doc }, '발주 확인서 보기') : null,
-        h('button', { class: 'link', onclick: render }, '발주서 다시 보기')));
+      clearInterval(tick);
+      app.replaceChildren(h('div', { class: 'done2' },
+        h('div', { class: 'hero' },
+          h('div', { class: 'check' }, '✓'),
+          h('h1', null, r.duplicate ? '이미 주문했어요' : '주문했어요'),
+          h('p', { class: 'sub' }, r.eta ? `${r.eta.range.replace(/(\d+)\/(\d+)/g, '$1월 $2일')}에 도착해요` : '담당자가 확인하면 카카오톡으로 알려 드려요'),
+          h('div', { class: 'lower' },
+            r.doc ? h('a', { class: 'btn soft small', href: r.doc }, '발주 확인서 보기') : null,
+            h('button', { class: 'btn small', onclick: render }, '발주서 다시 보기'))),
+        h('div', { class: 'meta-l' }, `주문번호 ${r.no} · 담당자가 확인하면 카카오톡으로 알려 드려요`),
+        h('section', { class: 'group' }, chosen.map((i) => h('div', { class: 'row' },
+          h('div', { class: 'info' }, h('div', { class: 'name' }, i.name), h('div', { class: 'desc' }, `${i.q}${i.unit}`)),
+          h('b', { class: 'amt' }, won(i.q * i.price))))),
+        h('div', { class: 'pad' }),
+        h('div', { class: 'bar' },
+          h('div', { class: 'acc' }, h('div', { class: 'sumline' }, h('span', null, '합계'), h('b', null, won(r.total)))),
+          // 카카오톡 인앱 브라우저 닫기 (카톡 밖에서 열었으면 아무 일 없음)
+          h('a', { class: 'btn cta', href: 'kakaotalk://inappbrowser/close' }, '확인'))));
       window.scrollTo(0, 0);
     } catch (e) {
       btn.disabled = false;

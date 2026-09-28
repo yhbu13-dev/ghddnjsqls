@@ -479,6 +479,8 @@ async function storeMonths(db, storeId) {
 const SETTINGS = {
   company: '투스타글로벌(주)', bizNo: '', ceo: '', address: '', tel: '', bizType: '', bizItem: '', account: '',
   deliveryMin: 2, deliveryMax: 3, skipWeekend: true,
+  cutoffHour: 16, // 이 시각(한국 시간) 이후 주문은 다음 날 접수로 계산. 0 = 마감 없음
+  minOrder: 0, // 최소 주문 금액(원). 0 = 서버 설정(MIN_ORDER)을 따름
   vat: 'included', // included: 단가에 부가세 포함 · excluded: 별도 · none: 면세
   kakaoBotId: '', kakaoRestKey: '', kakaoEvent: 'order_notice',
 };
@@ -503,6 +505,16 @@ async function saveSettings(db, patch) {
     next.deliveryMin = a; next.deliveryMax = b;
   }
   if (patch.skipWeekend !== undefined) next.skipWeekend = !!patch.skipWeekend;
+  if (patch.cutoffHour !== undefined) {
+    const h = Math.trunc(Number(patch.cutoffHour));
+    if (!(h >= 0 && h <= 23)) throw new UserError('마감 시각은 0~23시로 적어 주세요 (0 = 마감 없음)');
+    next.cutoffHour = h;
+  }
+  if (patch.minOrder !== undefined) {
+    const n = Math.trunc(Number(String(patch.minOrder).replace(/[,원\s]/g, '')));
+    if (!(n >= 0 && n <= 100_000_000)) throw new UserError('최소 주문 금액을 확인해 주세요');
+    next.minOrder = n;
+  }
   if (patch.vat !== undefined) {
     if (!['included', 'excluded', 'none'].includes(patch.vat)) throw new UserError('부가세 방식을 골라 주세요');
     next.vat = patch.vat;
@@ -548,9 +560,20 @@ function addDays(ms, n, skipWeekend) {
 const md = (d) => `${d.getUTCMonth() + 1}/${d.getUTCDate()}(${DOW[d.getUTCDay()]})`;
 
 /** 기준 시각부터 배송 예정: { days: '2~3일', range: '10/1(수)~10/2(목)', text } */
+/** 접수일: 마감(cutoffHour) 전 평일이면 오늘, 아니면 다음 영업일 (주말 제외일 때 토·일은 건너뜀) */
+function acceptedAt(ms, s) {
+  const off = (t) => { const w = new Date(t + 9 * 3600e3).getUTCDay(); return s.skipWeekend && (w === 0 || w === 6); };
+  let t = ms;
+  if (new Date(ms + 9 * 3600e3).getUTCHours() >= s.cutoffHour || off(t)) {
+    do t += 86400e3; while (off(t));
+  }
+  return t;
+}
+
 function eta(fromMs, s) {
-  const a = addDays(fromMs, s.deliveryMin, s.skipWeekend);
-  const b = addDays(fromMs, s.deliveryMax, s.skipWeekend);
+  const base = s.cutoffHour > 0 ? acceptedAt(fromMs, s) : fromMs;
+  const a = addDays(base, s.deliveryMin, s.skipWeekend);
+  const b = addDays(base, s.deliveryMax, s.skipWeekend);
   const days = s.deliveryMin === s.deliveryMax ? `${s.deliveryMin}일` : `${s.deliveryMin}~${s.deliveryMax}일`;
   const range = s.deliveryMin === s.deliveryMax ? md(a) : `${md(a)}~${md(b)}`;
   return { days, range, text: `배송 소요 ${days}${s.skipWeekend ? '(주말 제외)' : ''} · ${range} 도착 예정` };

@@ -90,10 +90,11 @@ h1, h2, h3 { letter-spacing: -0.03em; }
 .step button { width: 40px; height: 40px; font-size: 22px; line-height: 1; color: var(--g700); border-radius: 12px; display: grid; place-items: center; }
 .step button:active { background: var(--g200); }
 .step .q { min-width: 28px; text-align: center; font-weight: 700; font-size: 17px; color: var(--blue); }
-.row:not(.on) .step { background: none; }
-.row:not(.on) .step .minus, .row:not(.on) .step .q { display: none; }
-.row:not(.on) .step .plus { background: var(--blue50); color: var(--blue); width: 44px; }
-.row.on .name { color: var(--blue); }
+.step .minus:disabled { color: var(--g300); background: none; }
+.row:not(.on) .step .q { color: var(--g400); font-weight: 500; }
+.pup { color: var(--red); font-weight: 600; }
+.pdown { color: var(--blue); font-weight: 600; }
+.row .amt { font-weight: 600; font-variant-numeric: tabular-nums; }
 .block { padding: 20px 20px 8px; }
 .block h3 { margin: 0 0 6px; font-size: 20px; font-weight: 700; }
 .block .sub { margin: 0 0 8px; color: var(--g500); font-size: 14px; }
@@ -104,11 +105,33 @@ h1, h2, h3 { letter-spacing: -0.03em; }
 .cell .r { color: var(--g500); font-size: 14px; display: flex; align-items: center; gap: 8px; }
 .cell .chev { color: var(--g400); font-size: 18px; }
 button.cell:disabled { opacity: .4; }
-.pad { height: calc(120px + env(safe-area-inset-bottom)); }
+.pad { height: calc(190px + env(safe-area-inset-bottom)); }
 .bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; padding: 16px 20px calc(16px + env(safe-area-inset-bottom)); background: linear-gradient(to top, #fff 72%, rgba(255,255,255,0)); }
 .bar .cta { width: 100%; min-height: 58px; font-size: 17px; border-radius: 16px; gap: 8px; box-shadow: 0 6px 16px rgba(49,130,246,.25); }
 .bar .cta:disabled { background: var(--g200); color: var(--g500); box-shadow: none; opacity: 1; }
 .bar .cnt { background: rgba(255,255,255,.22); border-radius: 8px; padding: 1px 8px; font-size: 14px; }
+.bar { padding-top: 28px; background: linear-gradient(to top, #fff 84%, rgba(255,255,255,0)); }
+.bar .acc { padding: 0 4px 12px; }
+.bar .sumline { display: flex; justify-content: space-between; align-items: baseline; }
+.bar .sumline span { font-size: 15px; color: var(--g600); }
+.bar .sumline b { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.bar .note-l { font-size: 13px; color: var(--g600); margin-top: 2px; }
+.bar .note-l.warn { color: var(--red); font-weight: 600; }
+.bar .cta { box-shadow: none; }
+a.btn.cta { width: 100%; min-height: 58px; font-size: 17px; border-radius: 16px; }
+/* 토스식 상단: 가게 이름 · 마감까지 남은 시간 · 도착 안내 */
+.hero h1.soon { color: var(--red); }
+.hero .sub { margin: 6px 0 0; color: var(--g600); font-size: 15px; }
+.seg2 { display: flex; margin: 4px 20px 8px; padding: 4px; background: var(--g100); border-radius: 14px; }
+.seg2 button { flex: 1; padding: 10px 8px; border-radius: 10px; font-size: 15px; font-weight: 600; color: var(--g500); transition: background .15s, color .15s; }
+.seg2 button.on { background: #fff; color: var(--g900); box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+.inforow { display: flex; align-items: center; gap: 12px; padding: 10px 20px; font-size: 14px; word-break: keep-all; color: var(--g700); }
+.inforow span { flex: 1; }
+.done2 .hero { padding-top: 40px; }
+.done2 .check { width: 48px; height: 48px; border-radius: 50%; background: var(--blue); color: #fff; font-size: 26px; font-weight: 700; display: grid; place-items: center; margin-bottom: 16px; animation: pop .35s cubic-bezier(.2,1.6,.4,1); }
+.done2 .lower { display: flex; gap: 8px; margin-top: 16px; }
+.done2 .meta-l { padding: 0 20px 4px; font-size: 13px; color: var(--g500); }
+.done2 .group { border-top: 12px solid var(--g100); margin-top: 12px; }
 .sheet { position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 20; display: flex; align-items: flex-end; justify-content: center; animation: fade .15s; }
 @keyframes fade { from { opacity: 0; } }
 .sheet .box { background: #fff; width: 100%; max-width: 640px; max-height: 88vh; overflow: auto; border-radius: 24px 24px 0 0; padding: 12px 20px calc(20px + env(safe-area-inset-bottom)); animation: rise .22s ease-out; }

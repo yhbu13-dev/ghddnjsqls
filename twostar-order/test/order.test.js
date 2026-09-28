@@ -672,3 +672,39 @@ test('배송 예정일 · 금액 한글 · 부가세 나누기', () => {
   assert.deepEqual(docs.vatSplit(11000, 'included'), { supply: 10000, tax: 1000, total: 11000 });
   assert.deepEqual(docs.vatSplit(10000, 'excluded'), { supply: 10000, tax: 1000, total: 11000 });
 });
+
+test('주문 마감 시각 · 최소 주문 금액(설정) · 지난 발주 자동 채우기 · 단가 변동', async () => {
+  // 2026-09-28(월) 15:59 KST 는 오늘 접수, 16:00 은 다음 날 접수 → 2~3일(주말 제외)
+  const s = { deliveryMin: 2, deliveryMax: 3, skipWeekend: true, cutoffHour: 16 };
+  assert.equal(O.eta(Date.UTC(2026, 8, 28, 6, 59), s).range, '9/30(수)~10/1(목)');
+  assert.equal(O.eta(Date.UTC(2026, 8, 28, 7, 0), s).range, '10/1(목)~10/2(금)');
+  assert.equal(O.eta(Date.UTC(2026, 8, 26, 1), s).range, '9/30(수)~10/1(목)', '토요일 주문은 월요일 접수');
+
+  const db = open(':memory:');
+  const handle = createHandler({ db, cfg: { adminPassword: 'pw', skillKey: 'k', blockId: 'B', minAmount: 0, guest: {}, secret: 's' }, log: () => {}, assets: async () => null });
+  const call = (path, init) => handle(new Request(`https://x.com${path}`, init), { ip: '1' });
+  let r = await call('/admin/login', { method: 'POST', body: JSON.stringify({ password: 'pw' }) });
+  const H = { cookie: r.headers.get('set-cookie').split(';')[0], 'x-ts': '1' };
+  const post = async (sub, body) => call(`/api/admin/${sub}`, { method: 'POST', headers: H, body: JSON.stringify(body) });
+  await post('items', { category: 'cafe', grp: '시럽', name: '바닐라', price: 30000 });
+  const st = await (await post('stores', { name: '카페', biz: 'cafe' })).json();
+  assert.equal((await post('settings', { cutoffHour: 24 })).status, 400);
+  await post('settings', { minOrder: '100,000', cutoffHour: 16 });
+  const tk = new URL(st.link).pathname.split('/').pop();
+  const api = (p, m = 'GET', body) => call(`/api/o/${tk}${p}`, { method: m, headers: { 'x-ts': '1' }, body: body && JSON.stringify(body) });
+  let v = await (await api('?fresh=1')).json();
+  assert.equal(v.minAmount, 100000);
+  assert.equal(v.rules.cutoffHour, 16);
+  const id = v.items[0].id;
+  v = await (await api('/cart', 'PUT', { cart: { [id]: 3 } })).json();
+  r = await api('/submit', 'POST', { rev: v.rev });
+  assert.match((await r.json()).error, /최소 발주 금액은 100,000원/);
+  v = await (await api('/cart', 'PUT', { cart: { [id]: 4 } })).json();
+  assert.equal((await api('/submit', 'POST', { rev: v.rev })).status, 200);
+  // 단가가 바뀌면 지난 단가를 알려 주고, 다음에 열면 지난 발주 수량이 채워져 있음 (카페도)
+  await post('items', { id, category: 'cafe', grp: '시럽', name: '바닐라', price: 30280 });
+  v = await (await api('?fresh=1')).json();
+  assert.equal(v.prefilled, true);
+  assert.equal(v.cart[id], 4);
+  assert.equal(v.items[0].was, 30000);
+});
