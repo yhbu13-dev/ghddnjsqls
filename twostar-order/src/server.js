@@ -36,6 +36,7 @@ function config(env = process.env) {
   const dataDir = env.DATA_DIR || path.join(ROOT, 'data');
   return {
     port: Number(env.PORT || 8080),
+    host: env.HOST || undefined, // 127.0.0.1 이면 이 컴퓨터 안에서만 접속 (터널이 대신 외부 연결)
     publicUrl: String(env.PUBLIC_URL || `http://localhost:${env.PORT || 8080}`).replace(/\/+$/, ''),
     adminPassword: env.ADMIN_PASSWORD || '',
     skillKey: env.SKILL_KEY || '',
@@ -344,7 +345,7 @@ if (require.main === module) {
   if (!cfg.skillKey) console.log('⚠️  SKILL_KEY 가 없어 카카오 스킬(/kakao/skill)이 꺼져 있습니다.');
   if (!cfg.blockId) console.log('⚠️  BLOCK_ID 가 없어 챗봇 버튼이 "말하기" 방식으로 동작합니다.');
   const { server } = createApp(cfg);
-  server.listen(cfg.port, () => {
+  server.listen(cfg.port, cfg.host, () => {
     console.log(`투스타 발주 서버: http://localhost:${cfg.port}/admin`);
     if (cfg.skillKey) console.log(`카카오 스킬 URL: ${cfg.publicUrl}/kakao/skill?key=${cfg.skillKey}`);
   });
