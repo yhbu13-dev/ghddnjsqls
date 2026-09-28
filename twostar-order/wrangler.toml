@@ -1,5 +1,5 @@
 # 투스타 발주 — Cloudflare Workers 설정
-# 배포: Windows 에서 deploy-cloudflare.bat 더블클릭 (로그인 → D1 만들기 → 배포 → 관리자 비밀번호)
+# 배포: Windows 에서 deploy-cloudflare.bat 더블클릭 (= node scripts/deploy-cloudflare.js)
 name = "twostar-order"
 main = "src/worker.mjs"
 compatibility_date = "2025-09-01"

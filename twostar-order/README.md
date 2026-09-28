@@ -20,7 +20,7 @@
 PC 를 켜 둘 필요 없고 주소(`https://twostar-order.○○.workers.dev`)가 바뀌지 않습니다.
 Cloudflare Workers(서버) + D1(데이터베이스)을 쓰며, 이 규모는 무료 한도 안에서 운영됩니다.
 
-1. Windows 에서 `twostar-order` 폴더의 **`deploy-cloudflare.bat`** 더블클릭
+1. Windows 에서 `twostar-order` 폴더의 **`deploy-cloudflare.bat`** 더블클릭 (Mac: `node scripts/deploy-cloudflare.js`)
 2. 브라우저가 열리면 Cloudflare 로그인 → **Allow**
 3. 관리자 비밀번호(8자 이상) 입력
 4. 화면에 나온 **관리자 주소**와 **오픈빌더 스킬 URL**(클립보드에 복사됨)을 사용 → 오픈빌더 스킬 URL 교체 → 배포
