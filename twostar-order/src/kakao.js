@@ -118,12 +118,11 @@ function tag(res, store) {
 
 function homeCard(ctx, U, store) {
   const cart = O.cartOf(ctx.db, store);
-  const desc = cart.count
-    ? `🛒 장바구니 ${cart.count}품목 · ${O.won(cart.total)}`
-    : '[📋 발주하기]를 누르면 전체 품목이 한 화면에 나와요.';
+  const hint = '👇 [📋 전체 품목 발주서]\n전체 품목을 한 화면에서 보고 수량만 누르면 돼요.';
+  const desc = cart.count ? `🛒 장바구니 ${cart.count}품목 · ${O.won(cart.total)}\n\n${hint}` : hint;
   // 주 경로는 발주서(한 화면에서 +/−). 대화창에 메시지가 쌓이지 않는다
   return U.card(`${store.name} 사장님, 안녕하세요`, desc, [
-    U.link('📋 발주하기', ctx.orderLink(store.id)),
+    U.link('📋 전체 품목 발주서', ctx.orderLink(store.id)),
     U.btn(cart.count ? `장바구니 (${cart.count})` : '장바구니', { s: 'cart' }),
     U.btn('지난 발주 그대로', { s: 'reorder' }),
   ]);
@@ -225,7 +224,7 @@ function step(ctx, U, store, x, now) {
         return U.res([U.card('장바구니가 비어 있어요', '품목을 골라 담거나 지난 발주를 불러오세요.', [
           U.btn('품목 골라 담기', { s: 'cats' }),
           U.btn('지난 발주 그대로', { s: 'reorder' }),
-          U.link('📋 발주서 열기', ctx.orderLink(store.id)),
+          U.link('📋 전체 품목 발주서', ctx.orderLink(store.id)),
         ])], [home]);
       }
       return U.res([
