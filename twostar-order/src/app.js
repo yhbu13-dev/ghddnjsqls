@@ -149,7 +149,7 @@ function createHandler({ db, cfg, assets, log = console.log }) {
       if (!(await storeFromToken(mm[1]))) return reply(404, '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/assets/app.css"><p class="pad24">사용할 수 없는 발주서 링크예요. 카카오톡 채널의 [발주서 링크]나 담당자에게 새 링크를 받아 주세요.</p>', 'text/html; charset=utf-8');
       const raw = await file(PAGES.order);
       const tpl = typeof raw === 'string' ? raw : new TextDecoder().decode(raw);
-      return html(200, tpl.replaceAll('{{TOKEN}}', mm[1])); // 토큰은 [\w.-] 만 허용되어 그대로 넣어도 안전
+      return html(200, tpl.replaceAll('{{TOKEN}}', mm[1]).replaceAll('{{BASE}}', base)); // 토큰은 [\w.-] 만 허용되어 그대로 넣어도 안전
     }
     // 홈 화면에 추가할 때 앱 이름·아이콘·시작 주소
     mm = p.match(/^\/o\/([\w.-]{10,200})\/manifest\.webmanifest$/);
@@ -342,6 +342,12 @@ function createHandler({ db, cfg, assets, log = console.log }) {
   async function handle(request, info = {}) {
     try {
       const S = await init();
+      // HEAD: 카카오톡 등은 링크를 열기 전에 '주소가 살아 있는지' HEAD 로 먼저 확인한다.
+      // GET 과 똑같이 처리하고 본문만 뺀다 (데이터를 바꾸는 /api 는 제외)
+      if (request.method === 'HEAD' && !new URL(request.url).pathname.startsWith('/api/')) {
+        const res = await route(new Request(request.url, { method: 'GET', headers: request.headers }), info, S);
+        return new Response(null, { status: res.status, headers: res.headers });
+      }
       return await route(request, info, S);
     } catch (e) {
       if (e instanceof O.UserError) return json(400, { error: e.message });

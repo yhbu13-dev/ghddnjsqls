@@ -507,3 +507,22 @@ test('품목 삭제: 하나씩 · 판매 중지 품목 모두 · 지난 주문·
     server.close();
   }
 });
+
+test('카톡 링크 확인용 HEAD 요청: 발주서·서버 점검은 200, 잘못된 링크는 404', async () => {
+  const { server, db, base, orderLink } = await startApp();
+  try {
+    const s = await O.createStore(db, { name: 'HEAD사우나', biz: 'sauna' });
+    const page = orderLink(s.id).replace('http://localhost', base);
+    let r = await fetch(page, { method: 'HEAD' });
+    assert.equal(r.status, 200);
+    assert.match(r.headers.get('content-type'), /text\/html/);
+    assert.equal((await r.text()), '');
+    assert.equal((await fetch(`${base}/health`, { method: 'HEAD' })).status, 200);
+    assert.equal((await fetch(page.replace(/\.[^.]+$/, '.forged'), { method: 'HEAD' })).status, 404);
+    const html = await (await fetch(page)).text();
+    assert.match(html, /og:title/);
+    assert.ok(!html.includes('{{'), '자리표시가 모두 채워짐');
+  } finally {
+    server.close();
+  }
+});
