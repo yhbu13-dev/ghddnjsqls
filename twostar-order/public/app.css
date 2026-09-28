@@ -114,3 +114,7 @@ a.btn { display: inline-block; text-decoration: none; text-align: center; box-si
 }
 .banner.tip { font-size: 14px; background: #eef6ff; border-color: #bfdbfe; }
 .banner.tip .btn.small { padding: 4px 10px; font-size: 13px; margin-left: 4px; }
+.done .eta { background: #fff; border-radius: var(--r); padding: 12px; max-width: 320px; margin: 12px auto; }
+.guide { margin: 6px 0 12px; padding-left: 20px; line-height: 1.7; }
+.ord .hd a, td a { color: inherit; }
+.btn.small { padding: 4px 10px; font-size: 13px; }

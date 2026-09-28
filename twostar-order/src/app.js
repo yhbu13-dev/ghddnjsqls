@@ -10,6 +10,8 @@ const O = require('./order');
 const { skill } = require('./kakao');
 const tokens = require('./tokens');
 const images = require('./images');
+const docs = require('./docs');
+const { sendEvent, orderMessage } = require('./notify');
 const { migrate, metaValue } = require('./schema');
 const { seed } = require('./sample');
 
@@ -29,6 +31,8 @@ const FILES = {
   '/assets/app.css': ['app.css', 'text/css; charset=utf-8'],
   '/assets/order.js': ['order.js', 'text/javascript; charset=utf-8'],
   '/assets/admin.js': ['admin.js', 'text/javascript; charset=utf-8'],
+  '/assets/doc.css': ['doc.css', 'text/css; charset=utf-8'],
+  '/assets/doc.js': ['doc.js', 'text/javascript; charset=utf-8'],
   '/assets/icon-192.png': ['icon-192.png', 'image/png'],
   '/assets/icon-512.png': ['icon-512.png', 'image/png'],
 };
@@ -71,7 +75,7 @@ const randomKey = (n) => () => crypto.randomBytes(n).toString('base64url');
  *   publicUrl 이 없으면 요청 주소로, skillKey·secret 이 없으면 DB 에 만들어 둔 값으로.
  * assets(file) → 파일 내용 (Uint8Array | string) 또는 null
  */
-function createHandler({ db, cfg, assets, log = console.log }) {
+function createHandler({ db, cfg, assets, log = console.log, fetch: fetchImpl = globalThis.fetch }) {
   let setup = null;
   // 처음 요청 때 한 번: 테이블 준비 · 샘플 · 비밀키/스킬 키
   const init = () => (setup ??= (async () => {
@@ -91,6 +95,19 @@ function createHandler({ db, cfg, assets, log = console.log }) {
     // store = { id, link_ver } — 토큰에 '매장번호-링크버전'을 담는다
     const orderLink = (store) => `${base}/o/${tk.sign('o', `${store.id}-${store.link_ver || 0}`, LINK_TTL)}`;
     const skillUrl = `${base}/kakao/skill?key=${S.skillKey}`;
+    // 발주 확인서 링크 (점주에게 보내는 용, 1년)
+    const docLink = (orderId) => `${base}/d/${tk.sign('d', String(orderId), LINK_TTL)}`;
+    // 주문 상태가 바뀌면 점주 카톡으로 알림 (Event API 설정이 없으면 다음에 채팅방을 열 때 보여 줌)
+    const notifyOrder = async (orderId, kind) => {
+      const o = await O.orderWithStore(db, orderId);
+      const s = await O.getSettings(db);
+      const msg = o && orderMessage(o, kind, s);
+      if (!msg) return null;
+      const users = await O.addNotices(db, o.store_id, o.id, msg.title, msg.text);
+      const r = await sendEvent(s, users, `${msg.title}\n${msg.text}`, fetchImpl);
+      if (r.error) await O.note(db, 'notify', `카톡 알림 실패 · ${o.store.name} ${o.no} · ${r.error}`);
+      return { users: users.length, ...r };
+    };
     const hooks = {
       async onOrder(order, dup) {
         if (dup) return;
@@ -126,7 +143,7 @@ function createHandler({ db, cfg, assets, log = console.log }) {
       log(`[카톡 ${new Date().toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul', hour12: false })}] 사용자 ${who} · ${what}`);
       let out;
       try {
-        out = await skill({ db, blockId: cfg.blockId, orderLink, minAmount: cfg.minAmount, guest: cfg.guest, ...hooks }, body);
+        out = await skill({ db, blockId: cfg.blockId, orderLink, docLink, minAmount: cfg.minAmount, guest: cfg.guest, ...hooks }, body);
       } catch (e) {
         // 어떤 오류가 나도 카카오에는 규격에 맞는 답을 보낸다 (500을 보내면 '스킬 응답 오류'로 끝남)
         console.error(`[카톡 오류] ${what}:`, e);
@@ -134,6 +151,15 @@ function createHandler({ db, cfg, assets, log = console.log }) {
           quickReplies: cfg.blockId ? [{ label: '처음으로', action: 'block', blockId: cfg.blockId, messageText: '처음으로', extra: { s: 'home' } }] : [] } };
       }
       return json(200, out);
+    }
+
+    // ── 발주 확인서 (점주용 링크) ──
+    let md = p.match(/^\/d\/([\w.-]{10,200})$/);
+    if (md && m === 'GET') {
+      const id = Number(tk.verify('d', md[1]));
+      const o = id ? await O.orderWithStore(db, id) : null;
+      if (!o) return html(404, '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/assets/app.css"><p class="pad24">확인서를 찾을 수 없어요. 카카오톡 [발주 내역]에서 다시 열어 주세요.</p>');
+      return html(200, docs.orderDoc(o, await O.getSettings(db)));
     }
 
     // ── 점주 발주서 ──
@@ -168,7 +194,7 @@ function createHandler({ db, cfg, assets, log = console.log }) {
       if (!store) return json(404, { error: '링크가 만료되었어요. 카카오톡에서 다시 열어 주세요' });
       if (m !== 'GET' && request.headers.get('x-ts') !== '1') return json(403, { error: 'forbidden' });
       const act = mm[2];
-      if (!act && m === 'GET') return json(200, await sheetView(store, url.searchParams.get('fresh') === '1'));
+      if (!act && m === 'GET') return json(200, await sheetView(store, url.searchParams.get('fresh') === '1', docLink));
       const b = await readJson(request);
       if (act === 'cart' && m === 'PUT') { await O.replaceCart(db, store, b.cart); return json(200, await sheetView(store)); }
       if (act === 'reorder' && m === 'POST') { await O.reorder(db, store); return json(200, await sheetView(store)); }
@@ -180,7 +206,9 @@ function createHandler({ db, cfg, assets, log = console.log }) {
       if (act === 'submit' && m === 'POST') {
         const { order, duplicate } = await O.submit(db, store, b.rev, { via: 'web', memo: b.memo, minAmount: cfg.minAmount });
         await hooks.onOrder(order, duplicate);
-        return json(200, { no: order.no, total: order.total, duplicate, view: await sheetView(store) });
+        if (!duplicate) await notifyOrder(order.id, 'received');
+        const s = await O.getSettings(db);
+        return json(200, { no: order.no, total: order.total, duplicate, doc: docLink(order.id), eta: O.eta(Date.now(), s), view: await sheetView(store) });
       }
       return json(404, { error: 'not found' });
     }
@@ -213,14 +241,54 @@ function createHandler({ db, cfg, assets, log = console.log }) {
       if (!isAdmin()) return redirect('/admin/login');
       return page('admin');
     }
+    // 인쇄용 문서: /admin/doc/order/<주문>  ·  /admin/doc/statement?order=<주문> 또는 ?store=<매장>&from=YYYY-MM-DD&to=YYYY-MM-DD
+    if (p.startsWith('/admin/doc/') && m === 'GET') {
+      if (!isAdmin()) return redirect('/admin/login');
+      const s = await O.getSettings(db);
+      const back = '/admin';
+      md = p.match(/^\/admin\/doc\/order\/(\d+)$/);
+      if (md) {
+        const o = await O.orderWithStore(db, Number(md[1]));
+        return o ? html(200, docs.orderDoc(o, s, { back })) : json(404, { error: '주문을 찾을 수 없습니다' });
+      }
+      if (p === '/admin/doc/statement') {
+        const q = url.searchParams;
+        if (q.get('order')) {
+          const o = await O.orderWithStore(db, Number(q.get('order')));
+          if (!o) return json(404, { error: '주문을 찾을 수 없습니다' });
+          const list = o.status === 'canceled' ? [] : [o];
+          return html(200, docs.statementDoc(o.store, list, s, `주문번호 ${o.no} · ${O.kstYmd(o.created_at)}`, { back }));
+        }
+        const store = await db.get('SELECT * FROM stores WHERE id = ?', [Number(q.get('store'))]);
+        if (!store) return json(404, { error: '매장을 찾을 수 없습니다' });
+        const list = await O.storeOrders(db, store.id, q.get('from'), q.get('to'), { withCanceled: false });
+        return html(200, docs.statementDoc(store, list, s, `${q.get('from')} ~ ${q.get('to')}`, { back }));
+      }
+      return json(404, { error: 'not found' });
+    }
     if (p.startsWith('/api/admin/')) {
       if (!isAdmin()) return json(401, { error: '다시 로그인해 주세요' });
       if (m !== 'GET' && request.headers.get('x-ts') !== '1') return json(403, { error: 'forbidden' });
       const sub = p.slice('/api/admin/'.length);
       const data = async () => adminData(skillUrl);
       if (sub === 'data' && m === 'GET') return json(200, await data());
+      if (sub === 'store' && m === 'GET') return json(200, await storeDetail(Number(url.searchParams.get('id')), url.searchParams.get('month')));
       const b = m === 'GET' ? {} : await readJson(request, sub === 'item-image' ? 3 * 1024 * 1024 : undefined);
-      if (sub === 'status' && m === 'POST') await O.setStatus(db, Number(b.id), String(b.status));
+      if (sub === 'status' && m === 'POST') {
+        await O.setStatus(db, Number(b.id), String(b.status));
+        const notify = await notifyOrder(Number(b.id), String(b.status));
+        return json(200, { ...(await data()), notify });
+      } else if (sub === 'settings' && m === 'POST') await O.saveSettings(db, b);
+      else if (sub === 'notify-test' && m === 'POST') {
+        // 알림 테스트: 매장에 연결된 카톡으로 테스트 알림
+        const store = await O.storeOf(db, Number(b.id));
+        if (!store) throw new O.UserError('매장을 찾을 수 없습니다');
+        const s = await O.getSettings(db);
+        const msg = orderMessage({ store, lines: [] }, 'test', s);
+        const users = await O.addNotices(db, store.id, null, msg.title, msg.text);
+        if (!users.length) throw new O.UserError('이 매장에 연결된 카톡이 없어요. 먼저 연결 코드로 연결해 주세요');
+        return json(200, { users: users.length, ...(await sendEvent(s, users, `${msg.title}\n${msg.text}`, fetchImpl)) });
+      }
       else if (sub === 'access' && m === 'POST') await O.decideAccess(db, Number(b.store_id), String(b.category), String(b.decision));
       else if (sub === 'stores' && m === 'POST') {
         const r = await O.createStore(db, b);
@@ -269,7 +337,7 @@ function createHandler({ db, cfg, assets, log = console.log }) {
     return json(404, { error: 'not found' });
   }
 
-  async function sheetView(store, prefill = false) {
+  async function sheetView(store, prefill = false, docLink = null) {
     let cart = await O.cartOf(db, store);
     let prefilled = false;
     // 사우나: 품목이 많아 매번 지난 발주를 채운 발주서로 시작 (빈 장바구니일 때만)
@@ -295,7 +363,9 @@ function createHandler({ db, cfg, assets, log = console.log }) {
       prefilled,
       minAmount: cfg.minAmount,
       last: last ? { no: last.no, at: last.created_at, total: last.total } : null,
-      orders: (await O.ordersOf(db, store, 5)).map((o) => ({ no: o.no, status: O.STATUS[o.status], total: o.total, at: o.created_at })),
+      orders: (await O.ordersOf(db, store, 5)).map((o) => ({
+        no: o.no, status: O.STATUS[o.status], total: o.total, at: o.created_at, doc: docLink ? docLink(o.id) : null,
+      })),
     };
   }
 
@@ -321,8 +391,26 @@ function createHandler({ db, cfg, assets, log = console.log }) {
       items: await db.all('SELECT * FROM items ORDER BY category, sort, id'),
       events: (await db.all('SELECT at, kind, text FROM events ORDER BY id DESC LIMIT 30')).reverse(),
       skillUrl,
+      settings: O.publicSettings(await O.getSettings(db)),
       labels: { categories: O.CATEGORIES, biz: Object.fromEntries(Object.entries(O.BIZ).map(([k, v]) => [k, v.label])), status: O.STATUS },
     };
+  }
+
+  /** 매장 상세: 월별 합계 + 고른 달(없으면 최근 달)의 주문 */
+  async function storeDetail(id, month) {
+    const store = await db.get(`SELECT s.*, (SELECT COUNT(*) FROM user_stores l WHERE l.store_id = s.id) AS kakao
+                                FROM stores s WHERE s.id = ?`, [id]);
+    if (!store) throw new O.UserError('매장을 찾을 수 없습니다');
+    const months = await O.storeMonths(db, id);
+    const now = O.kstYmd(Date.now()).slice(0, 7);
+    const mon = /^\d{4}-\d{2}$/.test(month || '') ? month : (months[0] ? months[0].month : now);
+    const [y, mo] = mon.split('-').map(Number);
+    const last = new Date(Date.UTC(y, mo, 0)).getUTCDate();
+    const from = `${mon}-01`;
+    const to = `${mon}-${String(last).padStart(2, '0')}`;
+    const orders = (await O.storeOrders(db, id, from, to)).reverse()
+      .map((o) => ({ ...o, status_label: O.STATUS[o.status], next: O.FLOW[o.status] }));
+    return { store, months, month: mon, from, to, orders };
   }
 
   async function saveItem(b) {

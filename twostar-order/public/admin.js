@@ -1,5 +1,5 @@
 'use strict';
-// 관리자 화면: 주문 · 출고 집계 · 품목 승인 · 매장 · 품목
+// 관리자 화면: 주문 · 출고 집계 · 품목 승인 · 매장(매장별 발주 내역·명세서) · 품목 · 설정
 (() => {
   const won = (n) => `${Number(n).toLocaleString('ko-KR')}원`;
   const time = (ms) => new Date(ms).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -54,8 +54,9 @@
   let flash = null; // 방금 만든 매장 코드·링크
 
   const TABS = [
-    ['orders', '주문'], ['pick', '출고 집계'], ['requests', '품목 승인'], ['stores', '매장'], ['items', '품목'],
+    ['orders', '주문'], ['pick', '출고 집계'], ['requests', '품목 승인'], ['stores', '매장'], ['items', '품목'], ['settings', '설정'],
   ];
+  let storeView = null; // 매장 상세 { id, data }
 
   async function act(path, body, msg) {
     try { D = await call(path, body); if (msg) toast(msg); render(); return true; } catch (e) { toast(e.message); return false; }
@@ -65,10 +66,10 @@
     const open = D.orders.filter((o) => o.status === 'received').length;
     nav.replaceChildren(...TABS.map(([k, label]) => {
       const n = k === 'orders' ? open : k === 'requests' ? D.requests.length : 0;
-      return h('button', { class: `chip${tab === k ? ' on' : ''}`, onclick: () => { tab = k; render(); } }, label, n ? h('span', { class: 'badge' }, n) : null);
+      return h('button', { class: `chip${tab === k ? ' on' : ''}`, onclick: () => { tab = k; if (k === 'stores') storeView = null; render(); } }, label, n ? h('span', { class: 'badge' }, n) : null);
     }));
     document.title = open ? `(${open}) 투스타 발주 관리자` : '투스타 발주 관리자';
-    main.replaceChildren(...[].concat(({ orders, pick, requests, stores, items })[tab]()).flat().filter(Boolean));
+    main.replaceChildren(...[].concat(({ orders, pick, requests, stores, items, settings })[tab]()).flat().filter(Boolean));
   }
 
   // ── 주문 ──
@@ -83,17 +84,89 @@
         h('div', { class: 'filters' }, [['open', '처리할 주문'], ['shipped', '출고됨'], ['all', '전체']].map(([k, l]) => h('button', {
           class: `chip${filter === k ? ' on' : ''}`, onclick: () => { filter = k; render(); },
         }, l))),
-        list.length ? list.map((o) => h('div', { class: 'ord' },
-          h('div', { class: 'hd' },
-            h('b', null, o.store_name), h('span', { class: `tag ${o.status}` }, o.status_label),
-            h('span', { class: 'small muted' }, `${o.no} · ${time(o.created_at)} · ${L.biz[o.biz]} · ${o.via === 'chat' ? '카톡' : '발주서'}`),
-            h('b', { style: 'margin-left:auto' }, won(o.total))),
-          h('div', { class: 'ls' }, o.lines.map((l) => h('div', null, `${l.name} ${l.qty}${l.unit}`))),
-          o.next.length ? h('div', { class: 'acts noprint' }, o.next.map((s) => h('button', {
-            class: `btn ${s === 'canceled' ? 'bad' : 'primary'}`,
-            onclick: () => { if (s !== 'canceled' || confirm(`${o.store_name} ${o.no} 주문을 취소할까요?`)) act('/api/admin/status', { id: o.id, status: s }); },
-          }, s === 'canceled' ? '취소' : `${L.status[s]} 처리`))) : null))
-          : h('p', { class: 'muted' }, '주문이 없습니다.')),
+        list.length ? list.map((o) => orderCard(o)) : h('p', { class: 'muted' }, '주문이 없습니다.')),
+    ];
+  }
+
+  // 상태를 바꾸면 점주 카톡으로 알림이 간다 → 결과를 알려 줌
+  const notifyMsg = (n) => (!n ? '' : !n.users ? ' · 카톡 연결된 사람이 없어 알림은 없어요'
+    : n.error ? ` · 카톡 자동 알림 실패 (${n.error}). 점주가 채팅방을 열면 보여요`
+      : !n.configured ? ' · 알림은 점주가 채팅방을 열면 보여요 (자동 발송은 [설정])' : ` · 카톡 알림 ${n.sent}명에게 보냈어요`);
+  async function changeStatus(o, s) {
+    if (s === 'canceled' && !confirm(`${o.store_name || ''} ${o.no} 주문을 취소할까요?\n점주에게 취소 알림이 갑니다.`)) return;
+    try {
+      const r = await call('/api/admin/status', { id: o.id, status: s });
+      D = r;
+      toast(`${o.no} ${D.labels.status[s]} 처리${notifyMsg(r.notify)}`);
+      if (storeView) await openStore(storeView.id, storeView.data.month);
+      render();
+    } catch (e) { toast(e.message); }
+  }
+  const docBtns = (o) => [
+    h('a', { class: 'btn', href: `/admin/doc/order/${o.id}`, target: '_blank', rel: 'noopener' }, '📄 확인서'),
+    h('a', { class: 'btn', href: `/admin/doc/statement?order=${o.id}`, target: '_blank', rel: 'noopener' }, '🧾 명세서'),
+  ];
+  function orderCard(o, inStore) {
+    const L = D.labels;
+    return h('div', { class: 'ord' },
+      h('div', { class: 'hd' },
+        inStore ? null : h('b', null, h('a', { href: '#', onclick: (e) => { e.preventDefault(); tab = 'stores'; openStore(o.store_id); } }, o.store_name)),
+        h('span', { class: `tag ${o.status}` }, o.status_label),
+        h('span', { class: 'small muted' }, `${o.no} · ${time(o.created_at)}${o.biz ? ` · ${L.biz[o.biz]}` : ''} · ${o.via === 'chat' ? '카톡' : '발주서'}`),
+        h('b', { style: 'margin-left:auto' }, won(o.total))),
+      h('div', { class: 'ls' }, o.lines.map((l) => h('div', null, `${l.name} ${l.qty}${l.unit}`))),
+      h('div', { class: 'acts noprint' },
+        o.next.map((s) => h('button', { class: `btn ${s === 'canceled' ? 'bad' : 'primary'}`, onclick: () => changeStatus(o, s) },
+          s === 'canceled' ? '취소' : s === 'confirmed' ? '확인 처리 (카톡 알림)' : `${L.status[s]} 처리`)),
+        docBtns(o)));
+  }
+
+  // ── 매장 상세: 월별 발주 내역 · 거래명세서 ──
+  async function openStore(id, month) {
+    try {
+      const data = await call(`/api/admin/store?id=${id}${month ? `&month=${month}` : ''}`);
+      storeView = { id, data };
+      render();
+      window.scrollTo(0, 0);
+    } catch (e) { toast(e.message); }
+  }
+  function storeDetail() {
+    const { store: s, months, month, from, to, orders: list } = storeView.data;
+    const L = D.labels;
+    const sum = list.filter((o) => o.status !== 'canceled').reduce((a, o) => a + o.total, 0);
+    const pf = h('input', { type: 'date', value: from });
+    const pt = h('input', { type: 'date', value: to });
+    const test = async () => {
+      try {
+        const r = await call('/api/admin/notify-test', { id: s.id });
+        toast(r.error ? `자동 발송 실패: ${r.error}` : r.configured ? `테스트 알림을 ${r.sent}명에게 보냈어요` : '자동 발송 설정 전이에요. 점주가 채팅방을 열면 테스트 알림이 보여요');
+      } catch (e) { toast(e.message); }
+    };
+    return [
+      h('button', { class: 'btn', onclick: () => { storeView = null; render(); } }, '← 매장 목록'),
+      h('div', { class: 'panel', style: 'margin-top:10px' },
+        h('h2', null, s.name, ' ', h('span', { class: 'small muted' }, L.biz[s.biz])),
+        h('p', { class: 'small muted' }, [s.owner, s.phone].filter(Boolean).join(' · ') || '점주 정보 없음'),
+        h('p', null, s.kakao ? `카톡 연결 ${s.kakao}명` : '카톡 미연결', ' ',
+          s.kakao ? h('button', { class: 'btn small', onclick: test }, '알림 테스트') : null, ' ',
+          s.kakao ? h('button', {
+            class: 'btn small bad',
+            onclick: async () => {
+              if (!confirm(`${s.name}에 연결된 카톡 ${s.kakao}명의 연결을 모두 끊을까요?`)) return;
+              try { const r = await call('/api/admin/unlink', { id: s.id }); D = r.data; toast(`카톡 ${r.unlinked}명 연결을 끊었습니다`); await openStore(s.id, month); } catch (e) { toast(e.message); }
+            },
+          }, '카톡 연결 해제') : null)),
+      h('div', { class: 'panel' },
+        h('h2', null, '월별 발주'),
+        months.length ? h('div', { class: 'filters' }, months.map((m) => h('button', {
+          class: `chip${m.month === month ? ' on' : ''}`, onclick: () => openStore(s.id, m.month),
+        }, `${m.month.replace('-', '년 ')}월 · ${m.count}건 · ${won(m.total)}`))) : h('p', { class: 'muted' }, '아직 발주가 없습니다.'),
+        h('div', { class: 'form', style: 'margin-top:8px' },
+          h('label', null, '명세서 시작일', pf), h('label', null, '끝나는 날', pt),
+          h('button', { class: 'btn primary', onclick: () => window.open(`/admin/doc/statement?store=${s.id}&from=${pf.value}&to=${pt.value}`, '_blank', 'noopener') }, '🧾 기간 거래명세서'))),
+      h('div', { class: 'panel' },
+        h('h2', null, `${month.replace('-', '년 ')}월 발주 ${list.length}건 · ${won(sum)}`, h('span', { class: 'small muted' }, ' (취소 제외 합계)')),
+        list.length ? list.map((o) => orderCard(o, true)) : h('p', { class: 'muted' }, '이 달에는 발주가 없습니다.')),
     ];
   }
 
@@ -125,6 +198,7 @@
 
   // ── 매장 ──
   function stores() {
+    if (storeView) return storeDetail();
     const L = D.labels;
     const name = h('input', { placeholder: '예: 해오름사우나 본점' });
     const biz = h('select', null, Object.entries(L.biz).map(([k, v]) => h('option', { value: k }, v)));
@@ -176,7 +250,8 @@
         h('table', null,
           h('tr', null, h('th', null, '매장'), h('th', null, '업종'), h('th', null, '추가 승인 품목'), h('th', null, '카톡'), h('th', null, '')),
           D.stores.map((s) => h('tr', null,
-            h('td', null, s.name, h('div', { class: 'small muted' }, [s.owner, s.phone].filter(Boolean).join(' · '))),
+            h('td', null, h('a', { href: '#', onclick: (e) => { e.preventDefault(); openStore(s.id); } }, h('b', null, s.name)),
+              h('div', { class: 'small muted' }, [s.owner, s.phone].filter(Boolean).join(' · '))),
             h('td', null, L.biz[s.biz]),
             h('td', null, (s.extra || '').split(',').filter(Boolean).map((c) => L.categories[c]).join(', ') || '-'),
             h('td', null, s.kakao ? [`연결됨${s.kakao > 1 ? ` (${s.kakao}명)` : ''}`, h('br'), h('button', {
@@ -187,6 +262,7 @@
               },
             }, '카톡 연결 해제')] : s.code ? `코드 ${s.code}` : '미연결'),
             h('td', null,
+              h('button', { class: 'btn primary', onclick: () => openStore(s.id) }, '발주 내역 · 명세서'), ' ',
               h('button', { class: 'btn', onclick: () => showCode(s) }, '연결 코드'), ' ',
               h('button', { class: 'btn', onclick: () => copyLink(s) }, '발주서 링크'), ' ',
               h('button', { class: 'btn bad', onclick: () => confirm(`${s.name} 매장을 숨길까요?\n(주문 기록은 남고, 목록과 카톡 연결에서 빠집니다)`) && act('/api/admin/store-hide', { id: s.id }, '매장을 숨겼습니다') }, '숨기기'),
@@ -312,6 +388,52 @@
               h('button', { class: 'btn', onclick: () => { editing = i; render(); window.scrollTo(0, 0); } }, '수정'), ' ',
               h('button', { class: 'btn', onclick: () => act('/api/admin/item-active', { id: i.id, active: !i.active }) }, i.active ? '판매 중지' : '다시 판매'), ' ',
               h('button', { class: 'btn bad', onclick: () => removeItems(i) }, '삭제'))))))),
+    ];
+  }
+
+  // ── 설정: 회사 정보(확인서·명세서) · 배송 기간 · 부가세 · 카톡 자동 알림 ──
+  function settings() {
+    const S = D.settings;
+    const inp = (k, ph) => h('input', { value: S[k] ?? '', placeholder: ph || '' });
+    const F = {
+      company: inp('company'), bizNo: inp('bizNo', '000-00-00000'), ceo: inp('ceo'), tel: inp('tel', '02-000-0000'),
+      address: inp('address'), bizType: inp('bizType', '도소매'), bizItem: inp('bizItem', '식품'), account: inp('account', '은행 계좌번호 예금주'),
+      deliveryMin: h('input', { value: S.deliveryMin, inputmode: 'numeric' }), deliveryMax: h('input', { value: S.deliveryMax, inputmode: 'numeric' }),
+      vat: h('select', null, [['included', '단가에 부가세 포함'], ['excluded', '부가세 별도 (10% 추가)'], ['none', '면세']].map(([k, v]) => h('option', { value: k, selected: S.vat === k }, v))),
+      kakaoBotId: inp('kakaoBotId', '예: 64f0…'), kakaoEvent: inp('kakaoEvent', 'order_notice'),
+      kakaoRestKey: h('input', { type: 'password', placeholder: S.kakaoKeySet ? '저장됨 (바꿀 때만 입력)' : '카카오 디벨로퍼스 REST API 키', autocomplete: 'off' }),
+    };
+    const week = h('input', { type: 'checkbox', checked: S.skipWeekend, style: 'width:auto' });
+    const save = async (keys, extra = {}) => {
+      const body = { ...Object.fromEntries(keys.map((k) => [k, k === 'skipWeekend' ? week.checked : F[k].value])), ...extra };
+      await act('/api/admin/settings', body, '저장했습니다');
+    };
+    return [
+      h('div', { class: 'panel' }, h('h2', null, '회사 정보'),
+        h('p', { class: 'small muted' }, '발주 확인서 · 거래명세서의 공급자 칸에 들어갑니다.'),
+        h('div', { class: 'form' },
+          h('label', null, '상호', F.company), h('label', null, '사업자등록번호', F.bizNo), h('label', null, '대표', F.ceo), h('label', null, '연락처', F.tel),
+          h('label', null, '주소', F.address), h('label', null, '업태', F.bizType), h('label', null, '종목', F.bizItem), h('label', null, '입금 계좌', F.account),
+          h('button', { class: 'btn primary', onclick: () => save(['company', 'bizNo', 'ceo', 'tel', 'address', 'bizType', 'bizItem', 'account']) }, '저장'))),
+      h('div', { class: 'panel' }, h('h2', null, '배송 · 부가세'),
+        h('p', { class: 'small muted' }, `점주에게 "배송 소요 ${S.deliveryMin}~${S.deliveryMax}일" 로 안내하고, 확인 알림에 도착 예정일을 계산해 넣습니다.`),
+        h('div', { class: 'form' },
+          h('label', null, '배송 최소 (일)', F.deliveryMin), h('label', null, '배송 최대 (일)', F.deliveryMax),
+          h('label', { style: 'flex-direction:row;display:flex;gap:6px;align-items:center' }, week, '주말 제외하고 계산'),
+          h('label', null, '단가 부가세', F.vat),
+          h('button', { class: 'btn primary', onclick: () => save(['deliveryMin', 'deliveryMax', 'skipWeekend', 'vat']) }, '저장'))),
+      h('div', { class: 'panel' }, h('h2', null, '카톡 자동 알림 (주문 확인 · 출고 · 취소)'),
+        h('p', { class: 'small' }, S.kakaoBotId && S.kakaoKeySet ? '✅ 설정됨 — 주문 상태를 바꾸면 점주 카톡으로 바로 알림이 갑니다.'
+          : '⚪ 설정 전 — 알림은 점주가 채팅방에서 버튼을 누를 때 맨 위에 보입니다. 아래를 설정하면 바로 보내집니다.'),
+        h('ol', { class: 'small muted guide' },
+          h('li', null, '카카오 디벨로퍼스(developers.kakao.com)에서 앱을 만들고 [앱 키 → REST API 키]를 복사'),
+          h('li', null, '오픈빌더 → 이 챗봇 → 설정 → Event API 에서 그 앱을 연결 (안내에 따라 사용 신청)'),
+          h('li', null, '오픈빌더에 블록 하나를 새로 만들고, 이벤트 이름을 아래 [이벤트 이름]과 똑같이 적은 뒤 봇 응답을 스킬 데이터(발주서버)로 설정 → 배포'),
+          h('li', null, '오픈빌더 주소창 bots/ 뒤의 값(봇 ID)과 REST API 키를 아래에 넣고 저장 → 매장 상세에서 [알림 테스트]')),
+        h('div', { class: 'form' },
+          h('label', null, '봇 ID', F.kakaoBotId), h('label', null, 'REST API 키', F.kakaoRestKey), h('label', null, '이벤트 이름', F.kakaoEvent),
+          h('button', { class: 'btn primary', onclick: () => save(['kakaoBotId', 'kakaoEvent', 'kakaoRestKey']) }, '저장'),
+          S.kakaoKeySet ? h('button', { class: 'btn bad', onclick: () => confirm('저장된 REST API 키를 지울까요?') && save([], { clearKey: true }) }, '키 지우기') : null)),
     ];
   }
 

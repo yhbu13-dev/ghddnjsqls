@@ -172,7 +172,8 @@
             : h('span', { class: 'small muted' }, label[a.state])))),
       V.orders.length ? h('div', { class: 'section' },
         h('h3', null, '최근 발주'),
-        V.orders.map((o) => h('div', { class: 'acc' }, h('span', null, `${o.no} · ${won(o.total)}`), h('span', { class: 'small muted' }, o.status)))) : null,
+        V.orders.map((o) => h('div', { class: 'acc' }, h('span', null, `${o.no} · ${won(o.total)}`),
+          h('span', { class: 'small muted' }, o.status, o.doc ? [' · ', h('a', { href: o.doc }, '확인서')] : null)))) : null,
     ];
   }
 
@@ -220,9 +221,11 @@
       take(r.view);
       app.replaceChildren(h('div', { class: 'done' },
         h('div', { class: 'big' }, '✅'),
-        h('h2', null, r.duplicate ? '이미 접수된 주문이에요' : '주문이 접수되었어요'),
+        h('h2', null, r.duplicate ? '이미 접수된 발주예요' : '발주가 접수되었어요'),
         h('p', null, `주문번호 ${r.no}`, h('br'), `합계 ${won(r.total)}`),
-        h('p', { class: 'muted small' }, '카카오톡 채팅방에서 [발주 내역]으로 상태를 볼 수 있어요.'),
+        r.eta ? h('p', { class: 'eta' }, `🚚 배송은 확인 후 ${r.eta.days} 걸려요`, h('br'), h('span', { class: 'small muted' }, `${r.eta.range} 도착 예정`)) : null,
+        h('p', { class: 'muted small' }, '담당자가 확인하면 카카오톡으로 알려 드려요.'),
+        r.doc ? h('p', null, h('a', { class: 'btn wide', href: r.doc }, '📄 발주 확인서 보기')) : null,
         // 카카오톡 인앱 브라우저 닫기 (카톡 밖에서 열었으면 아무 일 없음)
         h('a', { class: 'btn yellow wide', href: 'kakaotalk://inappbrowser/close' }, '카카오톡으로 돌아가기'),
         h('p', null, h('button', { class: 'btn', onclick: render }, '발주서 다시 보기'))));

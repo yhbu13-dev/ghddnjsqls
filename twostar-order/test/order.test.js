@@ -106,7 +106,7 @@ test('카카오 스킬: 연결 코드 → 버튼으로 담고 주문', async () 
   r = await req({ s: 'confirm' });
   const ok = r.template.outputs[0].textCard.buttons[0];
   r = await req(ok.extra);
-  assert.match(JSON.stringify(r), /주문이 접수되었어요/);
+  assert.match(JSON.stringify(r), /발주가 접수되었어요/);
   r = await req(ok.extra);
   assert.match(JSON.stringify(r), /이미 접수된/);
   r = await req({ s: 'history' });
@@ -429,7 +429,7 @@ test('Cloudflare(D1) 모드: 스킬 키·서명 키 자동 생성 · 카톡 발�
   await talk(t.template.outputs[1].carousel.items[0].buttons[2].extra); // +10
   t = await talk({ s: 'confirm' });
   t = await talk(t.template.outputs[0].textCard.buttons[0].extra);
-  assert.match(JSON.stringify(t), /주문이 접수되었어요/);
+  assert.match(JSON.stringify(t), /발주가 접수되었어요/);
   const after = await (await call('/api/admin/data', { headers: H })).json();
   assert.equal(after.orders.length, 1);
   assert.equal(after.orders[0].lines.length, 1);
@@ -555,4 +555,120 @@ test('카톡 연결 끊기: 카톡에서 연결해제 · 남은 지점으로 전
   assert.equal(await O.unlinkStore(db, sauna.id), 2);
   assert.equal(await O.storeByUser(db, 'a'), null);
   assert.equal(await O.storeByUser(db, 'b'), null);
+});
+
+test('주문 확인 → 카톡 알림(Event API · 채팅방) · 발주 확인서 · 거래명세서 · 매장별 발주 내역 · 설정', async () => {
+  const db = open(':memory:');
+  const sent = [];
+  const fakeFetch = async (url, init) => { sent.push({ url, init }); return new Response(JSON.stringify({ taskId: 't1', status: 'SUCCESS' }), { status: 200 }); };
+  const handle = createHandler({
+    db, cfg: { adminPassword: 'pw', skillKey: 'k', blockId: 'B', minAmount: 0, guest: {}, secret: 's' }, log: () => {},
+    assets: async (n) => (n === 'admin.html' ? '<html>admin</html>' : null), fetch: fakeFetch,
+  });
+  const base = 'https://order.example.com';
+  const call = (path, init) => handle(new Request(base + path, init), { ip: '1.1.1.1' });
+  let r = await call('/admin/login', { method: 'POST', body: JSON.stringify({ password: 'pw' }) });
+  const H = { cookie: r.headers.get('set-cookie').split(';')[0], 'x-ts': '1' };
+  const post = async (sub, body) => (await call(`/api/admin/${sub}`, { method: 'POST', headers: H, body: JSON.stringify(body) })).json();
+  await post('items', { category: 'snack', grp: '과자', name: '새우깡 <b>', unit: '개', price: 1100 });
+  const st = await post('stores', { name: '해오름사우나', biz: 'sauna', owner: '김사장', phone: '010-1' });
+  const talk = async (extra, u = '버튼') => (await call('/kakao/skill?key=k', { method: 'POST', body: JSON.stringify({ userRequest: { user: { id: 'owner1' }, utterance: u }, action: { clientExtra: extra } }) })).json();
+  await talk({}, st.code);
+  const item = (await (await call('/api/admin/data', { headers: H })).json()).items[0];
+  await talk({ s: 'add', i: item.id, n: 10 });
+  let t = await talk({ s: 'confirm' });
+  t = await talk(t.template.outputs[0].textCard.buttons[0].extra);
+  const J = JSON.stringify(t);
+  assert.match(J, /배송은 확인 후 2~3일/);
+  const docUrl = t.template.outputs[0].textCard.buttons[0].webLinkUrl;
+  assert.ok(docUrl.startsWith(`${base}/d/`));
+
+  // 점주용 확인서 링크: 로그인 없이 열리고, 품목 이름은 HTML 이스케이프
+  r = await call(new URL(docUrl).pathname);
+  assert.equal(r.status, 200);
+  let html = await r.text();
+  assert.match(html, /발주 확인서/);
+  assert.match(html, /새우깡 &lt;b&gt;/);
+  assert.match(html, /11,000원/);
+  assert.equal((await call('/d/d.1.xxxxxx.forgedforgedforged')).status, 404);
+
+  // 설정 전: 확인 처리 → 알림은 DB 에 쌓이고, 점주가 채팅방을 열면 맨 위에 보임
+  const d = await (await call('/api/admin/data', { headers: H })).json();
+  const order = d.orders[0];
+  let res = await post('status', { id: order.id, status: 'confirmed' });
+  assert.deepEqual({ users: res.notify.users, configured: res.notify.configured }, { users: 1, configured: false });
+  assert.equal(sent.length, 0);
+  t = await talk({}, '아무 말');
+  assert.equal(t.template.outputs[0].textCard.title, '✅ 발주가 확인되었어요');
+  assert.match(t.template.outputs[0].textCard.description, /도착 예정/);
+  assert.equal(t.template.outputs[0].textCard.buttons[0].label, '📄 발주 확인서');
+  t = await talk({}, '아무 말');
+  assert.notEqual(t.template.outputs[0].textCard.title, '✅ 발주가 확인되었어요', '한 번 보여 준 알림은 다시 안 나옴');
+
+  // 설정: 잘못된 값 거절 · REST 키는 화면에 안 보냄
+  res = await call('/api/admin/settings', { method: 'POST', headers: H, body: JSON.stringify({ deliveryMin: 5, deliveryMax: 2 }) });
+  assert.equal(res.status, 400);
+  res = await post('settings', { kakaoBotId: 'bot123abc', kakaoRestKey: 'restkey1234567890', company: '투스타글로벌(주)', bizNo: '123-45-67890', account: '국민 000-000' });
+  assert.equal(res.settings.kakaoRestKey, '');
+  assert.equal(res.settings.kakaoKeySet, true);
+
+  // 설정 후: 출고 처리 → Event API 호출
+  res = await post('status', { id: order.id, status: 'shipped' });
+  assert.equal(res.notify.sent, 1);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].url, 'https://bot-api.kakao.com/v2/bots/bot123abc/talk');
+  assert.equal(sent[0].init.headers.authorization, 'KakaoAK restkey1234567890');
+  const body = JSON.parse(sent[0].init.body);
+  assert.equal(body.event.name, 'order_notice');
+  assert.deepEqual(body.user, [{ type: 'botUserKey', id: 'owner1' }]);
+  assert.match(body.event.data.text, /출고/);
+  // 테스트 알림
+  res = await post('notify-test', { id: st.id });
+  assert.equal(res.sent, 1);
+  // 발송 실패는 '새 소식'에 남음
+  sent.length = 0;
+  const failing = createHandler({
+    db, cfg: { adminPassword: 'pw', skillKey: 'k', blockId: 'B', minAmount: 0, guest: {}, secret: 's' }, log: () => {}, assets: async () => null,
+    fetch: async () => new Response('{"status":"FAIL","message":"no friend"}', { status: 200 }),
+  });
+  r = await failing(new Request(`${base}/api/admin/status`, { method: 'POST', headers: H, body: JSON.stringify({ id: order.id, status: 'done' }) }));
+  assert.equal(r.status, 200); // 납품완료는 알림 없음
+  r = await failing(new Request(`${base}/api/admin/notify-test`, { method: 'POST', headers: H, body: JSON.stringify({ id: st.id }) }));
+  assert.match((await r.json()).error, /FAIL · no friend/);
+
+  // 관리자 문서
+  r = await call(`/admin/doc/order/${order.id}`, { headers: H });
+  html = await r.text();
+  assert.match(html, /123-45-67890/);
+  assert.match(html, /김사장/);
+  r = await call(`/admin/doc/statement?order=${order.id}`, { headers: H });
+  html = await r.text();
+  assert.match(html, /거래명세서/);
+  assert.match(html, /금 일만일천원정/);
+  assert.match(html, /10,000원/); // 공급가액 11000/1.1
+  assert.match(html, /국민 000-000/);
+  const today = O.kstYmd(Date.now());
+  r = await call(`/admin/doc/statement?store=${st.id}&from=${today.slice(0, 8)}01&to=${today}`, { headers: H });
+  assert.match(await r.text(), /주문 1건/);
+  assert.equal((await call(`/admin/doc/order/${order.id}`)).status, 302, '로그인 없이는 관리자 문서 안 열림');
+
+  // 매장 상세: 월별 합계 + 이 달 주문
+  const sd = await (await call(`/api/admin/store?id=${st.id}`, { headers: H })).json();
+  assert.equal(sd.months.length, 1);
+  assert.equal(sd.months[0].total, 11000);
+  assert.equal(sd.orders.length, 1);
+  assert.equal(sd.orders[0].lines.length, 1);
+  assert.equal(sd.store.kakao, 1);
+});
+
+test('배송 예정일 · 금액 한글 · 부가세 나누기', () => {
+  const docs = require('../src/docs');
+  // 2026-09-25(금) 10시 KST → 주말 빼고 2~3일 = 9/29(화)~9/30(수)
+  const fri = Date.UTC(2026, 8, 25, 1);
+  assert.equal(O.eta(fri, { deliveryMin: 2, deliveryMax: 3, skipWeekend: true }).range, '9/29(화)~9/30(수)');
+  assert.equal(O.eta(fri, { deliveryMin: 2, deliveryMax: 3, skipWeekend: false }).range, '9/27(일)~9/28(월)');
+  assert.equal(docs.korean(123000), '일십이만삼천');
+  assert.equal(docs.korean(100010000), '일억일만');
+  assert.deepEqual(docs.vatSplit(11000, 'included'), { supply: 10000, tax: 1000, total: 11000 });
+  assert.deepEqual(docs.vatSplit(10000, 'excluded'), { supply: 10000, tax: 1000, total: 11000 });
 });

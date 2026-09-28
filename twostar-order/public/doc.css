@@ -1,0 +1,55 @@
+/* 발주 확인서 · 거래명세서 (A4 인쇄) */
+* { box-sizing: border-box; }
+body { margin: 0; background: #eef0f3; color: #111827; font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; }
+.toolbar { position: sticky; top: 0; z-index: 2; display: flex; gap: 8px; justify-content: flex-end; padding: 10px 16px; background: rgba(238,240,243,.92); backdrop-filter: blur(6px); }
+.tbtn { font: inherit; border: 1px solid #d1d5db; background: #fff; color: #111827; border-radius: 10px; padding: 8px 14px; text-decoration: none; cursor: pointer; }
+.tbtn.primary { background: #111827; color: #fff; border-color: #111827; margin-left: auto; }
+.doc { position: relative; max-width: 800px; margin: 8px auto 40px; background: #fff; padding: 40px 44px; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,.08), 0 8px 24px rgba(0,0,0,.06); }
+.dh { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #111827; padding-bottom: 14px; margin-bottom: 18px; }
+.dh h1 { margin: 0; font-size: 28px; letter-spacing: 8px; }
+.dh .sub { color: #4b5563; margin-top: 4px; }
+.stamp { border: 2px solid currentColor; border-radius: 8px; padding: 4px 12px; font-weight: 700; font-size: 15px; transform: rotate(-4deg); color: #6b7280; }
+.stamp.st-received { color: #dc2626; } .stamp.st-confirmed { color: #d97706; } .stamp.st-shipped { color: #2563eb; } .stamp.st-done { color: #16a34a; } .stamp.st-canceled { color: #6b7280; }
+.parties { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px; }
+.parties section { border: 1px solid #d1d5db; border-radius: 8px; overflow: hidden; }
+.parties h3 { margin: 0; padding: 6px 10px; font-size: 13px; background: #f3f4f6; border-bottom: 1px solid #d1d5db; letter-spacing: 2px; }
+.parties table { width: 100%; border-collapse: collapse; }
+.parties th { width: 84px; text-align: left; color: #6b7280; font-weight: 500; padding: 5px 10px; vertical-align: top; font-size: 13px; }
+.parties td { padding: 5px 10px 5px 0; font-size: 13px; }
+.facts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 0 0 16px; }
+.facts div { background: #f9fafb; border-radius: 8px; padding: 8px 10px; }
+.facts dt { color: #6b7280; font-size: 12px; }
+.facts dd { margin: 2px 0 0; font-weight: 600; }
+.amount { border: 1px solid #111827; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 15px; }
+.amount b { font-size: 17px; margin-left: 8px; }
+.amount span { color: #4b5563; margin-left: 6px; }
+table.lines { width: 100%; border-collapse: collapse; }
+table.lines th { background: #111827; color: #fff; font-weight: 500; padding: 8px; text-align: left; font-size: 13px; }
+table.lines td { padding: 7px 8px; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
+table.lines tr.first td { border-top: 1px solid #9ca3af; }
+.n { text-align: right !important; white-space: nowrap; }
+.c { text-align: center !important; }
+.muted { color: #6b7280; font-size: 12px; font-weight: 400; }
+.sum { margin: 14px 0 0 auto; width: 300px; }
+.sum div { display: flex; justify-content: space-between; padding: 5px 0; }
+.sum .grand { border-top: 2px solid #111827; margin-top: 4px; padding-top: 8px; font-size: 18px; }
+.memo { background: #fffbe6; border-radius: 8px; padding: 10px 12px; margin: 16px 0 0; }
+.fine { color: #6b7280; font-size: 12px; margin: 18px 0 0; }
+.sign { text-align: right; margin-top: 24px; line-height: 1.8; }
+.void::after { content: '취소'; position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%) rotate(-18deg); font-size: 120px; font-weight: 800; color: rgba(220,38,38,.12); pointer-events: none; }
+@media (max-width: 640px) {
+  .doc { padding: 22px 16px; margin: 0 0 24px; border-radius: 0; }
+  .dh h1 { font-size: 22px; letter-spacing: 4px; }
+  .parties { grid-template-columns: 1fr; }
+  .facts { grid-template-columns: 1fr 1fr; }
+  table.lines { font-size: 12px; }
+  .sum { width: 100%; }
+}
+@page { size: A4; margin: 12mm; }
+@media print {
+  body { background: #fff; }
+  .noprint { display: none !important; }
+  .doc { box-shadow: none; margin: 0; padding: 0; max-width: none; }
+  table.lines th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  tr { break-inside: avoid; }
+}

@@ -36,7 +36,7 @@ function lineText(l) {
 }
 
 /**
- * 스킬 처리. ctx = { db, blockId, orderLink(storeId), minAmount, guest: { label, url }, now }
+ * 스킬 처리. ctx = { db, blockId, orderLink(store), docLink(orderId), minAmount, guest: { label, url }, now }
  */
 async function skill(ctx, body) {
   const { db } = ctx;
@@ -127,7 +127,12 @@ async function skill(ctx, body) {
   }
 
   try {
-    return tag((await step(ctx, U, store, x, now)) || U.res([await homeCard(ctx, U, store)], await homeQuick(U, db, userKey)), store);
+    const r = await step(ctx, U, store, x, now);
+    if (r) return tag(r, store);
+    // 처음 화면: 못 본 알림(주문 확인·출고 등)을 먼저 보여 준다. 카카오 Event API 로 불렸을 때도 여기로 온다
+    const notes = (await O.takeNotices(db, userKey, 2, now)).map((n) => U.card(n.title, n.text,
+      n.order_id && ctx.docLink ? [U.link('📄 발주 확인서', ctx.docLink(n.order_id)), U.btn('발주 내역', { s: 'history' })] : []));
+    return tag(U.res([...notes, await homeCard(ctx, U, store)], await homeQuick(U, db, userKey)), store);
   } catch (e) {
     if (e instanceof O.UserError) return tag(U.res([U.text(`⚠️ ${e.message}`)], [U.btn('장바구니', { s: 'cart' }), home]), store);
     throw e;
@@ -301,8 +306,11 @@ async function step(ctx, U, store, x, now) {
     case 'submit': {
       const { order, duplicate } = await O.submit(db, store, x.r, { via: 'chat', minAmount: ctx.minAmount || 0 }, now);
       await ctx.onOrder?.(order, duplicate);
-      return U.res([U.card(duplicate ? '이미 접수된 주문이에요' : '✅ 주문이 접수되었어요',
-        `주문번호 ${order.no}\n합계 ${O.won(order.total)}\n\n담당자가 확인하면 알려 드릴게요.`, [
+      const s = await O.getSettings(db);
+      const e = O.eta(now, s);
+      return U.res([U.card(duplicate ? '이미 접수된 주문이에요' : '✅ 발주가 접수되었어요',
+        `주문번호 ${order.no}\n합계 ${O.won(order.total)}\n\n담당자가 확인하면 카톡으로 알려 드릴게요.\n🚚 배송은 확인 후 ${e.days}${s.skipWeekend ? '(주말 제외)' : ''} 걸려요.`, [
+          ...(ctx.docLink ? [U.link('📄 발주 확인서', ctx.docLink(order.id))] : []),
           U.btn('발주 내역', { s: 'history' }),
         ])], [home]);
     }
@@ -315,8 +323,13 @@ async function step(ctx, U, store, x, now) {
     case 'history': {
       const list = await O.ordersOf(db, store, 5);
       if (!list.length) return U.res([U.text('아직 발주 내역이 없어요.')], [home]);
-      const lines = list.map((o) => `${o.no}  ${O.STATUS[o.status]}  ${O.won(o.total)}`);
-      return U.res([U.text(`📦 최근 발주\n\n${lines.join('\n')}`)], [U.btn('지난 발주 그대로', { s: 'reorder' }), home]);
+      // 주문마다 카드 한 장: 상태 · 합계 · [발주 확인서]
+      return U.res([
+        U.text(`📦 ${store.name} 최근 발주`),
+        U.carousel(list.map((o) => U.card(`${o.no} · ${O.STATUS[o.status]}`,
+          `${O.kstText(o.created_at).replace(/^\d+년 /, '')}\n합계 ${O.won(o.total)}`,
+          ctx.docLink ? [U.link('📄 발주 확인서', ctx.docLink(o.id))] : []))),
+      ], [U.btn('지난 발주 그대로', { s: 'reorder' }), home]);
     }
 
     case 'req': {

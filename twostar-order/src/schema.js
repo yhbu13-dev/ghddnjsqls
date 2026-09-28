@@ -92,7 +92,18 @@ CREATE TABLE IF NOT EXISTS attempts (     -- 연결 코드·로그인 시도 횟
   at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS attempts_key ON attempts (key, at);
-CREATE TABLE IF NOT EXISTS meta (         -- 서버가 스스로 만든 값 (서명 비밀키·스킬 키 등)
+CREATE TABLE IF NOT EXISTS notices (      -- 점주 카톡 알림 (주문 확인·출고 등). 카톡을 열면 보여 주고 seen=1
+  id INTEGER PRIMARY KEY,
+  user_key TEXT NOT NULL,
+  store_id INTEGER NOT NULL,
+  order_id INTEGER,
+  title TEXT NOT NULL,
+  text TEXT NOT NULL,
+  at INTEGER NOT NULL,
+  seen INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS notices_user ON notices (user_key, seen);
+CREATE TABLE IF NOT EXISTS meta (         -- 서버가 스스로 만든 값 (서명 비밀키·스킬 키·관리자 설정)
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
 )

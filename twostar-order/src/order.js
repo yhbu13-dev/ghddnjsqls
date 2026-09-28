@@ -418,8 +418,168 @@ async function setStatus(db, orderId, status, now = Date.now()) {
   if (!r.changes) throw new UserError('다른 곳에서 먼저 바뀌었어요. 새로고침해 주세요');
 }
 
+/** 주문들 + 품목 줄 (주문 id 순서 그대로) */
+async function withLines(db, orders) {
+  if (!orders.length) return orders;
+  const ids = orders.map((o) => o.id);
+  const lines = await db.all(`SELECT * FROM order_lines WHERE order_id IN (${ids.map(() => '?').join(',')}) ORDER BY rowid`, ids);
+  const by = new Map(ids.map((id) => [id, []]));
+  for (const l of lines) by.get(l.order_id).push(l);
+  return orders.map((o) => ({ ...o, lines: by.get(o.id) }));
+}
+
+async function orderWithStore(db, orderId) {
+  const o = await db.get('SELECT * FROM orders WHERE id = ?', [orderId]);
+  if (!o) return null;
+  const [full] = await withLines(db, [o]);
+  full.store = await db.get('SELECT * FROM stores WHERE id = ?', [o.store_id]);
+  return full;
+}
+
+/** 'YYYY-MM-DD' (한국 날짜) → 그날 0시 (ms). 잘못된 값이면 null */
+function kstDate(s) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || ''));
+  if (!m) return null;
+  const t = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])) - 9 * 3600e3;
+  return Number.isFinite(t) ? t : null;
+}
+const kstYmd = (ms) => new Date(ms + 9 * 3600e3).toISOString().slice(0, 10);
+/** 한국 시각 글자: '2026년 9월 28일 18:10' (서버마다 다른 날짜 형식 기능에 기대지 않음) */
+function kstText(ms, withTime = true) {
+  const d = new Date(ms + 9 * 3600e3);
+  const date = `${d.getUTCFullYear()}년 ${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일`;
+  return withTime ? `${date} ${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}` : date;
+}
+
+/** 매장의 기간 주문 (from·to = 'YYYY-MM-DD', to 포함). 취소 주문은 withCanceled 일 때만 */
+async function storeOrders(db, storeId, from, to, { withCanceled = true } = {}) {
+  const a = kstDate(from);
+  const b = kstDate(to);
+  if (a == null || b == null || b < a) throw new UserError('기간을 확인해 주세요');
+  if (b - a > 400 * 86400e3) throw new UserError('기간은 1년 이내로 골라 주세요');
+  const list = await db.all(`SELECT * FROM orders WHERE store_id = ? AND created_at >= ? AND created_at < ?
+                             ${withCanceled ? '' : "AND status != 'canceled'"} ORDER BY id`, [storeId, a, b + 86400e3]);
+  return withLines(db, list);
+}
+
+/** 매장의 월별 발주 합계 (취소 제외) — 최근 월이 먼저 */
+async function storeMonths(db, storeId) {
+  const rows = await db.all("SELECT created_at, total FROM orders WHERE store_id = ? AND status != 'canceled'", [storeId]);
+  const m = new Map();
+  for (const r of rows) {
+    const k = kstYmd(r.created_at).slice(0, 7);
+    const v = m.get(k) || { month: k, count: 0, total: 0 };
+    v.count++; v.total += r.total;
+    m.set(k, v);
+  }
+  return [...m.values()].sort((x, y) => (x.month < y.month ? 1 : -1));
+}
+
+// ── 관리자 설정 (회사 정보 · 배송 기간 · 부가세 · 카톡 알림) ───────────
+const SETTINGS = {
+  company: '투스타글로벌(주)', bizNo: '', ceo: '', address: '', tel: '', bizType: '', bizItem: '', account: '',
+  deliveryMin: 2, deliveryMax: 3, skipWeekend: true,
+  vat: 'included', // included: 단가에 부가세 포함 · excluded: 별도 · none: 면세
+  kakaoBotId: '', kakaoRestKey: '', kakaoEvent: 'order_notice',
+};
+
+async function getSettings(db) {
+  const row = await db.get("SELECT value FROM meta WHERE key = 'settings'");
+  let v = {};
+  try { v = row ? JSON.parse(row.value) : {}; } catch { /* 깨진 값은 기본값으로 */ }
+  return { ...SETTINGS, ...v };
+}
+
+async function saveSettings(db, patch) {
+  const cur = await getSettings(db);
+  const next = { ...cur };
+  for (const k of ['company', 'bizNo', 'ceo', 'address', 'tel', 'bizType', 'bizItem', 'account']) {
+    if (patch[k] !== undefined) next[k] = String(patch[k]).trim().slice(0, 120);
+  }
+  if (patch.deliveryMin !== undefined || patch.deliveryMax !== undefined) {
+    const a = Math.trunc(Number(patch.deliveryMin ?? cur.deliveryMin));
+    const b = Math.trunc(Number(patch.deliveryMax ?? cur.deliveryMax));
+    if (!(a >= 0 && a <= 30 && b >= a && b <= 30)) throw new UserError('배송 기간을 확인해 주세요 (0~30일, 앞 숫자 ≤ 뒤 숫자)');
+    next.deliveryMin = a; next.deliveryMax = b;
+  }
+  if (patch.skipWeekend !== undefined) next.skipWeekend = !!patch.skipWeekend;
+  if (patch.vat !== undefined) {
+    if (!['included', 'excluded', 'none'].includes(patch.vat)) throw new UserError('부가세 방식을 골라 주세요');
+    next.vat = patch.vat;
+  }
+  if (patch.kakaoBotId !== undefined) {
+    const id = String(patch.kakaoBotId).trim();
+    if (id && !/^[\w-]{4,64}$/.test(id)) throw new UserError('봇 ID 는 영문·숫자로 된 값이에요 (오픈빌더 주소창의 bots/ 뒤)');
+    next.kakaoBotId = id;
+  }
+  if (patch.kakaoEvent !== undefined) {
+    const e = String(patch.kakaoEvent).trim() || SETTINGS.kakaoEvent;
+    if (!/^[\w-]{1,40}$/.test(e)) throw new UserError('이벤트 이름은 영문·숫자·_ 로 적어 주세요');
+    next.kakaoEvent = e;
+  }
+  // REST API 키: 새로 입력했을 때만 바꾸고, clearKey 면 지운다 (화면에는 저장 여부만 보여 줌)
+  if (patch.clearKey) next.kakaoRestKey = '';
+  else if (patch.kakaoRestKey) {
+    const key = String(patch.kakaoRestKey).trim();
+    if (!/^[\w-]{10,80}$/.test(key)) throw new UserError('REST API 키 형식이 아니에요');
+    next.kakaoRestKey = key;
+  }
+  await db.run(`INSERT INTO meta (key, value) VALUES ('settings', ?)
+                ON CONFLICT (key) DO UPDATE SET value = excluded.value`, [JSON.stringify(next)]);
+  return next;
+}
+
+/** 관리자 화면에 보낼 설정 (REST 키는 저장 여부만) */
+const publicSettings = (s) => ({ ...s, kakaoRestKey: '', kakaoKeySet: !!s.kakaoRestKey });
+
+// ── 배송 예정일 ──────────────────────────────────────
+const DOW = ['일', '월', '화', '수', '목', '금', '토'];
+function addDays(ms, n, skipWeekend) {
+  const d = new Date(ms + 9 * 3600e3); // 한국 날짜 기준
+  let left = n;
+  while (left > 0) {
+    d.setUTCDate(d.getUTCDate() + 1);
+    const w = d.getUTCDay();
+    if (skipWeekend && (w === 0 || w === 6)) continue;
+    left--;
+  }
+  return d;
+}
+const md = (d) => `${d.getUTCMonth() + 1}/${d.getUTCDate()}(${DOW[d.getUTCDay()]})`;
+
+/** 기준 시각부터 배송 예정: { days: '2~3일', range: '10/1(수)~10/2(목)', text } */
+function eta(fromMs, s) {
+  const a = addDays(fromMs, s.deliveryMin, s.skipWeekend);
+  const b = addDays(fromMs, s.deliveryMax, s.skipWeekend);
+  const days = s.deliveryMin === s.deliveryMax ? `${s.deliveryMin}일` : `${s.deliveryMin}~${s.deliveryMax}일`;
+  const range = s.deliveryMin === s.deliveryMax ? md(a) : `${md(a)}~${md(b)}`;
+  return { days, range, text: `배송 소요 ${days}${s.skipWeekend ? '(주말 제외)' : ''} · ${range} 도착 예정` };
+}
+
+// ── 점주 알림 (카톡) ─────────────────────────────────
+/** 매장에 연결된 카톡 사용자마다 알림을 쌓는다. 받을 사용자 키들을 돌려준다 */
+async function addNotices(db, storeId, orderId, title, text, now = Date.now()) {
+  const users = (await db.all('SELECT user_key FROM user_stores WHERE store_id = ?', [storeId])).map((r) => r.user_key);
+  if (users.length) {
+    await db.batch(users.map((u) => ['INSERT INTO notices (user_key, store_id, order_id, title, text, at) VALUES (?, ?, ?, ?, ?, ?)',
+      [u, storeId, orderId, title, text, now]]));
+  }
+  if (Math.random() < 0.05) await db.run('DELETE FROM notices WHERE at < ?', [now - 60 * 86400e3]);
+  return users;
+}
+
+/** 아직 못 본 알림 (최근 limit 개, 2주 이내)을 꺼내고 모두 읽음 처리 */
+async function takeNotices(db, userKey, limit = 2, now = Date.now()) {
+  const list = await db.all('SELECT * FROM notices WHERE user_key = ? AND seen = 0 AND at > ? ORDER BY id DESC LIMIT ?',
+    [userKey, now - 14 * 86400e3, limit]);
+  await db.run('UPDATE notices SET seen = 1 WHERE user_key = ? AND seen = 0', [userKey]);
+  return list.reverse();
+}
+
 module.exports = {
   CATEGORIES, BIZ, STATUS, FLOW, MAX_QTY, UserError, won,
+  withLines, orderWithStore, kstDate, kstYmd, kstText, storeOrders, storeMonths,
+  SETTINGS, getSettings, saveSettings, publicSettings, eta, addNotices, takeNotices,
   limited, clearAttempts, note,
   createStore, reissueCode, storeOf, storeByUser, storesOfUser, useStore, linkUser, unlinkUser, unlinkStore,
   categoriesOf, accessStates, requestAccess, decideAccess,
