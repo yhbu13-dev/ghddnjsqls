@@ -526,3 +526,33 @@ test('카톡 링크 확인용 HEAD 요청: 발주서·서버 점검은 200, 잘�
     server.close();
   }
 });
+
+test('카톡 연결 끊기: 카톡에서 연결해제 · 남은 지점으로 전환 · 관리자 일괄 해제', async () => {
+  const { db, sauna } = await setup();
+  const cafe = await O.createStore(db, { name: '카페 온도', biz: 'cafe' });
+  const ctx = { db, blockId: 'B1', orderLink: (st) => `https://x/o/${st.id}`, minAmount: 0 };
+  const req = (u, extra, utter = '버튼') => skill(ctx, { userRequest: { user: { id: u }, utterance: utter }, action: { clientExtra: extra } });
+  const J = (x) => JSON.stringify(x);
+  await req('me', {}, sauna.code);
+  await req('me', {}, cafe.code); // 지금 매장: 카페
+  let r = await req('me', {}, '연결 해제');
+  assert.match(J(r), /카페 온도 연결을 끊을까요/);
+  r = await req('me', r.template.outputs[0].textCard.buttons[0].extra);
+  assert.match(J(r), /카페 온도 매장과 연결을 끊었어요/);
+  assert.match(J(r), /지금 매장: 해오름사우나/);
+  assert.equal((await O.storeByUser(db, 'me')).id, sauna.id);
+  r = await req('me', { s: 'stores' });
+  assert.ok(r.template.quickReplies.some((q) => q.label === '이 매장 연결 끊기'));
+  r = await req('me', { s: 'unlink2', to: sauna.id });
+  assert.match(J(r), /연결 코드 6자리를 입력해/);
+  assert.equal(await O.storeByUser(db, 'me'), null);
+  assert.match(J(await req('me', {})), /처음 오셨네요/);
+  // 관리자: 매장에 연결된 계정 모두 끊기
+  const code2 = await O.reissueCode(db, sauna.id);
+  await req('a', {}, code2);
+  const code3 = await O.reissueCode(db, sauna.id);
+  await req('b', {}, code3);
+  assert.equal(await O.unlinkStore(db, sauna.id), 2);
+  assert.equal(await O.storeByUser(db, 'a'), null);
+  assert.equal(await O.storeByUser(db, 'b'), null);
+});

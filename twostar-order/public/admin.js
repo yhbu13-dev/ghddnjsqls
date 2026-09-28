@@ -179,7 +179,13 @@
             h('td', null, s.name, h('div', { class: 'small muted' }, [s.owner, s.phone].filter(Boolean).join(' · '))),
             h('td', null, L.biz[s.biz]),
             h('td', null, (s.extra || '').split(',').filter(Boolean).map((c) => L.categories[c]).join(', ') || '-'),
-            h('td', null, s.kakao ? `연결됨${s.kakao > 1 ? ` (${s.kakao}명)` : ''}` : s.code ? `코드 ${s.code}` : '미연결'),
+            h('td', null, s.kakao ? [`연결됨${s.kakao > 1 ? ` (${s.kakao}명)` : ''}`, h('br'), h('button', {
+              class: 'btn small bad',
+              onclick: async () => {
+                if (!confirm(`${s.name}에 연결된 카톡 ${s.kakao}명의 연결을 모두 끊을까요?\n다시 연결하려면 새 연결 코드를 받아 입력해야 합니다.`)) return;
+                try { const r = await call('/api/admin/unlink', { id: s.id }); D = r.data; toast(`카톡 ${r.unlinked}명 연결을 끊었습니다`); render(); } catch (e) { toast(e.message); }
+              },
+            }, '카톡 연결 해제')] : s.code ? `코드 ${s.code}` : '미연결'),
             h('td', null,
               h('button', { class: 'btn', onclick: () => showCode(s) }, '연결 코드'), ' ',
               h('button', { class: 'btn', onclick: () => copyLink(s) }, '발주서 링크'), ' ',

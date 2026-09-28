@@ -94,7 +94,30 @@ async function useStore(db, userKey, storeId, now = Date.now()) {
 
 async function storeByUser(db, userKey) {
   const l = await db.get('SELECT store_id FROM links WHERE user_key = ?', [userKey]);
-  return l ? storeOf(db, l.store_id) : null;
+  const s = l ? await storeOf(db, l.store_id) : null;
+  if (s) return s;
+  // 지금 매장이 끊겼거나 숨겨졌으면, 남아 있는 다른 연결 매장으로 자동 전환
+  const other = (await storesOfUser(db, userKey))[0];
+  return other ? useStore(db, userKey, other.id) : null;
+}
+
+/** 카톡 사용자 한 명의 매장 연결 끊기. 남은 연결 매장 수를 돌려준다 */
+async function unlinkUser(db, userKey, storeId) {
+  await db.batch([
+    ['DELETE FROM user_stores WHERE user_key = ? AND store_id = ?', [userKey, storeId]],
+    ['DELETE FROM links WHERE user_key = ? AND store_id = ?', [userKey, storeId]],
+  ]);
+  return (await storesOfUser(db, userKey)).length;
+}
+
+/** 매장에 연결된 카톡 계정 모두 끊기 (관리자). 끊은 계정 수를 돌려준다 */
+async function unlinkStore(db, storeId) {
+  const n = (await db.get('SELECT COUNT(*) AS n FROM user_stores WHERE store_id = ?', [storeId])).n;
+  await db.batch([
+    ['DELETE FROM user_stores WHERE store_id = ?', [storeId]],
+    ['DELETE FROM links WHERE store_id = ?', [storeId]],
+  ]);
+  return n;
 }
 
 /** 연결 코드로 카톡 사용자를 매장에 연결(추가)하고 그 매장으로 바꾼다. 코드는 한 번 쓰면 사라진다. */
@@ -398,7 +421,7 @@ async function setStatus(db, orderId, status, now = Date.now()) {
 module.exports = {
   CATEGORIES, BIZ, STATUS, FLOW, MAX_QTY, UserError, won,
   limited, clearAttempts, note,
-  createStore, reissueCode, storeOf, storeByUser, storesOfUser, useStore, linkUser,
+  createStore, reissueCode, storeOf, storeByUser, storesOfUser, useStore, linkUser, unlinkUser, unlinkStore,
   categoriesOf, accessStates, requestAccess, decideAccess,
   itemsFor, groupsFor, orderableItem, parseItems, importItems, deleteItems,
   cartOf, setQty, addQty, replaceCart, clearCart, lastOrder, reorder,

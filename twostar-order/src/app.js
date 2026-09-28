@@ -248,6 +248,10 @@ function createHandler({ db, cfg, assets, log = console.log }) {
         const name = b.remove ? '' : await images.save(db, it.id, b.data);
         await db.run('UPDATE items SET image = ? WHERE id = ?', [name, it.id]);
         await images.remove(db, it.image);
+      } else if (sub === 'unlink' && m === 'POST') {
+        // 매장에 연결된 카톡 계정 모두 끊기 (점주 변경·휴대폰 분실 등)
+        const n = await O.unlinkStore(db, Number(b.id));
+        return json(200, { unlinked: n, data: await data() });
       } else if (sub === 'store-hide' && m === 'POST') {
         // 매장 숨기기: 주문 기록은 남기고 목록·카톡 연결에서만 뺀다
         const r = await db.run('UPDATE stores SET active = 0, code = NULL WHERE id = ? AND active = 1', [Number(b.id)]);

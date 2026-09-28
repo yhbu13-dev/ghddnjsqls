@@ -103,8 +103,27 @@ async function skill(ctx, body) {
       U.text(`지금 매장: ${store.name}\n다른 지점을 고르세요.\n(새 지점은 담당자에게 받은 연결 코드 6자리를 입력하면 추가돼요)`),
     ], [
       ...list.filter((s) => s.id !== store.id).map((s) => U.btn(s.name, { s: 'use', to: s.id }, `${s.name}로 바꾸기`)),
+      U.btn('이 매장 연결 끊기', { s: 'unlink' }),
       U.btn('처음으로', { s: 'home' }),
     ]), store);
+  }
+
+  // 연결 끊기: 채팅창에 '연결해제' 입력 또는 [이 매장 연결 끊기] → 한 번 더 확인
+  if (x.s === 'unlink' || (!x.s && /^(연결해제|연결끊기|연결취소)$/.test(utter.replace(/\s/g, '')))) {
+    return tag(U.res([U.card(`${store.name} 연결을 끊을까요?`,
+      '끊으면 이 카톡에서 이 매장으로 발주할 수 없어요.\n다시 연결하려면 담당자에게 새 연결 코드를 받아 입력하면 돼요.', [
+        U.btn('연결 끊기', { s: 'unlink2', to: store.id }, '연결 끊기'),
+        U.btn('취소', { s: 'home' }, '취소'),
+      ])]), store);
+  }
+  if (x.s === 'unlink2') {
+    const target = Number(x.to) || store.id;
+    const name = (await O.storeOf(db, target))?.name || store.name;
+    const left = await O.unlinkUser(db, userKey, target);
+    if (!left) return U.res([U.text(`🔌 ${name} 매장과 연결을 끊었어요.\n다시 연결하려면 연결 코드 6자리를 입력해 주세요.`)]);
+    const next = await O.storeByUser(db, userKey);
+    return tag(U.res([U.text(`🔌 ${name} 매장과 연결을 끊었어요.\n지금 매장: ${next.name}`), await homeCard(ctx, U, next)],
+      await homeQuick(U, db, userKey)), next);
   }
 
   try {
