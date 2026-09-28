@@ -109,6 +109,7 @@
         h('h1', null, `${V.store.name}`),
         h('div', { class: 'meta' }, `${V.store.biz} · 발주서`, V.last ? ` · 지난 주문 ${V.last.no}` : '')),
       V.prefilled ? h('div', { class: 'banner' }, '📋 지난 발주 수량을 채워 두었어요. 바뀐 것만 고치고 [주문하기]를 누르세요.') : null,
+      homeTip(),
       V.categories.length > 1 ? h('div', { class: 'tabs' }, V.categories.map((c) => h('button', {
         class: `chip${c.id === cat ? ' on' : ''}`, onclick: () => { cat = c.id; render(); window.scrollTo(0, 0); },
       }, c.label))) : null,
@@ -135,6 +136,22 @@
       h('div', { class: 'bar', id: 'bar' }),
     ].flat().filter(Boolean));
     renderBar();
+  }
+
+  // 홈 화면에 붙여 두기 안내 (이미 홈 화면 아이콘으로 열었거나 [닫기]를 눌렀으면 숨김)
+  function homeTip() {
+    const standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+    let off = false;
+    try { off = localStorage.getItem('ts_tip_off') === '1'; } catch { /* 저장 안 되는 브라우저 */ }
+    if (standalone || off) return null;
+    const ua = navigator.userAgent;
+    const how = /KAKAOTALK/i.test(ua)
+      ? '오른쪽 아래(또는 위) ⋯ 메뉴 → [다른 브라우저로 열기] → 브라우저 메뉴에서 [홈 화면에 추가]'
+      : /iPhone|iPad/i.test(ua) ? '사파리 아래쪽 공유 버튼(□↑) → [홈 화면에 추가]' : '크롬 오른쪽 위 ⋮ 메뉴 → [홈 화면에 추가]';
+    const box = h('div', { class: 'banner tip' },
+      h('b', null, '📌 홈 화면에 붙여 두면 앱처럼 바로 열려요'), h('br'), how, ' ',
+      h('button', { class: 'btn small', onclick: () => { try { localStorage.setItem('ts_tip_off', '1'); } catch { /* 무시 */ } box.remove(); } }, '닫기'));
+    return box;
   }
 
   function extras() {

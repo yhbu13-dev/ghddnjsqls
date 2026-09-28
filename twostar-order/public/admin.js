@@ -141,11 +141,13 @@
     const showCode = async (s) => {
       try { const r = await call('/api/admin/code', { id: s.id }); flash = { name: s.name, code: r.code }; render(); } catch (e) { toast(e.message); }
     };
-    const copyLink = async (s) => {
+    const copyLink = async (s, reset) => {
+      if (reset && !confirm(`${s.name} 발주서 링크를 바꿀까요?\n지금까지 보낸 링크와 점주 홈 화면 아이콘은 더 이상 열리지 않습니다.`)) return;
       try {
-        const r = await call('/api/admin/link', { id: s.id });
-        await navigator.clipboard.writeText(r.link).catch(() => { flash = { name: s.name, link: r.link }; render(); });
-        toast('발주서 링크를 복사했어요');
+        const r = await call(reset ? '/api/admin/link-reset' : '/api/admin/link', { id: s.id });
+        flash = { name: s.name, link: r.link, store: s };
+        render();
+        await navigator.clipboard.writeText(r.link).then(() => toast(reset ? '새 링크를 만들고 복사했어요' : '발주서 링크를 복사했어요'), () => {});
       } catch (e) { toast(e.message); }
     };
     return [
@@ -158,7 +160,13 @@
         h('h2', null, `${flash.name} — 점주에게 전달하세요`),
         flash.code ? [h('div', null, '카톡 연결 코드 (한 번만 사용)'), h('div', { class: 'codebox' }, flash.code),
           h('p', { class: 'small muted' }, '점주가 "투스타글로벌(발주)" 채널을 추가하고 채팅창에 이 6자리를 보내면 매장과 연결됩니다.')] : null,
-        flash.link ? h('p', { class: 'small', style: 'word-break:break-all' }, `발주서 링크: ${flash.link}`) : null,
+        flash.link ? [
+          h('div', null, '발주서 링크 (1년 동안 사용)'),
+          h('p', { class: 'small', style: 'word-break:break-all' }, flash.link),
+          h('p', { class: 'small muted' }, '점주에게 카톡(개인 채팅)이나 문자로 보내 주세요. 점주가 휴대폰 크롬·사파리로 열고 [홈 화면에 추가] 하면 아이콘을 눌러 바로 발주할 수 있습니다.'),
+          h('button', { class: 'btn', onclick: () => navigator.clipboard.writeText(flash.link).then(() => toast('복사했어요'), () => toast('주소를 직접 선택해 복사해 주세요')) }, '복사'), ' ',
+          flash.store ? h('button', { class: 'btn bad', onclick: () => copyLink(flash.store, true) }, '링크 바꾸기 (예전 링크 막기)') : null, ' ',
+        ] : null,
         h('button', { class: 'btn', onclick: () => { flash = null; render(); } }, '닫기')) : null,
       h('div', { class: 'panel' }, h('h2', null, '매장 추가'),
         h('div', { class: 'form' },

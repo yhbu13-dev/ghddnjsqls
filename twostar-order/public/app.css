@@ -112,3 +112,5 @@ a.btn { display: inline-block; text-decoration: none; text-align: center; box-si
   body:not(.admin) #app { max-width: 640px; margin: 0 auto; background: var(--bg); min-height: 100vh; box-shadow: 0 0 0 1px var(--line); }
   body:not(.admin) .bar { max-width: 640px; margin: 0 auto; }
 }
+.banner.tip { font-size: 14px; background: #eef6ff; border-color: #bfdbfe; }
+.banner.tip .btn.small { padding: 4px 10px; font-size: 13px; margin-left: 4px; }

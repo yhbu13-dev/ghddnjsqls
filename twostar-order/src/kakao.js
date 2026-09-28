@@ -68,8 +68,8 @@ async function skill(ctx, body) {
 
   // 링크 버튼이 열리는지 점검: 채팅창에 '링크점검' 입력
   if (!x.s && utter.replace(/\s/g, '') === '링크점검') {
-    const sheet = store ? ctx.orderLink(store.id) : '';
-    const health = `${new URL(ctx.orderLink(0)).origin}/health`;
+    const sheet = store ? ctx.orderLink(store) : '';
+    const health = `${new URL(ctx.orderLink({ id: 0 })).origin}/health`;
     return U.res([
       U.card('링크 점검', '버튼을 하나씩 눌러 어떤 것이 열리는지 알려 주세요.', [
         U.link('① 네이버', 'https://m.naver.com'),
@@ -136,7 +136,7 @@ async function homeCard(ctx, U, store) {
   const desc = cart.count ? `🛒 장바구니 ${cart.count}품목 · ${O.won(cart.total)}\n\n${hint}` : hint;
   // 주 경로는 발주서(한 화면에서 +/−). 대화창에 메시지가 쌓이지 않는다
   return U.card(`${store.name} 사장님, 안녕하세요`, desc, [
-    U.link('📋 전체 품목 발주서', ctx.orderLink(store.id)),
+    U.link('📋 전체 품목 발주서', ctx.orderLink(store)),
     U.btn(cart.count ? `장바구니 (${cart.count})` : '장바구니', { s: 'cart' }),
     U.btn('지난 발주 그대로', { s: 'reorder' }),
   ]);
@@ -241,14 +241,14 @@ async function step(ctx, U, store, x, now) {
         return U.res([U.card('장바구니가 비어 있어요', '품목을 골라 담거나 지난 발주를 불러오세요.', [
           U.btn('품목 골라 담기', { s: 'cats' }),
           U.btn('지난 발주 그대로', { s: 'reorder' }),
-          U.link('📋 전체 품목 발주서', ctx.orderLink(store.id)),
+          U.link('📋 전체 품목 발주서', ctx.orderLink(store)),
         ])], [home]);
       }
       return U.res([
         U.text(`🛒 장바구니 (${cart.count}품목)\n\n${cart.lines.map(lineText).join('\n')}`),
         U.card(`합계 ${O.won(cart.total)}`, '수량을 바꾸려면 발주서를 열어 주세요.', [
           U.btn('주문하기', { s: 'confirm' }),
-          U.link('📋 발주서에서 수정', ctx.orderLink(store.id)),
+          U.link('📋 발주서에서 수정', ctx.orderLink(store)),
           U.btn('모두 비우기', { s: 'clear' }),
         ]),
       ], [U.btn('더 담기', { s: 'cats' }), home]);
@@ -290,7 +290,7 @@ async function step(ctx, U, store, x, now) {
 
     case 'sheetlink': {
       // 링크 버튼 대신 주소를 글자로 보냄 (카톡이 말풍선 속 주소를 눌러 열 수 있게 바꿔 준다)
-      return U.res([U.text(`📋 ${store.name} 전체 품목 발주서\n아래 주소를 누르면 열려요.\n\n${ctx.orderLink(store.id)}`)], [home]);
+      return U.res([U.text(`📋 ${store.name} 전체 품목 발주서\n\n${ctx.orderLink(store)}\n\n📌 주소를 길게 눌러 복사 → 휴대폰 크롬(아이폰은 사파리)에 붙여넣기 → '홈 화면에 추가' 하면 다음부터 아이콘으로 바로 열려요.`)], [home]);
     }
 
     case 'history': {

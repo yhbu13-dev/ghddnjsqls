@@ -13,7 +13,8 @@ const images = require('./images');
 const { migrate, metaValue } = require('./schema');
 const { seed } = require('./sample');
 
-const LINK_TTL = 30 * 24 * 3600e3; // 발주서 링크 30일
+// 발주서 링크: 홈 화면에 붙여 두고 오래 쓰도록 1년. 잃어버리면 관리자가 [링크 바꾸기]로 예전 링크를 모두 무효화
+const LINK_TTL = 365 * 24 * 3600e3;
 const SESSION_TTL = 12 * 3600e3;
 
 const HEADERS = {
@@ -28,6 +29,8 @@ const FILES = {
   '/assets/app.css': ['app.css', 'text/css; charset=utf-8'],
   '/assets/order.js': ['order.js', 'text/javascript; charset=utf-8'],
   '/assets/admin.js': ['admin.js', 'text/javascript; charset=utf-8'],
+  '/assets/icon-192.png': ['icon-192.png', 'image/png'],
+  '/assets/icon-512.png': ['icon-512.png', 'image/png'],
 };
 const PAGES = { order: 'order.html', admin: 'admin.html', login: 'login.html' };
 
@@ -85,7 +88,8 @@ function createHandler({ db, cfg, assets, log = console.log }) {
     const m = request.method;
     const base = cfg.publicUrl || url.origin;
     const { tk } = S;
-    const orderLink = (storeId) => `${base}/o/${tk.sign('o', storeId, LINK_TTL)}`;
+    // store = { id, link_ver } — 토큰에 '매장번호-링크버전'을 담는다
+    const orderLink = (store) => `${base}/o/${tk.sign('o', `${store.id}-${store.link_ver || 0}`, LINK_TTL)}`;
     const skillUrl = `${base}/kakao/skill?key=${S.skillKey}`;
     const hooks = {
       async onOrder(order, dup) {
@@ -134,13 +138,29 @@ function createHandler({ db, cfg, assets, log = console.log }) {
 
     // ── 점주 발주서 ──
     const storeFromToken = async (token) => {
-      const id = tk.verify('o', token);
-      return id ? O.storeOf(db, Number(id)) : null;
+      const v = tk.verify('o', token);
+      const m2 = /^(\d+)(?:-(\d+))?$/.exec(v || '');
+      if (!m2) return null;
+      const store = await O.storeOf(db, Number(m2[1]));
+      return store && (store.link_ver || 0) === Number(m2[2] || 0) ? store : null;
     };
     let mm = p.match(/^\/o\/([\w.-]{10,200})$/);
     if (mm && m === 'GET') {
-      if (!(await storeFromToken(mm[1]))) return reply(404, '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/assets/app.css"><p class="pad24">링크가 만료되었어요. 카카오톡 채널에서 [📋 전체 품목 발주서]를 다시 눌러 주세요.</p>', 'text/html; charset=utf-8');
-      return page('order');
+      if (!(await storeFromToken(mm[1]))) return reply(404, '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/assets/app.css"><p class="pad24">사용할 수 없는 발주서 링크예요. 카카오톡 채널의 [발주서 링크]나 담당자에게 새 링크를 받아 주세요.</p>', 'text/html; charset=utf-8');
+      const raw = await file(PAGES.order);
+      const tpl = typeof raw === 'string' ? raw : new TextDecoder().decode(raw);
+      return html(200, tpl.replaceAll('{{TOKEN}}', mm[1])); // 토큰은 [\w.-] 만 허용되어 그대로 넣어도 안전
+    }
+    // 홈 화면에 추가할 때 앱 이름·아이콘·시작 주소
+    mm = p.match(/^\/o\/([\w.-]{10,200})\/manifest\.webmanifest$/);
+    if (mm && m === 'GET') {
+      const store = await storeFromToken(mm[1]);
+      if (!store) return json(404, { error: 'not found' });
+      return reply(200, JSON.stringify({
+        name: `투스타 발주 · ${store.name}`, short_name: '투스타 발주', start_url: `/o/${mm[1]}`, scope: `/o/${mm[1]}`,
+        display: 'standalone', background_color: '#f4f5f7', theme_color: '#fee500',
+        icons: [{ src: '/assets/icon-192.png', sizes: '192x192', type: 'image/png' }, { src: '/assets/icon-512.png', sizes: '512x512', type: 'image/png' }],
+      }), 'application/manifest+json; charset=utf-8');
     }
     mm = p.match(/^\/api\/o\/([\w.-]{10,200})(?:\/(cart|submit|reorder|request))?$/);
     if (mm) {
@@ -204,13 +224,20 @@ function createHandler({ db, cfg, assets, log = console.log }) {
       else if (sub === 'access' && m === 'POST') await O.decideAccess(db, Number(b.store_id), String(b.category), String(b.decision));
       else if (sub === 'stores' && m === 'POST') {
         const r = await O.createStore(db, b);
-        return json(200, { ...r, link: orderLink(r.id) });
+        return json(200, { ...r, link: orderLink({ id: r.id, link_ver: 0 }) });
       } else if (sub === 'code' && m === 'POST') {
         if (!(await O.storeOf(db, Number(b.id)))) throw new O.UserError('매장을 찾을 수 없습니다');
         return json(200, { code: await O.reissueCode(db, Number(b.id)) });
       } else if (sub === 'link' && m === 'POST') {
-        if (!(await O.storeOf(db, Number(b.id)))) throw new O.UserError('매장을 찾을 수 없습니다');
-        return json(200, { link: orderLink(Number(b.id)) });
+        const s = await O.storeOf(db, Number(b.id));
+        if (!s) throw new O.UserError('매장을 찾을 수 없습니다');
+        return json(200, { link: orderLink(s) });
+      } else if (sub === 'link-reset' && m === 'POST') {
+        // 링크 바꾸기: 버전을 올려 지금까지 나간 발주서 링크(홈 화면 아이콘 포함)를 모두 무효화
+        await db.run('UPDATE stores SET link_ver = link_ver + 1 WHERE id = ? AND active = 1', [Number(b.id)]);
+        const s = await O.storeOf(db, Number(b.id));
+        if (!s) throw new O.UserError('매장을 찾을 수 없습니다');
+        return json(200, { link: orderLink(s) });
       } else if (sub === 'items-bulk' && m === 'POST') {
         const r = await O.importItems(db, b.text);
         return json(200, { ...r, data: await data() });

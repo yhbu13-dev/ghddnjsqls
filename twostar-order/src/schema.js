@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS stores (
   phone TEXT NOT NULL DEFAULT '',
   code TEXT UNIQUE,                       -- 카톡 연결 코드 (6자리, 한 번 쓰면 사라짐)
   cart_rev INTEGER NOT NULL DEFAULT 0,    -- 장바구니가 바뀔 때마다 +1 (중복 주문 방지)
+  link_ver INTEGER NOT NULL DEFAULT 0,    -- 발주서 링크 버전. 올리면 예전 링크는 모두 무효
   active INTEGER NOT NULL DEFAULT 1,
   created_at INTEGER NOT NULL
 );
@@ -107,6 +108,8 @@ async function migrate(db) {
   await db.batch(STATEMENTS.map((s) => [s, []]));
   const cols = await db.all('PRAGMA table_info(items)');
   if (!cols.some((c) => c.name === 'image')) await db.run("ALTER TABLE items ADD COLUMN image TEXT NOT NULL DEFAULT ''");
+  const scols = await db.all('PRAGMA table_info(stores)');
+  if (!scols.some((c) => c.name === 'link_ver')) await db.run('ALTER TABLE stores ADD COLUMN link_ver INTEGER NOT NULL DEFAULT 0');
   await db.run('INSERT OR IGNORE INTO user_stores (user_key, store_id, linked_at) SELECT user_key, store_id, linked_at FROM links');
 }
 

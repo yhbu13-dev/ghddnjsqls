@@ -77,7 +77,7 @@ test('주문: 버전 확인 · 중복 방지 · 최소 금액 · 지난 발주 �
 
 test('카카오 스킬: 연결 코드 → 버튼으로 담고 주문', async () => {
   const { db, ids, sauna } = await setup();
-  const ctx = { db, blockId: 'B1', orderLink: (id) => `https://x/o/${id}`, minAmount: 0 };
+  const ctx = { db, blockId: 'B1', orderLink: (st) => `https://x/o/${st.id}`, minAmount: 0 };
   const req = (extra, utterance = '버튼') => skill(ctx, { userRequest: { user: { id: 'u1' }, utterance }, action: { clientExtra: extra } });
 
   let r = await req({});
@@ -247,7 +247,7 @@ test('품목 사진: 올리기 · 발주서 표시 · 위조 파일 거절 · �
 test('카톡 한 계정에 여러 지점: 새 코드 입력 → 그 지점 추가·전환, 매장 바꾸기, 예전 버튼은 그 지점으로', async () => {
   const { db, ids, sauna } = await setup();
   const cafe = await O.createStore(db, { name: '카페 온도', biz: 'cafe' });
-  const ctx = { db, blockId: 'B1', orderLink: (id) => `https://x/o/${id}`, minAmount: 0 };
+  const ctx = { db, blockId: 'B1', orderLink: (st) => `https://x/o/${st.id}`, minAmount: 0 };
   const req = (extra, utterance = '버튼') => skill(ctx, { userRequest: { user: { id: 'boss' }, utterance }, action: { clientExtra: extra } });
   const J = (x) => JSON.stringify(x);
 
@@ -295,7 +295,7 @@ test('모든 카톡 화면이 오픈빌더 응답 규격을 지킨다 (42품목 
   await db.run("INSERT INTO items (category, grp, name, price) VALUES ('cafe', '시럽', '바닐라 시럽', 11000)");
   const a = await O.createStore(db, { name: '아주아주긴이름의해오름사우나본점', biz: 'sauna' });
   const b = await O.createStore(db, { name: '카페 온도', biz: 'cafe' });
-  const ctx = { db, blockId: 'B1', orderLink: (id) => `https://x.example/o/${id}`, minAmount: 0 };
+  const ctx = { db, blockId: 'B1', orderLink: (st) => `https://x.example/o/${st.id}`, minAmount: 0 };
   const len = (s) => [...String(s)].length;
   const seen = new Set();
   function check(r, where) {
@@ -439,7 +439,7 @@ test('Cloudflare(D1) 모드: 스킬 키·서명 키 자동 생성 · 카톡 발�
 
 test('발주서 링크를 글자로 받기 · 링크점검', async () => {
   const { db, sauna } = await setup();
-  const ctx = { db, blockId: 'B1', orderLink: (id) => `https://x.example/o/tok${id}`, minAmount: 0 };
+  const ctx = { db, blockId: 'B1', orderLink: (st) => `https://x.example/o/tok${st.id}`, minAmount: 0 };
   const req = (extra, u = '버튼') => skill(ctx, { userRequest: { user: { id: 'lk' }, utterance: u }, action: { clientExtra: extra } });
   let r = await req({}, '링크점검');
   assert.equal(r.template.outputs[0].textCard.buttons.length, 2, '연결 전: 네이버·서버 점검');
@@ -450,4 +450,33 @@ test('발주서 링크를 글자로 받기 · 링크점검', async () => {
   assert.match(r.template.outputs[0].simpleText.text, new RegExp(`https://x\\.example/o/tok${sauna.id}`));
   r = await req({}, '링크 점검');
   assert.deepEqual(r.template.outputs[0].textCard.buttons.map((b) => b.label), ['① 네이버', '② 서버 점검', '③ 발주서']);
+});
+
+test('발주서 링크: 1년짜리 · 링크 바꾸면 예전 링크 막힘 · 홈 화면 아이콘', async () => {
+  const { server, db, base } = await startApp();
+  try {
+    const s = await O.createStore(db, { name: '홈화면사우나', biz: 'sauna' });
+    let r = await fetch(`${base}/admin/login`, { method: 'POST', body: JSON.stringify({ password: 'pw1234' }) });
+    const H = { cookie: r.headers.get('set-cookie').split(';')[0], 'x-ts': '1' };
+    const old = (await (await fetch(`${base}/api/admin/link`, { method: 'POST', headers: H, body: JSON.stringify({ id: s.id }) })).json()).link;
+    const oldPath = new URL(old).pathname;
+    const exp = parseInt(oldPath.split('.')[2], 36) * 1000;
+    assert.ok(exp - Date.now() > 360 * 24 * 3600e3, '1년 가까이 유효');
+    r = await fetch(base + oldPath);
+    const page = await r.text();
+    assert.match(page, new RegExp(`/o/${oldPath.slice(3).replace(/\./g, '\\.')}/manifest\.webmanifest`));
+    assert.match(page, /apple-touch-icon/);
+    const mf = await (await fetch(`${base}${oldPath}/manifest.webmanifest`)).json();
+    assert.equal(mf.start_url, oldPath);
+    assert.equal(mf.display, 'standalone');
+    assert.equal((await fetch(`${base}/assets/icon-192.png`)).headers.get('content-type'), 'image/png');
+
+    const fresh = (await (await fetch(`${base}/api/admin/link-reset`, { method: 'POST', headers: H, body: JSON.stringify({ id: s.id }) })).json()).link;
+    assert.notEqual(fresh, old);
+    assert.equal((await fetch(base + oldPath)).status, 404, '예전 링크는 막힘');
+    assert.equal((await fetch(`${base}/api/o/${oldPath.slice(3)}`)).status, 404);
+    assert.equal((await fetch(base + new URL(fresh).pathname)).status, 200, '새 링크는 열림');
+  } finally {
+    server.close();
+  }
 });

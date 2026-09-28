@@ -64,7 +64,7 @@ function createApp(cfg) {
   const db = open(cfg.dbFile);
   const handle = createHandler({ db, cfg, assets });
   const tk = tokens.make(cfg.secret);
-  const orderLink = (storeId) => `${cfg.publicUrl}/o/${tk.sign('o', storeId, 30 * 24 * 3600e3)}`;
+  const orderLink = (storeId, ver = 0) => `${cfg.publicUrl}/o/${tk.sign('o', `${storeId}-${ver}`, 365 * 24 * 3600e3)}`;
 
   const server = http.createServer((req, res) => {
     const chunks = [];
