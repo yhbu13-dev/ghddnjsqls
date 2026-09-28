@@ -23,12 +23,12 @@ if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
 
 # 2) Cloudflare 로그인
 Say '1/5  Cloudflare 로그인 확인 중… (처음에는 wrangler 를 내려받느라 1~2분 걸립니다)'
-$null = WOut whoami --json
-if ($LASTEXITCODE -ne 0) {
-  Say '브라우저가 열리면 Cloudflare 에 로그인하고 [Allow] 를 눌러 주세요.'
+# Windows 의 npx 는 실패 신호(종료 코드)를 잃어버릴 수 있어 응답 내용을 직접 확인한다
+function Test-Login { return (((WOut whoami --json) -join '') -match '"loggedIn"\s*:\s*true') }
+if (-not (Test-Login)) {
+  Say '브라우저가 열리면 Cloudflare 에 로그인하고 [Allow] 를 눌러 주세요. (끝나면 브라우저는 닫고 이 창으로 돌아오세요)'
   W login
-  $null = WOut whoami --json
-  if ($LASTEXITCODE -ne 0) { Fail '로그인이 되지 않았습니다. 다시 실행해 주세요.' }
+  if (-not (Test-Login)) { Fail '로그인이 되지 않았습니다. 이 창을 닫고 deploy-cloudflare.bat 을 다시 실행해 주세요.' }
 }
 Write-Host '로그인 확인 완료'
 
@@ -57,9 +57,8 @@ $toml = [regex]::Replace($toml, 'database_id = "[^"]*"', "database_id = `"$DbId`
 # 4) 배포
 Say '3/5  Cloudflare 에 올리는 중…'
 $deploy = W deploy 2>&1 | ForEach-Object { $s = "$_"; Write-Host $s; $s }
-if ($LASTEXITCODE -ne 0) { Fail '배포에 실패했습니다. 위 메시지를 캡처해서 보내 주세요.' }
 $m = [regex]::Match(($deploy -join "`n"), 'https://[a-z0-9.-]+\.workers\.dev')
-if (-not $m.Success) { Fail '배포는 됐지만 주소를 찾지 못했습니다. 위 메시지를 캡처해서 보내 주세요.' }
+if (-not $m.Success) { Fail '배포에 실패했거나 주소를 찾지 못했습니다. 위 메시지를 캡처해서 보내 주세요.' }
 $Url = $m.Value
 
 # 5) 관리자 비밀번호 (처음 한 번. 이미 있으면 바꿀지 물어봄)
@@ -74,8 +73,8 @@ if ($hasPw) {
 }
 if ($Password -and -not $hasPw) {
   if ($Password.Length -lt 8) { Fail 'TS_ADMIN_PASSWORD 는 8자 이상이어야 합니다.' }
-  $Password | & npx --yes wrangler@4 secret put ADMIN_PASSWORD
-  if ($LASTEXITCODE -ne 0) { Fail '비밀번호를 저장하지 못했습니다. 위 메시지를 캡처해서 보내 주세요.' }
+  $put = ($Password | & npx --yes wrangler@4 secret put ADMIN_PASSWORD 2>&1 | ForEach-Object { $x = "$_"; Write-Host $x; $x }) -join "`n"
+  if ($put -notmatch 'Success') { Fail '비밀번호를 저장하지 못했습니다. 위 메시지를 캡처해서 보내 주세요.' }
 } elseif ($ask) {
   while ($true) {
     $sec = Read-Host '새 관리자 비밀번호 (8자 이상, 입력한 글자는 안 보입니다)' -AsSecureString
@@ -83,8 +82,8 @@ if ($Password -and -not $hasPw) {
     if ($Password.Length -ge 8) { break }
     Write-Host '8자 이상으로 입력해 주세요.' -ForegroundColor Yellow
   }
-  $Password | & npx --yes wrangler@4 secret put ADMIN_PASSWORD
-  if ($LASTEXITCODE -ne 0) { Fail '비밀번호를 저장하지 못했습니다. 위 메시지를 캡처해서 보내 주세요.' }
+  $put = ($Password | & npx --yes wrangler@4 secret put ADMIN_PASSWORD 2>&1 | ForEach-Object { $x = "$_"; Write-Host $x; $x }) -join "`n"
+  if ($put -notmatch 'Success') { Fail '비밀번호를 저장하지 못했습니다. 위 메시지를 캡처해서 보내 주세요.' }
 } elseif (-not $Password) {
   $sec = Read-Host '스킬 URL 을 가져오려면 지금 관리자 비밀번호를 입력해 주세요 (건너뛰려면 엔터)' -AsSecureString
   $Password = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($sec))
