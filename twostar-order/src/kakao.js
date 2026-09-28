@@ -49,31 +49,71 @@ function skill(ctx, body) {
 
   const home = U.btn('처음으로', { s: 'home' });
   let store = O.storeByUser(db, userKey);
+  const code = x.s ? '' : utter.replace(/[\s-]/g, '');
 
-  // ── 연결 전: 연결 코드 6자리 ─────────────────────
-  if (!store) {
-    const code = utter.replace(/\s/g, '');
-    if (/^\d{6}$/.test(code)) {
-      if (limited(userKey, now)) return U.res([U.text('입력 횟수를 넘었어요. 10분 뒤에 다시 입력해 주세요.')]);
-      store = O.linkUser(db, userKey, code, now);
-      if (!store) return U.res([U.text('연결 코드가 맞지 않아요. 투스타글로벌 담당자에게 받은 6자리 숫자를 다시 입력해 주세요.')]);
-      return U.res([
-        U.text(`✅ ${store.name} 매장과 연결되었어요.\n이제부터 버튼만 눌러 발주하시면 됩니다.`),
-        homeCard(ctx, U, store),
-      ], homeQuick(U));
+  // ── 연결 코드 6자리: 처음 연결 · 다른 지점 추가 모두 여기서 ───────
+  if (/^\d{6}$/.test(code)) {
+    if (limited(userKey, now)) return U.res([U.text('입력 횟수를 넘었어요. 10분 뒤에 다시 입력해 주세요.')]);
+    const linked = O.linkUser(db, userKey, code, now);
+    if (!linked) {
+      return U.res([U.text('연결 코드가 맞지 않아요. 투스타글로벌 담당자에게 받은 6자리 숫자를 다시 입력해 주세요.\n(코드는 한 번 쓰면 사라져요. 필요하면 새 코드를 받아 주세요)')],
+        store ? tag(homeQuick(U, db, userKey), store) : []);
     }
+    const many = O.storesOfUser(db, userKey).length > 1;
+    return tag(U.res([
+      U.text(`✅ ${linked.name} 매장과 연결되었어요.${many ? '\n다른 지점은 [매장 바꾸기]로 오갈 수 있어요.' : '\n이제부터 버튼만 눌러 발주하시면 됩니다.'}`),
+      homeCard(ctx, U, linked),
+    ], homeQuick(U, db, userKey)), linked);
+  }
+
+  if (!store) {
     const out = [U.card('투스타글로벌 발주', '처음 오셨네요!\n담당자에게 받은 연결 코드 6자리를 채팅창에 입력해 주세요.\n(처음 한 번만 입력하면 됩니다)')];
     const quick = ctx.guest?.url ? [U.link(ctx.guest.label || '쇼핑몰 문의하기', ctx.guest.url)] : [];
     if (quick.length) out[0].textCard.buttons = quick;
     return U.res(out);
   }
 
+  // 버튼에는 어느 매장 화면에서 눌렀는지(st)가 들어 있다 → 매장을 바꾼 뒤 예전 버튼을 눌러도 그 매장으로 처리
+  if (x.st && Number(x.st) !== store.id) {
+    const other = O.useStore(db, userKey, Number(x.st), now);
+    if (other) store = other;
+  }
+  if (x.s === 'use') {
+    const next = O.useStore(db, userKey, Number(x.to), now);
+    if (!next) return U.res([U.text('연결되지 않은 매장이에요.')], tag(homeQuick(U, db, userKey), store));
+    return tag(U.res([U.text(`🔄 ${next.name} 매장으로 바꿨어요.`), homeCard(ctx, U, next)], homeQuick(U, db, userKey)), next);
+  }
+  if (x.s === 'stores') {
+    const list = O.storesOfUser(db, userKey);
+    return tag(U.res([
+      U.text(`지금 매장: ${store.name}\n다른 지점을 고르세요.\n(새 지점은 담당자에게 받은 연결 코드 6자리를 입력하면 추가돼요)`),
+    ], [
+      ...list.filter((s) => s.id !== store.id).map((s) => U.btn(s.name, { s: 'use', to: s.id }, `${s.name}로 바꾸기`)),
+      U.btn('처음으로', { s: 'home' }),
+    ]), store);
+  }
+
   try {
-    return step(ctx, U, store, x, now) || U.res([homeCard(ctx, U, store)], homeQuick(U));
+    return tag(step(ctx, U, store, x, now) || U.res([homeCard(ctx, U, store)], homeQuick(U, db, userKey)), store);
   } catch (e) {
-    if (e instanceof O.UserError) return U.res([U.text(`⚠️ ${e.message}`)], [U.btn('장바구니', { s: 'cart' }), home]);
+    if (e instanceof O.UserError) return tag(U.res([U.text(`⚠️ ${e.message}`)], [U.btn('장바구니', { s: 'cart' }), home]), store);
     throw e;
   }
+}
+
+/** 응답 안의 모든 블록 버튼에 매장 번호(st)를 붙인다 */
+function tag(res, store) {
+  const mark = (b) => { if (b && b.action === 'block' && b.extra && !b.extra.st) b.extra.st = store.id; };
+  const each = (arr) => (arr || []).forEach(mark);
+  if (Array.isArray(res)) { each(res); return res; }
+  const t = res.template;
+  each(t.quickReplies);
+  for (const o of t.outputs) {
+    const c = o.textCard || o.basicCard;
+    if (c) each(c.buttons);
+    if (o.carousel) o.carousel.items.forEach((i) => each(i.buttons));
+  }
+  return res;
 }
 
 function homeCard(ctx, U, store) {
@@ -89,11 +129,13 @@ function homeCard(ctx, U, store) {
   ]);
 }
 
-function homeQuick(U) {
+function homeQuick(U, db, userKey) {
+  const many = db && O.storesOfUser(db, userKey).length > 1;
   return [
     U.btn('카톡에서 고르기', { s: 'cats' }),
     U.btn('발주 내역', { s: 'history' }),
     U.btn('품목 추가 신청', { s: 'req' }),
+    ...(many ? [U.btn('매장 바꾸기', { s: 'stores' })] : []),
   ];
 }
 

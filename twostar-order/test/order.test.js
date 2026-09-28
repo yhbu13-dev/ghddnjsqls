@@ -217,3 +217,46 @@ test('품목 사진: 올리기 · 발주서 표시 · 위조 파일 거절 · �
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('카톡 한 계정에 여러 지점: 새 코드 입력 → 그 지점 추가·전환, 매장 바꾸기, 예전 버튼은 그 지점으로', () => {
+  const { db, ids, sauna } = setup();
+  const cafe = O.createStore(db, { name: '카페 온도', biz: 'cafe' });
+  const ctx = { db, blockId: 'B1', orderLink: (id) => `https://x/o/${id}`, minAmount: 0 };
+  const req = (extra, utterance = '버튼') => skill(ctx, { userRequest: { user: { id: 'boss' }, utterance }, action: { clientExtra: extra } });
+  const J = (x) => JSON.stringify(x);
+
+  let r = req({}, sauna.code);
+  assert.match(J(r), /해오름사우나 매장과 연결/);
+  assert.ok(!J(r).includes('매장 바꾸기'), '한 곳만 연결되면 [매장 바꾸기] 없음');
+  const saunaAdd = r.template.outputs[1].textCard.buttons[1].extra; // 장바구니 버튼 (st = 사우나)
+  assert.equal(saunaAdd.st, sauna.id);
+
+  r = req({}, `${cafe.code.slice(0, 3)} ${cafe.code.slice(3)}`); // 띄어 써도 OK
+  assert.match(J(r), /카페 온도 매장과 연결/);
+  assert.equal(O.storeByUser(db, 'boss').id, cafe.id);
+  assert.match(J(r), /매장 바꾸기/);
+
+  r = req({}, '999999');
+  if (![sauna.code, cafe.code].includes('999999')) assert.match(J(r), /코드가 맞지 않아요/);
+  assert.equal(O.storeByUser(db, 'boss').id, cafe.id, '틀린 코드는 지금 매장을 바꾸지 않음');
+
+  r = req({ s: 'stores' });
+  const pick = r.template.quickReplies.find((q) => q.label === '해오름사우나');
+  r = req(pick.extra);
+  assert.match(J(r), /해오름사우나 매장으로 바꿨어요/);
+  assert.equal(O.storeByUser(db, 'boss').id, sauna.id);
+
+  // 카페 화면에서 받은 버튼을 사우나로 바꾼 뒤 눌러도 → 카페 장바구니에 담김
+  const cafeStore = O.storeOf(db, cafe.id);
+  r = req({ s: 'add', i: ids.cafe, n: 2, st: cafe.id });
+  assert.match(J(r), /바닐라 시럽 2개 담았어요/);
+  assert.equal(O.cartOf(db, cafeStore).count, 1);
+  assert.equal(O.cartOf(db, O.storeOf(db, sauna.id)).count, 0);
+
+  // 연결 안 된 매장 번호를 억지로 넣어도 무시
+  const other = O.createStore(db, { name: '남의 매장', biz: 'cafe' });
+  r = req({ s: 'use', to: other.id });
+  assert.match(J(r), /연결되지 않은 매장/);
+  r = req({ s: 'cart', st: other.id });
+  assert.ok(!J(r).includes('남의 매장'));
+});

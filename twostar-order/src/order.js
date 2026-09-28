@@ -54,12 +54,28 @@ function storeOf(db, id) {
   return db.get('SELECT * FROM stores WHERE id = ? AND active = 1', [id]) || null;
 }
 
+/** 이 카톡 사용자가 연결한 매장 목록 */
+function storesOfUser(db, userKey) {
+  return db.all(`SELECT s.* FROM user_stores u JOIN stores s ON s.id = u.store_id
+                 WHERE u.user_key = ? AND s.active = 1 ORDER BY u.linked_at`, [userKey]);
+}
+
+/** 연결된 매장 중 하나로 바꾸기. 연결 안 된 매장이면 null */
+function useStore(db, userKey, storeId, now = Date.now()) {
+  const ok = db.get(`SELECT s.* FROM user_stores u JOIN stores s ON s.id = u.store_id
+                     WHERE u.user_key = ? AND u.store_id = ? AND s.active = 1`, [userKey, storeId]);
+  if (!ok) return null;
+  db.run(`INSERT INTO links (user_key, store_id, linked_at) VALUES (?, ?, ?)
+          ON CONFLICT (user_key) DO UPDATE SET store_id = excluded.store_id`, [userKey, storeId, now]);
+  return ok;
+}
+
 function storeByUser(db, userKey) {
   const l = db.get('SELECT store_id FROM links WHERE user_key = ?', [userKey]);
   return l ? storeOf(db, l.store_id) : null;
 }
 
-/** 연결 코드로 카톡 사용자를 매장에 연결. 코드는 한 번 쓰면 사라진다. */
+/** 연결 코드로 카톡 사용자를 매장에 연결(추가)하고 그 매장으로 바꾼다. 코드는 한 번 쓰면 사라진다. */
 function linkUser(db, userKey, code, now = Date.now()) {
   return db.tx(() => {
     const s = db.get('SELECT * FROM stores WHERE code = ? AND active = 1', [code]);
@@ -67,6 +83,8 @@ function linkUser(db, userKey, code, now = Date.now()) {
     db.run(`INSERT INTO links (user_key, store_id, linked_at) VALUES (?, ?, ?)
             ON CONFLICT (user_key) DO UPDATE SET store_id = excluded.store_id, linked_at = excluded.linked_at`,
     [userKey, s.id, now]);
+    db.run(`INSERT INTO user_stores (user_key, store_id, linked_at) VALUES (?, ?, ?)
+            ON CONFLICT (user_key, store_id) DO UPDATE SET linked_at = excluded.linked_at`, [userKey, s.id, now]);
     db.run('UPDATE stores SET code = NULL WHERE id = ?', [s.id]);
     return s;
   });
@@ -333,7 +351,7 @@ function setStatus(db, orderId, status, now = Date.now()) {
 
 module.exports = {
   CATEGORIES, BIZ, STATUS, FLOW, MAX_QTY, UserError, won,
-  createStore, reissueCode, storeOf, storeByUser, linkUser,
+  createStore, reissueCode, storeOf, storeByUser, storesOfUser, useStore, linkUser,
   categoriesOf, accessStates, requestAccess, decideAccess,
   itemsFor, groupsFor, orderableItem, parseItems, importItems,
   cartOf, setQty, addQty, replaceCart, clearCart, lastOrder, reorder,

@@ -17,10 +17,16 @@ CREATE TABLE IF NOT EXISTS stores (
   active INTEGER NOT NULL DEFAULT 1,
   created_at INTEGER NOT NULL
 );
-CREATE TABLE IF NOT EXISTS links (        -- 카카오 챗봇 사용자 ↔ 매장
+CREATE TABLE IF NOT EXISTS links (        -- 카카오 챗봇 사용자 → 지금 보고 있는 매장
   user_key TEXT PRIMARY KEY,
   store_id INTEGER NOT NULL REFERENCES stores(id),
   linked_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS user_stores (  -- 카카오 챗봇 사용자가 연결한 매장들 (여러 지점 가능)
+  user_key TEXT NOT NULL,
+  store_id INTEGER NOT NULL REFERENCES stores(id),
+  linked_at INTEGER NOT NULL,
+  PRIMARY KEY (user_key, store_id)
 );
 CREATE TABLE IF NOT EXISTS items (
   id INTEGER PRIMARY KEY,
@@ -81,6 +87,7 @@ function open(file) {
   if (file !== ':memory:') raw.exec('PRAGMA journal_mode = WAL;');
   raw.exec(SCHEMA);
   // 이전 버전 DB 업그레이드
+  raw.exec('INSERT OR IGNORE INTO user_stores (user_key, store_id, linked_at) SELECT user_key, store_id, linked_at FROM links');
   if (!raw.prepare('PRAGMA table_info(items)').all().some((c) => c.name === 'image')) {
     raw.exec("ALTER TABLE items ADD COLUMN image TEXT NOT NULL DEFAULT ''");
   }

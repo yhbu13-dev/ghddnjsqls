@@ -183,7 +183,7 @@ function createApp(cfg) {
       pick,
       requests: db.all(`SELECT a.*, s.name AS store_name, s.biz FROM access a JOIN stores s ON s.id = a.store_id
                         WHERE a.status = 'pending' ORDER BY a.requested_at`),
-      stores: db.all(`SELECT s.*, (SELECT COUNT(*) FROM links l WHERE l.store_id = s.id) AS kakao,
+      stores: db.all(`SELECT s.*, (SELECT COUNT(*) FROM user_stores l WHERE l.store_id = s.id) AS kakao,
                         (SELECT GROUP_CONCAT(category) FROM access a WHERE a.store_id = s.id AND a.status = 'approved') AS extra
                       FROM stores s WHERE s.active = 1 ORDER BY s.id`),
       items: db.all('SELECT * FROM items ORDER BY category, sort, id'),
@@ -232,6 +232,11 @@ function createApp(cfg) {
       if (m !== 'POST') return send(res, 405, { error: 'POST only' });
       if (!cfg.skillKey || !safeEq(url.searchParams.get('key') || '', cfg.skillKey)) return send(res, 403, { error: 'forbidden' });
       const body = await readJson(req);
+      // 검은 창에 한 줄씩: 카톡에서 무엇을 눌렀는지 (사용자는 짧은 별칭으로만)
+      const who = crypto.createHash('sha256').update(String(body?.userRequest?.user?.id || '')).digest('hex').slice(0, 6);
+      const ex = body?.action?.clientExtra || {};
+      const what = ex.s ? `버튼 ${ex.s}` : `입력 "${String(body?.userRequest?.utterance || '').slice(0, 20).replace(/\d{6}/, '******')}"`;
+      console.log(`[카톡 ${new Date().toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul', hour12: false })}] 사용자 ${who} · ${what}`);
       const out = skill({ db, blockId: cfg.blockId, orderLink, minAmount: cfg.minAmount, guest: cfg.guest, ...hooks }, body);
       return send(res, 200, out);
     }
