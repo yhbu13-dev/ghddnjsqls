@@ -19,7 +19,7 @@ database_id = "REPLACE_WITH_D1_ID"   # deploy-cloudflare 가 자동으로 채움
 [vars]
 BLOCK_ID = "6ab764d9f6804a5978559653"   # 오픈빌더 "발주" 블록 ID
 MIN_ORDER = "0"
-SEED_SAMPLE = "1"                        # 1 = 품목이 없을 때 샘플 69개·매장 3곳 (실제 운영 전 "0")
+SEED_SAMPLE = "0"                        # 1 = 품목이 하나도 없을 때 샘플 69개·매장 3곳을 넣음 (데모용). 운영 중에는 0
 
 [observability]
 enabled = true                           # Cloudflare 대시보드에서 카톡 요청 기록(로그) 보기
