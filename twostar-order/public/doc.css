@@ -3,7 +3,7 @@
 body { margin: 0; background: #eef0f3; color: #111827; font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; }
 .toolbar { position: sticky; top: 0; z-index: 2; display: flex; gap: 8px; justify-content: flex-end; padding: 10px 16px; background: rgba(238,240,243,.92); backdrop-filter: blur(6px); }
 .tbtn { font: inherit; border: 1px solid #d1d5db; background: #fff; color: #111827; border-radius: 10px; padding: 8px 14px; text-decoration: none; cursor: pointer; }
-.tbtn.primary { background: #111827; color: #fff; border-color: #111827; margin-left: auto; }
+.tbtn.primary { background: #3182f6; color: #fff; border-color: #3182f6; margin-left: auto; font-weight: 600; }
 .doc { position: relative; max-width: 800px; margin: 8px auto 40px; background: #fff; padding: 40px 44px; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,.08), 0 8px 24px rgba(0,0,0,.06); }
 .dh { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #111827; padding-bottom: 14px; margin-bottom: 18px; }
 .dh h1 { margin: 0; font-size: 28px; letter-spacing: 8px; }

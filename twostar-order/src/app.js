@@ -184,7 +184,7 @@ function createHandler({ db, cfg, assets, log = console.log, fetch: fetchImpl = 
       if (!store) return json(404, { error: 'not found' });
       return reply(200, JSON.stringify({
         name: `투스타 발주 · ${store.name}`, short_name: '투스타 발주', start_url: `/o/${mm[1]}`, scope: `/o/${mm[1]}`,
-        display: 'standalone', background_color: '#f4f5f7', theme_color: '#fee500',
+        display: 'standalone', background_color: '#ffffff', theme_color: '#ffffff',
         icons: [{ src: '/assets/icon-192.png', sizes: '192x192', type: 'image/png' }, { src: '/assets/icon-512.png', sizes: '512x512', type: 'image/png' }],
       }), 'application/manifest+json; charset=utf-8');
     }

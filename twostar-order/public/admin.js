@@ -66,25 +66,43 @@
     const open = D.orders.filter((o) => o.status === 'received').length;
     nav.replaceChildren(...TABS.map(([k, label]) => {
       const n = k === 'orders' ? open : k === 'requests' ? D.requests.length : 0;
-      return h('button', { class: `chip${tab === k ? ' on' : ''}`, onclick: () => { tab = k; if (k === 'stores') storeView = null; render(); } }, label, n ? h('span', { class: 'badge' }, n) : null);
+      return h('button', { class: tab === k ? 'on' : null, onclick: () => { tab = k; if (k === 'stores') storeView = null; render(); window.scrollTo(0, 0); } },
+        label, n ? h('span', { class: 'badge' }, n) : null);
     }));
     document.title = open ? `(${open}) 투스타 발주 관리자` : '투스타 발주 관리자';
     main.replaceChildren(...[].concat(({ orders, pick, requests, stores, items, settings })[tab]()).flat().filter(Boolean));
   }
 
+  const title = (t, sub, ...right) => h('div', { class: 'pagetitle' }, h('div', null, h('h1', null, t), sub ? h('p', null, sub) : null), right.length ? h('div', null, ...right) : null);
+  const kpi = (label, value, sub, hot) => h('div', { class: `kpi${hot ? ' hot' : ''}` }, h('span', null, label), h('b', null, value), sub ? h('small', null, sub) : null);
+  const empty = (t) => h('p', { class: 'empty' }, t);
+  const kst = (ms) => new Date(ms + 9 * 3600e3).toISOString();
+
   // ── 주문 ──
   function orders() {
     const F = { open: ['received', 'confirmed'], shipped: ['shipped'], all: null };
     const list = D.orders.filter((o) => !F[filter] || F[filter].includes(o.status));
-    const L = D.labels;
+    const live = D.orders.filter((o) => o.status !== 'canceled');
+    const today = kst(Date.now()).slice(0, 10);
+    const month = today.slice(0, 7);
+    const todays = live.filter((o) => kst(o.created_at).startsWith(today));
+    const months = live.filter((o) => kst(o.created_at).startsWith(month));
+    const nRecv = D.orders.filter((o) => o.status === 'received').length;
+    const nConf = D.orders.filter((o) => o.status === 'confirmed').length;
     return [
+      title('주문', '들어온 발주를 확인하고 출고까지 처리해요'),
+      h('div', { class: 'kpis' },
+        kpi('확인 기다리는 주문', `${nRecv}건`, nRecv ? '확인하면 점주에게 카톡이 가요' : '모두 확인했어요', nRecv > 0),
+        kpi('출고 기다리는 주문', `${nConf}건`),
+        kpi('오늘 발주', won(todays.reduce((a, o) => a + o.total, 0)), `${todays.length}건`),
+        kpi('이번 달 발주', won(months.reduce((a, o) => a + o.total, 0)), `${months.length}건`)),
       D.events.length ? h('div', { class: 'panel events' }, h('h2', null, '새 소식'),
-        D.events.slice().reverse().slice(0, 5).map((e) => h('div', null, `${time(e.at)} · ${e.text}`))) : null,
+        D.events.slice().reverse().slice(0, 5).map((e) => h('div', null, h('time', null, time(e.at)), h('span', null, e.text)))) : null,
       h('div', { class: 'panel' },
-        h('div', { class: 'filters' }, [['open', '처리할 주문'], ['shipped', '출고됨'], ['all', '전체']].map(([k, l]) => h('button', {
-          class: `chip${filter === k ? ' on' : ''}`, onclick: () => { filter = k; render(); },
+        h('div', { class: 'seg' }, [['open', '처리할 주문'], ['shipped', '출고됨'], ['all', '전체']].map(([k, l]) => h('button', {
+          class: filter === k ? 'on' : null, onclick: () => { filter = k; render(); },
         }, l))),
-        list.length ? list.map((o) => orderCard(o)) : h('p', { class: 'muted' }, '주문이 없습니다.')),
+        list.length ? list.map((o) => orderCard(o)) : empty(filter === 'open' ? '처리할 주문이 없어요 👍' : '주문이 없어요')),
     ];
   }
 
@@ -103,22 +121,25 @@
     } catch (e) { toast(e.message); }
   }
   const docBtns = (o) => [
-    h('a', { class: 'btn', href: `/admin/doc/order/${o.id}`, target: '_blank', rel: 'noopener' }, '📄 확인서'),
-    h('a', { class: 'btn', href: `/admin/doc/statement?order=${o.id}`, target: '_blank', rel: 'noopener' }, '🧾 명세서'),
+    h('a', { class: 'btn small', href: `/admin/doc/order/${o.id}`, target: '_blank', rel: 'noopener' }, '확인서'),
+    h('a', { class: 'btn small', href: `/admin/doc/statement?order=${o.id}`, target: '_blank', rel: 'noopener' }, '명세서'),
   ];
   function orderCard(o, inStore) {
     const L = D.labels;
     return h('div', { class: 'ord' },
       h('div', { class: 'hd' },
-        inStore ? null : h('b', null, h('a', { href: '#', onclick: (e) => { e.preventDefault(); tab = 'stores'; openStore(o.store_id); } }, o.store_name)),
+        inStore ? null : h('a', { class: 'who', href: '#', onclick: (e) => { e.preventDefault(); tab = 'stores'; openStore(o.store_id); } }, o.store_name),
         h('span', { class: `tag ${o.status}` }, o.status_label),
-        h('span', { class: 'small muted' }, `${o.no} · ${time(o.created_at)}${o.biz ? ` · ${L.biz[o.biz]}` : ''} · ${o.via === 'chat' ? '카톡' : '발주서'}`),
-        h('b', { style: 'margin-left:auto' }, won(o.total))),
-      h('div', { class: 'ls' }, o.lines.map((l) => h('div', null, `${l.name} ${l.qty}${l.unit}`))),
+        h('span', { class: 'meta' }, `${o.no} · ${time(o.created_at)}${o.biz ? ` · ${L.biz[o.biz]}` : ''} · ${o.via === 'chat' ? '카톡' : '발주서'}`),
+        h('span', { class: 'amt' }, won(o.total))),
+      h('div', { class: 'ls' }, o.lines.map((l) => h('span', null, l.name, h('b', null, `${l.qty}${l.unit}`)))),
+      o.memo ? h('p', { class: 'small muted' }, `요청 사항: ${o.memo}`) : null,
       h('div', { class: 'acts noprint' },
-        o.next.map((s) => h('button', { class: `btn ${s === 'canceled' ? 'bad' : 'primary'}`, onclick: () => changeStatus(o, s) },
-          s === 'canceled' ? '취소' : s === 'confirmed' ? '확인 처리 (카톡 알림)' : `${L.status[s]} 처리`)),
-        docBtns(o)));
+        o.next.filter((s) => s !== 'canceled').map((s) => h('button', { class: 'btn primary small', onclick: () => changeStatus(o, s) },
+          s === 'confirmed' ? '확인하고 카톡 알림' : s === 'shipped' ? '출고 처리' : `${L.status[s]} 처리`)),
+        docBtns(o),
+        h('span', { class: 'sp' }),
+        o.next.includes('canceled') ? h('button', { class: 'btn bad small', onclick: () => changeStatus(o, 'canceled') }, '주문 취소') : null));
   }
 
   // ── 매장 상세: 월별 발주 내역 · 거래명세서 ──
@@ -133,67 +154,77 @@
   function storeDetail() {
     const { store: s, months, month, from, to, orders: list } = storeView.data;
     const L = D.labels;
-    const sum = list.filter((o) => o.status !== 'canceled').reduce((a, o) => a + o.total, 0);
+    const live = list.filter((o) => o.status !== 'canceled');
+    const sum = live.reduce((a, o) => a + o.total, 0);
+    const all = months.reduce((a, m) => a + m.total, 0);
     const pf = h('input', { type: 'date', value: from });
     const pt = h('input', { type: 'date', value: to });
+    const ym = (m) => `${m.slice(0, 4)}년 ${Number(m.slice(5))}월`;
     const test = async () => {
       try {
         const r = await call('/api/admin/notify-test', { id: s.id });
         toast(r.error ? `자동 발송 실패: ${r.error}` : r.configured ? `테스트 알림을 ${r.sent}명에게 보냈어요` : '자동 발송 설정 전이에요. 점주가 채팅방을 열면 테스트 알림이 보여요');
       } catch (e) { toast(e.message); }
     };
+    const unlink = async () => {
+      if (!confirm(`${s.name}에 연결된 카톡 ${s.kakao}명의 연결을 모두 끊을까요?`)) return;
+      try { const r = await call('/api/admin/unlink', { id: s.id }); D = r.data; toast(`카톡 ${r.unlinked}명 연결을 끊었어요`); await openStore(s.id, month); } catch (e) { toast(e.message); }
+    };
     return [
-      h('button', { class: 'btn', onclick: () => { storeView = null; render(); } }, '← 매장 목록'),
-      h('div', { class: 'panel', style: 'margin-top:10px' },
-        h('h2', null, s.name, ' ', h('span', { class: 'small muted' }, L.biz[s.biz])),
-        h('p', { class: 'small muted' }, [s.owner, s.phone].filter(Boolean).join(' · ') || '점주 정보 없음'),
-        h('p', null, s.kakao ? `카톡 연결 ${s.kakao}명` : '카톡 미연결', ' ',
-          s.kakao ? h('button', { class: 'btn small', onclick: test }, '알림 테스트') : null, ' ',
-          s.kakao ? h('button', {
-            class: 'btn small bad',
-            onclick: async () => {
-              if (!confirm(`${s.name}에 연결된 카톡 ${s.kakao}명의 연결을 모두 끊을까요?`)) return;
-              try { const r = await call('/api/admin/unlink', { id: s.id }); D = r.data; toast(`카톡 ${r.unlinked}명 연결을 끊었습니다`); await openStore(s.id, month); } catch (e) { toast(e.message); }
-            },
-          }, '카톡 연결 해제') : null)),
+      h('button', { class: 'back', onclick: () => { storeView = null; render(); } }, '‹ 매장 목록'),
       h('div', { class: 'panel' },
-        h('h2', null, '월별 발주'),
+        h('div', { class: 'storehead' },
+          h('div', { class: 'av' }, s.name.slice(0, 1)),
+          h('div', null, h('h1', null, s.name), h('p', null, [L.biz[s.biz], s.owner, s.phone].filter(Boolean).join(' · '))),
+          h('div', { class: 'acts' },
+            h('span', { class: 'stat' }, h('span', { class: `dot${s.kakao ? ' on' : ''}` }), s.kakao ? `카톡 연결 ${s.kakao}명` : '카톡 미연결'),
+            s.kakao ? h('button', { class: 'btn small', onclick: test }, '알림 테스트') : null,
+            s.kakao ? h('button', { class: 'btn small bad', onclick: unlink }, '연결 해제') : null))),
+      h('div', { class: 'kpis' },
+        kpi(`${ym(month)} 발주`, won(sum), `${live.length}건`),
+        kpi('누적 발주', won(all), `${months.reduce((a, m) => a + m.count, 0)}건 · ${months.length}개월`),
+        kpi('평균 발주 금액', live.length ? won(Math.round(sum / live.length)) : '-', ym(month))),
+      h('div', { class: 'panel' },
+        h('h2', null, '거래명세서'),
+        h('div', { class: 'form' },
+          h('label', null, '시작일', pf), h('label', null, '종료일', pt),
+          h('button', { class: 'btn primary', onclick: () => window.open(`/admin/doc/statement?store=${s.id}&from=${pf.value}&to=${pt.value}`, '_blank', 'noopener') }, '명세서 만들기'))),
+      h('div', { class: 'panel' },
+        h('h2', null, '발주 내역'),
         months.length ? h('div', { class: 'filters' }, months.map((m) => h('button', {
           class: `chip${m.month === month ? ' on' : ''}`, onclick: () => openStore(s.id, m.month),
-        }, `${m.month.replace('-', '년 ')}월 · ${m.count}건 · ${won(m.total)}`))) : h('p', { class: 'muted' }, '아직 발주가 없습니다.'),
-        h('div', { class: 'form', style: 'margin-top:8px' },
-          h('label', null, '명세서 시작일', pf), h('label', null, '끝나는 날', pt),
-          h('button', { class: 'btn primary', onclick: () => window.open(`/admin/doc/statement?store=${s.id}&from=${pf.value}&to=${pt.value}`, '_blank', 'noopener') }, '🧾 기간 거래명세서'))),
-      h('div', { class: 'panel' },
-        h('h2', null, `${month.replace('-', '년 ')}월 발주 ${list.length}건 · ${won(sum)}`, h('span', { class: 'small muted' }, ' (취소 제외 합계)')),
-        list.length ? list.map((o) => orderCard(o, true)) : h('p', { class: 'muted' }, '이 달에는 발주가 없습니다.')),
+        }, `${ym(m.month)} · ${m.count}건`))) : null,
+        list.length ? list.map((o) => orderCard(o, true)) : empty('이 달에는 발주가 없어요')),
     ];
   }
 
   // ── 출고 집계 ──
   function pick() {
-    return h('div', { class: 'panel' },
-      h('h2', null, '출고 집계 (접수·확인 주문 합계)'),
-      h('button', { class: 'btn noprint', onclick: () => window.print() }, '인쇄'),
-      D.pick.length ? h('table', null,
-        h('tr', null, h('th', null, '품목'), h('th', null, '규격'), h('th', { class: 'num' }, '수량'), h('th', { class: 'num' }, '매장 수')),
-        D.pick.map((p) => h('tr', null, h('td', null, p.name), h('td', null, p.spec), h('td', { class: 'num' }, `${p.qty}${p.unit}`), h('td', { class: 'num' }, p.stores))))
-        : h('p', { class: 'muted' }, '출고할 주문이 없습니다.'));
+    return [
+      title('출고 집계', '확인 전·출고 전 주문의 품목별 합계예요', h('button', { class: 'btn noprint', onclick: () => window.print() }, '인쇄')),
+      h('div', { class: 'panel' },
+        D.pick.length ? h('div', { class: 'tbl' }, h('table', null,
+          h('tr', null, h('th', null, '품목'), h('th', null, '규격'), h('th', { class: 'num' }, '수량'), h('th', { class: 'num' }, '주문 수')),
+          D.pick.map((p) => h('tr', null, h('td', null, h('b', null, p.name)), h('td', { class: 'muted' }, p.spec), h('td', { class: 'num' }, h('b', null, `${p.qty}${p.unit}`)), h('td', { class: 'num muted' }, `${p.stores}건`)))))
+          : empty('출고할 주문이 없어요')),
+    ];
   }
 
   // ── 품목 승인 ──
   function requests() {
     const L = D.labels;
-    return h('div', { class: 'panel' },
-      h('h2', null, '추가 품목 이용 신청'),
-      D.requests.length ? h('table', null,
-        h('tr', null, h('th', null, '매장'), h('th', null, '업종'), h('th', null, '신청 품목'), h('th', null, '신청 시각'), h('th', null, '')),
-        D.requests.map((r) => h('tr', null,
-          h('td', null, r.store_name), h('td', null, L.biz[r.biz]), h('td', null, L.categories[r.category]), h('td', null, time(r.requested_at)),
-          h('td', null,
-            h('button', { class: 'btn ok', onclick: () => act('/api/admin/access', { store_id: r.store_id, category: r.category, decision: 'approve' }, '승인했습니다') }, '승인'), ' ',
-            h('button', { class: 'btn bad', onclick: () => act('/api/admin/access', { store_id: r.store_id, category: r.category, decision: 'reject' }, '반려했습니다') }, '반려')))))
-        : h('p', { class: 'muted' }, '대기 중인 신청이 없습니다.'));
+    return [
+      title('품목 승인', '기본 품목 외 다른 분류를 발주하려는 신청이에요'),
+      h('div', { class: 'panel' },
+        D.requests.length ? h('div', { class: 'tbl' }, h('table', null,
+          h('tr', null, h('th', null, '매장'), h('th', null, '신청 품목'), h('th', null, '신청 시각'), h('th', null, '')),
+          D.requests.map((r) => h('tr', null,
+            h('td', null, h('b', null, r.store_name), h('div', { class: 'small muted' }, L.biz[r.biz])), h('td', null, L.categories[r.category]), h('td', { class: 'muted' }, time(r.requested_at)),
+            h('td', null, h('div', { class: 'acts' },
+              h('button', { class: 'btn primary small', onclick: () => act('/api/admin/access', { store_id: r.store_id, category: r.category, decision: 'approve' }, '승인했어요') }, '승인'),
+              h('button', { class: 'btn small', onclick: () => act('/api/admin/access', { store_id: r.store_id, category: r.category, decision: 'reject' }, '반려했어요') }, '반려')))))))
+          : empty('기다리는 신청이 없어요')),
+    ];
   }
 
   // ── 매장 ──
@@ -213,7 +244,7 @@
       } catch (e) { toast(e.message); }
     };
     const showCode = async (s) => {
-      try { const r = await call('/api/admin/code', { id: s.id }); flash = { name: s.name, code: r.code }; render(); } catch (e) { toast(e.message); }
+      try { const r = await call('/api/admin/code', { id: s.id }); flash = { name: s.name, code: r.code }; render(); window.scrollTo(0, 0); } catch (e) { toast(e.message); }
     };
     const copyLink = async (s, reset) => {
       if (reset && !confirm(`${s.name} 발주서 링크를 바꿀까요?\n지금까지 보낸 링크와 점주 홈 화면 아이콘은 더 이상 열리지 않습니다.`)) return;
@@ -221,54 +252,61 @@
         const r = await call(reset ? '/api/admin/link-reset' : '/api/admin/link', { id: s.id });
         flash = { name: s.name, link: r.link, store: s };
         render();
+        window.scrollTo(0, 0);
         await navigator.clipboard.writeText(r.link).then(() => toast(reset ? '새 링크를 만들고 복사했어요' : '발주서 링크를 복사했어요'), () => {});
       } catch (e) { toast(e.message); }
     };
+    const copy = (text, msg) => navigator.clipboard.writeText(text).then(() => toast(msg), () => toast('복사하지 못했어요. 주소를 직접 선택해 복사해 주세요'));
     return [
-      D.skillUrl ? h('div', { class: 'panel' },
-        h('h2', null, '카카오 오픈빌더 스킬 URL'),
-        h('p', { class: 'small muted' }, '오픈빌더 → 스킬 → 발주서버 의 URL 칸에 이 주소를 넣고 저장·배포하세요.'),
-        h('p', { class: 'small', style: 'word-break:break-all' }, D.skillUrl),
-        h('button', { class: 'btn', onclick: () => navigator.clipboard.writeText(D.skillUrl).then(() => toast('스킬 URL 을 복사했어요'), () => toast('복사하지 못했어요. 주소를 직접 선택해 복사해 주세요')) }, '복사')) : null,
-      flash ? h('div', { class: 'panel', style: 'border:2px solid #fee500' },
+      title('매장', `${D.stores.length}곳 · 매장 이름을 누르면 발주 내역과 명세서를 볼 수 있어요`),
+      flash ? h('div', { class: 'panel hl' },
         h('h2', null, `${flash.name} — 점주에게 전달하세요`),
-        flash.code ? [h('div', null, '카톡 연결 코드 (한 번만 사용)'), h('div', { class: 'codebox' }, flash.code),
-          h('p', { class: 'small muted' }, '점주가 "투스타글로벌(발주)" 채널을 추가하고 채팅창에 이 6자리를 보내면 매장과 연결됩니다.')] : null,
+        flash.code ? [h('div', { class: 'small muted' }, '카톡 연결 코드 · 한 번만 사용'), h('div', { class: 'codebox' }, flash.code),
+          h('p', { class: 'small muted' }, '점주가 "투스타글로벌(발주)" 채널을 추가하고 채팅창에 이 6자리를 보내면 매장과 연결돼요.')] : null,
         flash.link ? [
-          h('div', null, '발주서 링크 (1년 동안 사용)'),
-          h('p', { class: 'small', style: 'word-break:break-all' }, flash.link),
-          h('p', { class: 'small muted' }, '점주에게 카톡(개인 채팅)이나 문자로 보내 주세요. 점주가 휴대폰 크롬·사파리로 열고 [홈 화면에 추가] 하면 아이콘을 눌러 바로 발주할 수 있습니다.'),
-          h('button', { class: 'btn', onclick: () => navigator.clipboard.writeText(flash.link).then(() => toast('복사했어요'), () => toast('주소를 직접 선택해 복사해 주세요')) }, '복사'), ' ',
-          flash.store ? h('button', { class: 'btn bad', onclick: () => copyLink(flash.store, true) }, '링크 바꾸기 (예전 링크 막기)') : null, ' ',
+          h('div', { class: 'small muted' }, '발주서 링크 · 1년 동안 사용'),
+          h('div', { class: 'url' }, flash.link),
+          h('p', { class: 'small muted' }, '점주에게 카톡이나 문자로 보내 주세요. 휴대폰 크롬·사파리에서 [홈 화면에 추가] 하면 아이콘으로 바로 열려요.'),
         ] : null,
-        h('button', { class: 'btn', onclick: () => { flash = null; render(); } }, '닫기')) : null,
+        h('div', { class: 'acts', style: 'display:flex;gap:6px;flex-wrap:wrap' },
+          flash.link ? h('button', { class: 'btn primary', onclick: () => copy(flash.link, '복사했어요') }, '링크 복사') : null,
+          flash.store ? h('button', { class: 'btn bad', onclick: () => copyLink(flash.store, true) }, '링크 바꾸기 (예전 링크 막기)') : null,
+          h('button', { class: 'btn', onclick: () => { flash = null; render(); } }, '닫기'))) : null,
+      h('div', { class: 'panel' },
+        D.stores.length ? h('div', { class: 'tbl' }, h('table', null,
+          h('tr', null, h('th', null, '매장'), h('th', null, '카톡'), h('th', null, '추가 승인 품목'), h('th', null, '')),
+          D.stores.map((s) => h('tr', null,
+            h('td', null, h('a', { href: '#', onclick: (e) => { e.preventDefault(); openStore(s.id); } }, h('b', null, s.name)),
+              h('div', { class: 'small muted' }, [L.biz[s.biz], s.owner, s.phone].filter(Boolean).join(' · '))),
+            h('td', null, s.kakao
+              ? [h('span', { class: 'stat' }, h('span', { class: 'dot on' }), `연결됨${s.kakao > 1 ? ` ${s.kakao}명` : ''}`), ' ',
+                h('button', {
+                  class: 'btn small bad',
+                  onclick: async () => {
+                    if (!confirm(`${s.name}에 연결된 카톡 ${s.kakao}명의 연결을 모두 끊을까요?\n다시 연결하려면 새 연결 코드를 받아 입력해야 합니다.`)) return;
+                    try { const r = await call('/api/admin/unlink', { id: s.id }); D = r.data; toast(`카톡 ${r.unlinked}명 연결을 끊었어요`); render(); } catch (e) { toast(e.message); }
+                  },
+                }, '해제')]
+              : h('span', { class: 'stat muted' }, h('span', { class: 'dot' }), s.code ? `코드 ${s.code}` : '미연결')),
+            h('td', null, (s.extra || '').split(',').filter(Boolean).map((c) => h('button', {
+              class: 'btn small', title: '누르면 승인 취소',
+              onclick: () => confirm(`${s.name}의 ${L.categories[c]} 승인을 취소할까요?`) && act('/api/admin/access', { store_id: s.id, category: c, decision: 'revoke' }, '승인을 취소했어요'),
+            }, `${L.categories[c]} ✕`)), (s.extra || '') ? null : h('span', { class: 'muted' }, '-')),
+            h('td', null, h('div', { class: 'acts' },
+              h('button', { class: 'btn primary small', onclick: () => openStore(s.id) }, '발주 내역'),
+              h('button', { class: 'btn small', onclick: () => showCode(s) }, '연결 코드'),
+              h('button', { class: 'btn small', onclick: () => copyLink(s) }, '발주서 링크'),
+              h('button', { class: 'btn small bad', onclick: () => confirm(`${s.name} 매장을 숨길까요?\n(주문 기록은 남고, 목록과 카톡 연결에서 빠집니다)`) && act('/api/admin/store-hide', { id: s.id }, '매장을 숨겼어요') }, '숨기기')))))))
+          : empty('아직 매장이 없어요')),
       h('div', { class: 'panel' }, h('h2', null, '매장 추가'),
         h('div', { class: 'form' },
           h('label', null, '매장 이름', name), h('label', null, '업종', biz), h('label', null, '점주', owner), h('label', null, '연락처', phone),
           h('button', { class: 'btn primary', onclick: create }, '추가하고 연결 코드 받기'))),
-      h('div', { class: 'panel' }, h('h2', null, `매장 ${D.stores.length}곳`),
-        h('table', null,
-          h('tr', null, h('th', null, '매장'), h('th', null, '업종'), h('th', null, '추가 승인 품목'), h('th', null, '카톡'), h('th', null, '')),
-          D.stores.map((s) => h('tr', null,
-            h('td', null, h('a', { href: '#', onclick: (e) => { e.preventDefault(); openStore(s.id); } }, h('b', null, s.name)),
-              h('div', { class: 'small muted' }, [s.owner, s.phone].filter(Boolean).join(' · '))),
-            h('td', null, L.biz[s.biz]),
-            h('td', null, (s.extra || '').split(',').filter(Boolean).map((c) => L.categories[c]).join(', ') || '-'),
-            h('td', null, s.kakao ? [`연결됨${s.kakao > 1 ? ` (${s.kakao}명)` : ''}`, h('br'), h('button', {
-              class: 'btn small bad',
-              onclick: async () => {
-                if (!confirm(`${s.name}에 연결된 카톡 ${s.kakao}명의 연결을 모두 끊을까요?\n다시 연결하려면 새 연결 코드를 받아 입력해야 합니다.`)) return;
-                try { const r = await call('/api/admin/unlink', { id: s.id }); D = r.data; toast(`카톡 ${r.unlinked}명 연결을 끊었습니다`); render(); } catch (e) { toast(e.message); }
-              },
-            }, '카톡 연결 해제')] : s.code ? `코드 ${s.code}` : '미연결'),
-            h('td', null,
-              h('button', { class: 'btn primary', onclick: () => openStore(s.id) }, '발주 내역 · 명세서'), ' ',
-              h('button', { class: 'btn', onclick: () => showCode(s) }, '연결 코드'), ' ',
-              h('button', { class: 'btn', onclick: () => copyLink(s) }, '발주서 링크'), ' ',
-              h('button', { class: 'btn bad', onclick: () => confirm(`${s.name} 매장을 숨길까요?\n(주문 기록은 남고, 목록과 카톡 연결에서 빠집니다)`) && act('/api/admin/store-hide', { id: s.id }, '매장을 숨겼습니다') }, '숨기기'),
-              (s.extra || '').split(',').filter(Boolean).map((c) => [' ', h('button', {
-                class: 'btn bad', onclick: () => confirm(`${s.name}의 ${L.categories[c]} 승인을 취소할까요?`) && act('/api/admin/access', { store_id: s.id, category: c, decision: 'revoke' }, '승인을 취소했습니다'),
-              }, `${L.categories[c]} 해제`)])))))),
+      D.skillUrl ? h('div', { class: 'panel' },
+        h('h2', null, '카카오 오픈빌더 스킬 URL'),
+        h('p', { class: 'small muted' }, '오픈빌더 → 스킬 → 발주서버 의 URL 칸에 이 주소를 넣고 저장·배포하세요.'),
+        h('div', { class: 'url' }, D.skillUrl),
+        h('button', { class: 'btn', onclick: () => copy(D.skillUrl, '스킬 URL 을 복사했어요') }, '복사')) : null,
     ];
   }
 
@@ -283,7 +321,7 @@
       const r = await call(item ? '/api/admin/item-delete' : '/api/admin/items-delete-inactive', item ? { id: item.id } : {});
       D = r.data;
       if (editing && item && editing.id === item.id) editing = null;
-      toast(`품목 ${r.deleted}개를 삭제했습니다`);
+      toast(`품목 ${r.deleted}개를 삭제했어요`);
       render();
     } catch (e) { toast(e.message); }
   }
@@ -317,19 +355,20 @@
     input.addEventListener('change', async () => {
       const f = input.files[0];
       if (!f) return;
-      try { await act('/api/admin/item-image', { id: i.id, data: await shrink(f) }, `${i.name} 사진을 올렸습니다`); } catch (e) { toast(e.message); }
+      try { await act('/api/admin/item-image', { id: i.id, data: await shrink(f) }, `${i.name} 사진을 올렸어요`); } catch (e) { toast(e.message); }
     });
     return h('div', { class: 'photo' },
       i.image ? h('img', { class: 'thumb', src: `/img/${i.image}`, alt: '' }) : h('span', { class: 'thumb empty' }, '사진 없음'),
       h('div', null,
         h('button', { class: 'btn small', onclick: () => input.click() }, i.image ? '바꾸기' : '사진 올리기'),
-        i.image ? h('button', { class: 'btn small', onclick: () => confirm(`${i.name} 사진을 지울까요?`) && act('/api/admin/item-image', { id: i.id, remove: true }, '사진을 지웠습니다') }, '지우기') : null),
+        i.image ? h('button', { class: 'btn small', onclick: () => confirm(`${i.name} 사진을 지울까요?`) && act('/api/admin/item-image', { id: i.id, remove: true }, '사진을 지웠어요') }, '지우기') : null),
       input);
   }
   let bulkText = '';
+  let itemCat = null;
   function items() {
     const L = D.labels;
-    const e = editing || { category: 'snack', grp: '', name: '', spec: '', unit: '개', price: '', sort: 0 };
+    const e = editing || { category: itemCat || 'snack', grp: '', name: '', spec: '', unit: '개', price: '', sort: 0 };
     const F = {
       category: h('select', null, Object.entries(L.categories).map(([k, v]) => h('option', { value: k, selected: k === e.category }, v))),
       grp: h('input', { value: e.grp, placeholder: '예: 과자' }),
@@ -344,9 +383,11 @@
       if (editing) body.id = editing.id;
       const was = editing;
       editing = null;
-      if (!(await act('/api/admin/items', body, was ? '수정했습니다' : '추가했습니다'))) editing = was;
+      if (!(await act('/api/admin/items', body, was ? '수정했어요' : '추가했어요'))) editing = was;
     };
-    const byCat = Object.keys(L.categories).map((c) => [c, D.items.filter((i) => i.category === c)]);
+    const cats = Object.keys(L.categories);
+    if (!itemCat || !cats.includes(itemCat)) itemCat = cats[0];
+    const list = D.items.filter((i) => i.category === itemCat);
     // 엑셀에서 복사해 붙여넣기
     const bulkBox = h('textarea', { placeholder: '분류\t묶음\t품목명\t규격\t단위\t단가\n스낵\t과자\t새우깡\t\t개\t1200\n카페\t시럽\t바닐라 시럽 1L\t1L\t병\t11000' });
     bulkBox.value = bulkText;
@@ -362,32 +403,37 @@
         render();
       } catch (e) { toast(e.message); }
     };
-    const bulk = h('div', { class: 'panel bulk' }, h('h2', null, '엑셀에서 한꺼번에 넣기'),
-      h('p', { class: 'small muted' }, '엑셀에서 [분류 · 묶음 · 품목명 · 규격 · 단위 · 단가] 6칸을 순서대로 선택해 복사(⌘C)한 뒤 아래에 붙여넣기(⌘V) 하세요. 분류는 카페 / 스낵 / 음료. 같은 분류에 같은 이름이 있으면 가격 등을 고칩니다.'),
-      bulkBox, bulkErr,
-      h('button', { class: 'btn primary', onclick: runBulk }, '붙여넣은 품목 저장'));
+    const inactive = D.items.filter((i) => !i.active).length;
     return [
-      bulk,
-      D.items.some((i) => !i.active) ? h('div', { class: 'panel' },
-        h('h2', null, `판매 중지한 품목 ${D.items.filter((i) => !i.active).length}개`),
-        h('p', { class: 'small muted' }, '샘플 품목 등을 한꺼번에 정리할 때: 먼저 [판매 중지] 한 뒤 이 버튼을 누르세요. 지난 주문 내역은 그대로 남습니다.'),
-        h('button', { class: 'btn bad', onclick: () => removeItems(null) }, '판매 중지한 품목 모두 삭제')) : null,
-      h('div', { class: 'panel' }, h('h2', null, editing ? `품목 수정 — ${editing.name}` : '품목 한 개 추가'),
+      title('품목', `전체 ${D.items.length}개 · 판매 중 ${D.items.length - inactive}개`),
+      h('div', { class: `panel${editing ? ' hl' : ''}` }, h('h2', null, editing ? `품목 수정 — ${editing.name}` : '품목 하나 추가'),
         h('div', { class: 'form' },
           h('label', null, '분류', F.category), h('label', null, '진열대·묶음', F.grp), h('label', null, '품목 이름', F.name),
           h('label', null, '규격', F.spec), h('label', null, '단위', F.unit), h('label', null, '단가(원)', F.price), h('label', null, '순서', F.sort),
           h('button', { class: 'btn primary', onclick: saveItem }, editing ? '저장' : '추가'),
           editing ? h('button', { class: 'btn', onclick: () => { editing = null; render(); } }, '취소') : null)),
-      byCat.map(([c, list]) => h('div', { class: 'panel' }, h('h2', null, `${L.categories[c]} (${list.length})`),
-        h('table', null,
-          h('tr', null, h('th', null, '사진'), h('th', null, '묶음'), h('th', null, '품목'), h('th', null, '규격'), h('th', { class: 'num' }, '단가'), h('th', null, '')),
+      h('div', { class: 'panel' },
+        h('div', { class: 'seg' }, cats.map((c) => h('button', { class: c === itemCat ? 'on' : null, onclick: () => { itemCat = c; render(); } },
+          `${L.categories[c]} ${D.items.filter((i) => i.category === c).length}`))),
+        list.length ? h('div', { class: 'tbl' }, h('table', null,
+          h('tr', null, h('th', null, '사진'), h('th', null, '품목'), h('th', { class: 'num' }, '단가'), h('th', null, '')),
           list.map((i) => h('tr', { style: i.active ? null : 'opacity:.45' },
             h('td', null, photoCell(i)),
-            h('td', null, i.grp), h('td', null, i.name), h('td', null, i.spec), h('td', { class: 'num' }, won(i.price)),
-            h('td', null,
-              h('button', { class: 'btn', onclick: () => { editing = i; render(); window.scrollTo(0, 0); } }, '수정'), ' ',
-              h('button', { class: 'btn', onclick: () => act('/api/admin/item-active', { id: i.id, active: !i.active }) }, i.active ? '판매 중지' : '다시 판매'), ' ',
-              h('button', { class: 'btn bad', onclick: () => removeItems(i) }, '삭제'))))))),
+            h('td', null, h('b', null, i.name), h('div', { class: 'small muted' }, [i.grp, i.spec, i.active ? null : '판매 중지'].filter(Boolean).join(' · '))),
+            h('td', { class: 'num' }, won(i.price)),
+            h('td', null, h('div', { class: 'acts' },
+              h('button', { class: 'btn small', onclick: () => { editing = i; render(); window.scrollTo(0, 0); } }, '수정'),
+              h('button', { class: 'btn small', onclick: () => act('/api/admin/item-active', { id: i.id, active: !i.active }) }, i.active ? '판매 중지' : '다시 판매'),
+              h('button', { class: 'btn small bad', onclick: () => removeItems(i) }, '삭제')))))))
+          : empty('이 분류에는 품목이 없어요')),
+      inactive ? h('div', { class: 'panel' },
+        h('h2', null, `판매 중지한 품목 ${inactive}개`),
+        h('p', { class: 'small muted' }, '샘플 품목 등을 한꺼번에 정리할 때: 먼저 [판매 중지] 한 뒤 이 버튼을 누르세요. 지난 주문 내역은 그대로 남아요.'),
+        h('button', { class: 'btn bad', onclick: () => removeItems(null) }, '판매 중지한 품목 모두 삭제')) : null,
+      h('div', { class: 'panel bulk' }, h('h2', null, '엑셀에서 한꺼번에 넣기'),
+        h('p', { class: 'small muted' }, '엑셀에서 [분류 · 묶음 · 품목명 · 규격 · 단위 · 단가] 6칸을 순서대로 선택해 복사한 뒤 아래에 붙여넣으세요. 분류는 카페 / 스낵 / 음료. 같은 분류에 같은 이름이 있으면 가격 등을 고쳐요.'),
+        bulkBox, bulkErr,
+        h('button', { class: 'btn primary', onclick: runBulk }, '붙여넣은 품목 저장')),
     ];
   }
 
@@ -403,12 +449,14 @@
       kakaoBotId: inp('kakaoBotId', '예: 64f0…'), kakaoEvent: inp('kakaoEvent', 'order_notice'),
       kakaoRestKey: h('input', { type: 'password', placeholder: S.kakaoKeySet ? '저장됨 (바꿀 때만 입력)' : '카카오 디벨로퍼스 REST API 키', autocomplete: 'off' }),
     };
-    const week = h('input', { type: 'checkbox', checked: S.skipWeekend, style: 'width:auto' });
+    const week = h('input', { type: 'checkbox', checked: S.skipWeekend });
     const save = async (keys, extra = {}) => {
       const body = { ...Object.fromEntries(keys.map((k) => [k, k === 'skipWeekend' ? week.checked : F[k].value])), ...extra };
-      await act('/api/admin/settings', body, '저장했습니다');
+      await act('/api/admin/settings', body, '저장했어요');
     };
+    const on = S.kakaoBotId && S.kakaoKeySet;
     return [
+      title('설정', '확인서·명세서에 들어갈 회사 정보와 알림 방식을 정해요'),
       h('div', { class: 'panel' }, h('h2', null, '회사 정보'),
         h('p', { class: 'small muted' }, '발주 확인서 · 거래명세서의 공급자 칸에 들어갑니다.'),
         h('div', { class: 'form' },
@@ -419,13 +467,13 @@
         h('p', { class: 'small muted' }, `점주에게 "배송 소요 ${S.deliveryMin}~${S.deliveryMax}일" 로 안내하고, 확인 알림에 도착 예정일을 계산해 넣습니다.`),
         h('div', { class: 'form' },
           h('label', null, '배송 최소 (일)', F.deliveryMin), h('label', null, '배송 최대 (일)', F.deliveryMax),
-          h('label', { style: 'flex-direction:row;display:flex;gap:6px;align-items:center' }, week, '주말 제외하고 계산'),
+          h('label', { class: 'check' }, week, '주말 빼고 계산'),
           h('label', null, '단가 부가세', F.vat),
           h('button', { class: 'btn primary', onclick: () => save(['deliveryMin', 'deliveryMax', 'skipWeekend', 'vat']) }, '저장'))),
-      h('div', { class: 'panel' }, h('h2', null, '카톡 자동 알림 (주문 확인 · 출고 · 취소)'),
-        h('p', { class: 'small' }, S.kakaoBotId && S.kakaoKeySet ? '✅ 설정됨 — 주문 상태를 바꾸면 점주 카톡으로 바로 알림이 갑니다.'
-          : '⚪ 설정 전 — 알림은 점주가 채팅방에서 버튼을 누를 때 맨 위에 보입니다. 아래를 설정하면 바로 보내집니다.'),
-        h('ol', { class: 'small muted guide' },
+      h('div', { class: 'panel' }, h('h2', null, '카톡 자동 알림', h('span', { class: 'stat' }, h('span', { class: `dot${on ? ' on' : ''}` }), on ? '켜짐' : '설정 전')),
+        h('p', { class: 'small muted' }, on ? '주문을 확인·출고·취소하면 점주 카톡으로 바로 알림이 가요.'
+          : '지금은 점주가 채팅방에서 버튼을 누를 때 알림이 맨 위에 보여요. 아래를 설정하면 바로 보내져요.'),
+        h('ol', { class: 'small guide' },
           h('li', null, '카카오 디벨로퍼스(developers.kakao.com)에서 앱을 만들고 [앱 키 → REST API 키]를 복사'),
           h('li', null, '오픈빌더 → 이 챗봇 → 설정 → Event API 에서 그 앱을 연결 (안내에 따라 사용 신청)'),
           h('li', null, '오픈빌더에 블록 하나를 새로 만들고, 이벤트 이름을 아래 [이벤트 이름]과 똑같이 적은 뒤 봇 응답을 스킬 데이터(발주서버)로 설정 → 배포'),
