@@ -33,21 +33,35 @@ if (-not (Test-Login)) {
 Write-Host '로그인 확인 완료'
 
 # 3) D1 데이터베이스 (없으면 만들기)
+$UuidRe = '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}'
+$script:LastLookup = ''
 function Find-DbId {
-  $text = (WOut d1 list --json) -join "`n"
-  $i = $text.IndexOf('[')
-  if ($i -lt 0) { return $null }
-  try { $list = $text.Substring($i) | ConvertFrom-Json } catch { return $null }
-  foreach ($d in $list) { if ($d.name -eq $DbName) { return $d.uuid } }
+  # ① 이름으로 바로 조회  ② 목록에서 찾기 — JSON 해석 대신 글자에서 직접 찾아 어떤 출력 모양이든 견딘다
+  $info = (WOut d1 info $DbName --json) -join "`n"
+  $m = [regex]::Match($info, '"uuid"\s*:\s*"(' + $UuidRe + ')"')
+  if ($m.Success) { return $m.Groups[1].Value }
+  $list = (WOut d1 list --json) -join "`n"
+  $script:LastLookup = "[d1 info]`n$info`n[d1 list]`n$list"
+  $name = [regex]::Escape($DbName)
+  $m = [regex]::Match($list, '"uuid"\s*:\s*"(' + $UuidRe + ')"\s*,\s*"name"\s*:\s*"' + $name + '"')
+  if ($m.Success) { return $m.Groups[1].Value }
+  $m = [regex]::Match($list, '"name"\s*:\s*"' + $name + '"[^}]*?"uuid"\s*:\s*"(' + $UuidRe + ')"')
+  if ($m.Success) { return $m.Groups[1].Value }
   return $null
 }
 Say '2/5  데이터베이스(D1) 확인 중…'
 $DbId = Find-DbId
 if (-not $DbId) {
   Write-Host '데이터베이스를 새로 만듭니다 (아시아 지역).'
-  '' | & npx --yes wrangler@4 d1 create $DbName --location apac   # 입력을 넘겨 질문 없이 진행
-  $DbId = Find-DbId
-  if (-not $DbId) { Fail '데이터베이스를 만들지 못했습니다. 위 메시지를 캡처해서 보내 주세요.' }
+  # 입력을 넘겨 질문 없이 진행. 만든 결과에 찍힌 database_id 를 바로 쓴다
+  $created = ('' | & npx --yes wrangler@4 d1 create $DbName --location apac 2>&1 | ForEach-Object { $x = "$_"; Write-Host $x; $x }) -join "`n"
+  $m = [regex]::Match($created, 'database_id\s*=\s*"(' + $UuidRe + ')"')
+  if ($m.Success) { $DbId = $m.Groups[1].Value }
+  if (-not $DbId) { Start-Sleep -Seconds 3; $DbId = Find-DbId }
+  if (-not $DbId) {
+    Write-Host $script:LastLookup -ForegroundColor DarkGray
+    Fail '데이터베이스 번호를 찾지 못했습니다. 위 메시지 전체를 캡처해서 보내 주세요.'
+  }
 }
 Write-Host "데이터베이스: $DbName ($DbId)"
 $toml = Get-Content -LiteralPath 'wrangler.toml' -Raw -Encoding UTF8
