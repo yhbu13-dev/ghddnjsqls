@@ -358,6 +358,14 @@ if (require.main === module) {
   if (!cfg.skillKey) console.log('⚠️  SKILL_KEY 가 없어 카카오 스킬(/kakao/skill)이 꺼져 있습니다.');
   if (!cfg.blockId) console.log('⚠️  BLOCK_ID 가 없어 챗봇 버튼이 "말하기" 방식으로 동작합니다.');
   const { server } = createApp(cfg);
+  server.on('error', (e) => {
+    if (e.code === 'EADDRINUSE') {
+      console.error(`\n⚠️  ${cfg.port} 번 포트를 이미 다른 프로그램(먼저 켠 투스타 발주 서버일 수 있음)이 쓰고 있습니다.`);
+      console.error('   먼저 켜 둔 서버 창을 찾아 Ctrl+C 로 끄거나, 작업 관리자에서 node.exe 를 끝낸 뒤 다시 실행해 주세요.\n');
+      process.exit(1);
+    }
+    throw e;
+  });
   server.listen(cfg.port, cfg.host, () => {
     console.log(`투스타 발주 서버: http://localhost:${cfg.port}/admin`);
     if (cfg.skillKey) console.log(`카카오 스킬 URL: ${cfg.publicUrl}/kakao/skill?key=${cfg.skillKey}`);

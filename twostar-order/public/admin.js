@@ -12,7 +12,7 @@
     });
     const j = await r.json().catch(() => ({}));
     if (r.status === 401 && !path.includes('login')) { location.href = '/admin/login'; throw new Error('로그인이 필요합니다'); }
-    if (!r.ok) throw new Error(j.error || '오류가 났어요');
+    if (!r.ok) throw new Error(j.error || `서버가 응답하지 않아요 (${r.status}). 서버 창(검은 창)이 켜져 있는지 확인해 주세요`);
     return j;
   }
 

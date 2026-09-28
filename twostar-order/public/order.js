@@ -37,7 +37,7 @@
       body: body ? JSON.stringify(body) : undefined,
     });
     const j = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(j.error || '잠시 후 다시 시도해 주세요');
+    if (!r.ok) throw new Error(j.error || `서버에 연결되지 않아요 (${r.status}). 카카오톡에서 발주서를 다시 열어 주세요`);
     return j;
   }
 

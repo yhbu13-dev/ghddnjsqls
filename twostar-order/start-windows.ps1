@@ -66,6 +66,19 @@ $Port = $env:PORT
 if (-not $Port) { $Port = '8080'; $env:PORT = $Port }
 $env:HOST = '127.0.0.1'    # 이 PC 안에서만 받음 (외부 연결은 터널이 담당) → 방화벽 경고 창 안 뜸
 
+# 3-1) 이미 켜진 서버가 있으면 멈춤 (두 번 켜면 주소만 새로 생기고 서버는 부딪힘)
+$busy = $false
+try { $tc = New-Object Net.Sockets.TcpClient; $tc.Connect('127.0.0.1', [int]$Port); $busy = $tc.Connected; $tc.Close() } catch {}
+if ($busy) {
+  Fail ("이미 투스타 발주 서버가 켜져 있습니다 (포트 $Port)." + [Environment]::NewLine +
+        "먼저 켜 둔 검은 창을 찾아 그대로 쓰시거나, 그 창에서 Ctrl + C 로 끈 뒤 다시 실행해 주세요." + [Environment]::NewLine +
+        "(창을 못 찾겠으면 작업 관리자 → node.exe / cloudflared.exe 작업 끝내기)")
+}
+# 창을 X 로 닫으면 터널(cloudflared)만 남을 수 있어 정리
+Get-Process cloudflared -ErrorAction SilentlyContinue | Where-Object {
+  try { $_.Path -and ($_.Path -like (Join-Path $Bin '*')) } catch { $false }
+} | Stop-Process -Force -ErrorAction SilentlyContinue
+
 # 4) 샘플 품목·매장 (데이터가 없을 때만)
 if (-not (Test-Path -LiteralPath (Join-Path $Data 'order.db'))) {
   Say '샘플 품목과 매장을 넣습니다 (데모용)'
