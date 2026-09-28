@@ -66,6 +66,20 @@ async function skill(ctx, body) {
     ], await homeQuick(U, db, userKey)), linked);
   }
 
+  // 링크 버튼이 열리는지 점검: 채팅창에 '링크점검' 입력
+  if (!x.s && utter.replace(/\s/g, '') === '링크점검') {
+    const sheet = store ? ctx.orderLink(store.id) : '';
+    const health = `${new URL(ctx.orderLink(0)).origin}/health`;
+    return U.res([
+      U.card('링크 점검', '버튼을 하나씩 눌러 어떤 것이 열리는지 알려 주세요.', [
+        U.link('① 네이버', 'https://m.naver.com'),
+        U.link('② 서버 점검', health),
+        ...(sheet ? [U.link('③ 발주서', sheet)] : []),
+      ]),
+      U.text(`버튼이 안 열리면 아래 주소를 눌러 보세요.\n\n${health}${sheet ? `\n\n${sheet}` : ''}`),
+    ]);
+  }
+
   if (!store) {
     const out = [U.card('투스타글로벌 발주', '처음 오셨네요!\n담당자에게 받은 연결 코드 6자리를 채팅창에 입력해 주세요.\n(처음 한 번만 입력하면 됩니다)')];
     const quick = ctx.guest?.url ? [U.link(ctx.guest.label || '쇼핑몰 문의하기', ctx.guest.url)] : [];
@@ -131,6 +145,7 @@ async function homeCard(ctx, U, store) {
 async function homeQuick(U, db, userKey) {
   const many = db && (await O.storesOfUser(db, userKey)).length > 1;
   return [
+    U.btn('발주서 링크', { s: 'sheetlink' }),
     U.btn('카톡에서 고르기', { s: 'cats' }),
     U.btn('발주 내역', { s: 'history' }),
     U.btn('품목 추가 신청', { s: 'req' }),
@@ -271,6 +286,11 @@ async function step(ctx, U, store, x, now) {
         `주문번호 ${order.no}\n합계 ${O.won(order.total)}\n\n담당자가 확인하면 알려 드릴게요.`, [
           U.btn('발주 내역', { s: 'history' }),
         ])], [home]);
+    }
+
+    case 'sheetlink': {
+      // 링크 버튼 대신 주소를 글자로 보냄 (카톡이 말풍선 속 주소를 눌러 열 수 있게 바꿔 준다)
+      return U.res([U.text(`📋 ${store.name} 전체 품목 발주서\n아래 주소를 누르면 열려요.\n\n${ctx.orderLink(store.id)}`)], [home]);
     }
 
     case 'history': {

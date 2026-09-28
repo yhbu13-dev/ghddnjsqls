@@ -436,3 +436,18 @@ test('Cloudflare(D1) 모드: 스킬 키·서명 키 자동 생성 · 카톡 발�
   assert.match(after.events.at(-1).text, /새 주문/);
   assert.equal((await call('/kakao/skill?key=wrong', { method: 'POST', body: '{}' })).status, 403);
 });
+
+test('발주서 링크를 글자로 받기 · 링크점검', async () => {
+  const { db, sauna } = await setup();
+  const ctx = { db, blockId: 'B1', orderLink: (id) => `https://x.example/o/tok${id}`, minAmount: 0 };
+  const req = (extra, u = '버튼') => skill(ctx, { userRequest: { user: { id: 'lk' }, utterance: u }, action: { clientExtra: extra } });
+  let r = await req({}, '링크점검');
+  assert.equal(r.template.outputs[0].textCard.buttons.length, 2, '연결 전: 네이버·서버 점검');
+  assert.match(r.template.outputs[1].simpleText.text, /https:\/\/x\.example\/health/);
+  r = await req({}, sauna.code);
+  assert.equal(r.template.quickReplies[0].label, '발주서 링크');
+  r = await req(r.template.quickReplies[0].extra);
+  assert.match(r.template.outputs[0].simpleText.text, new RegExp(`https://x\\.example/o/tok${sauna.id}`));
+  r = await req({}, '링크 점검');
+  assert.deepEqual(r.template.outputs[0].textCard.buttons.map((b) => b.label), ['① 네이버', '② 서버 점검', '③ 발주서']);
+});
