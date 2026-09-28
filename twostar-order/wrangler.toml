@@ -5,6 +5,11 @@ main = "src/worker.mjs"
 compatibility_date = "2025-09-01"
 compatibility_flags = ["nodejs_compat"]   # node:crypto · Buffer 사용
 
+# 회사 주소 (카카오는 workers.dev 주소를 링크로 열어 주지 않아 자체 도메인 사용)
+routes = [
+  { pattern = "order.twostarorder.com", custom_domain = true },
+]
+
 [assets]
 directory = "./public"          # 발주서·관리자 화면 파일
 binding = "ASSETS"
@@ -17,6 +22,7 @@ database_name = "twostar-order"
 database_id = "REPLACE_WITH_D1_ID"   # deploy-cloudflare 가 자동으로 채움
 
 [vars]
+PUBLIC_URL = "https://order.twostarorder.com"   # 발주서 링크·스킬 URL 을 항상 이 주소로 만든다
 BLOCK_ID = "6ab764d9f6804a5978559653"   # 오픈빌더 "발주" 블록 ID
 MIN_ORDER = "0"
 SEED_SAMPLE = "0"                        # 1 = 품목이 하나도 없을 때 샘플 69개·매장 3곳을 넣음 (데모용). 운영 중에는 0

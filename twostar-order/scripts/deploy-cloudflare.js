@@ -132,7 +132,10 @@ async function skillUrlOf(url, password) {
   const dep = wrangler(['deploy'], { show: true }).out;
   const um = dep.match(/https:\/\/[a-z0-9.-]+\.workers\.dev/i);
   if (!um) fail('배포에 실패했거나 주소를 찾지 못했습니다. 위 메시지를 캡처해서 보내 주세요.');
-  const url = um[0];
+  const devUrl = um[0];
+  // wrangler.toml 에 회사 주소(PUBLIC_URL)가 있으면 그 주소를 쓴다 (없으면 workers.dev)
+  const pm = fs.readFileSync(tomlPath, 'utf8').match(/^PUBLIC_URL\s*=\s*"(https:\/\/[^"]+)"/m);
+  const url = pm ? pm[1].replace(/\/+$/, '') : devUrl;
 
   // 4) 관리자 비밀번호
   say('4/5  관리자 비밀번호');
@@ -156,7 +159,8 @@ async function skillUrlOf(url, password) {
 
   // 5) 스킬 URL
   say('5/5  오픈빌더 스킬 URL 가져오는 중…');
-  const skillUrl = password ? await skillUrlOf(url, password) : null;
+  // 회사 주소는 처음 붙일 때 인증서 발급에 몇 분 걸릴 수 있어 workers.dev 로도 시도
+  const skillUrl = password ? (await skillUrlOf(url, password)) || (url !== devUrl ? await skillUrlOf(devUrl, password) : null) : null;
   const copied = skillUrl && copy(skillUrl);
 
   const bar = '─'.repeat(62);
