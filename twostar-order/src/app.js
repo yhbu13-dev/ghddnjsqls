@@ -252,6 +252,11 @@ function createHandler({ db, cfg, assets, log = console.log }) {
         // 매장 숨기기: 주문 기록은 남기고 목록·카톡 연결에서만 뺀다
         const r = await db.run('UPDATE stores SET active = 0, code = NULL WHERE id = ? AND active = 1', [Number(b.id)]);
         if (!r.changes) throw new O.UserError('매장을 찾을 수 없습니다');
+      } else if ((sub === 'item-delete' || sub === 'items-delete-inactive') && m === 'POST') {
+        const r = await O.deleteItems(db, sub === 'item-delete' ? [Number(b.id)] : null);
+        if (sub === 'item-delete' && !r.deleted) throw new O.UserError('품목을 찾을 수 없습니다');
+        for (const name of r.images) await images.remove(db, name);
+        return json(200, { deleted: r.deleted, data: await data() });
       } else if (sub === 'item-active' && m === 'POST') await db.run('UPDATE items SET active = ? WHERE id = ?', [b.active ? 1 : 0, Number(b.id)]);
       else return json(404, { error: 'not found' });
       return json(200, await data());

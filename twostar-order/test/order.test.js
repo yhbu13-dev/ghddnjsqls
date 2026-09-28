@@ -480,3 +480,30 @@ test('발주서 링크: 1년짜리 · 링크 바꾸면 예전 링크 막힘 · �
     server.close();
   }
 });
+
+test('품목 삭제: 하나씩 · 판매 중지 품목 모두 · 지난 주문·장바구니 영향', async () => {
+  const { server, db, base } = await startApp();
+  try {
+    const add = async (name) => (await db.run("INSERT INTO items (category, grp, name, price) VALUES ('snack', '과자', ?, 1000)", [name])).lastRowId;
+    const a = await add('지울과자'); const b = await add('중지과자1'); const c = await add('중지과자2'); const keep = await add('남길과자');
+    const s = await O.createStore(db, { name: '삭제사우나', biz: 'sauna' });
+    const st = await O.storeOf(db, s.id);
+    await O.setQty(db, st, a, 3);
+    const order = (await O.submit(db, st, (await O.cartOf(db, st)).rev)).order;
+    await O.setQty(db, st, b, 2); // 장바구니에 담긴 채로 삭제될 품목
+    let r = await fetch(`${base}/admin/login`, { method: 'POST', body: JSON.stringify({ password: 'pw1234' }) });
+    const H = { cookie: r.headers.get('set-cookie').split(';')[0], 'x-ts': '1' };
+    r = await (await fetch(`${base}/api/admin/item-delete`, { method: 'POST', headers: H, body: JSON.stringify({ id: a }) })).json();
+    assert.equal(r.deleted, 1);
+    assert.ok(!r.data.items.some((i) => i.id === a));
+    assert.equal(r.data.orders.find((o) => o.id === order.id).lines[0].name, '지울과자', '지난 주문 내역은 그대로');
+    await db.run('UPDATE items SET active = 0 WHERE id IN (?, ?)', [b, c]);
+    r = await (await fetch(`${base}/api/admin/items-delete-inactive`, { method: 'POST', headers: H, body: '{}' })).json();
+    assert.equal(r.deleted, 2);
+    assert.deepEqual(r.data.items.map((i) => i.id), [keep]);
+    assert.equal((await O.cartOf(db, st)).count, 0, '장바구니에서도 빠짐');
+    assert.equal((await fetch(`${base}/api/admin/item-delete`, { method: 'POST', headers: H, body: JSON.stringify({ id: 9999 }) })).status, 400);
+  } finally {
+    server.close();
+  }
+});

@@ -192,6 +192,19 @@
 
   // ── 품목 ──
   let editing = null;
+  // 품목 삭제 (item = null 이면 판매 중지한 품목 전부)
+  async function removeItems(item) {
+    const n = D.items.filter((i) => !i.active).length;
+    const msg = item ? `'${item.name}' 품목을 삭제할까요?\n지난 주문 내역은 그대로 남습니다.` : `판매 중지한 품목 ${n}개를 모두 삭제할까요?\n지난 주문 내역은 그대로 남습니다.`;
+    if (!confirm(msg)) return;
+    try {
+      const r = await call(item ? '/api/admin/item-delete' : '/api/admin/items-delete-inactive', item ? { id: item.id } : {});
+      D = r.data;
+      if (editing && item && editing.id === item.id) editing = null;
+      toast(`품목 ${r.deleted}개를 삭제했습니다`);
+      render();
+    } catch (e) { toast(e.message); }
+  }
   // 사진: 브라우저에서 600×600 JPEG로 줄여서 올림 (휴대폰 원본 사진도 OK)
   function shrink(file) {
     return new Promise((resolve, reject) => {
@@ -273,6 +286,10 @@
       h('button', { class: 'btn primary', onclick: runBulk }, '붙여넣은 품목 저장'));
     return [
       bulk,
+      D.items.some((i) => !i.active) ? h('div', { class: 'panel' },
+        h('h2', null, `판매 중지한 품목 ${D.items.filter((i) => !i.active).length}개`),
+        h('p', { class: 'small muted' }, '샘플 품목 등을 한꺼번에 정리할 때: 먼저 [판매 중지] 한 뒤 이 버튼을 누르세요. 지난 주문 내역은 그대로 남습니다.'),
+        h('button', { class: 'btn bad', onclick: () => removeItems(null) }, '판매 중지한 품목 모두 삭제')) : null,
       h('div', { class: 'panel' }, h('h2', null, editing ? `품목 수정 — ${editing.name}` : '품목 한 개 추가'),
         h('div', { class: 'form' },
           h('label', null, '분류', F.category), h('label', null, '진열대·묶음', F.grp), h('label', null, '품목 이름', F.name),
@@ -287,7 +304,8 @@
             h('td', null, i.grp), h('td', null, i.name), h('td', null, i.spec), h('td', { class: 'num' }, won(i.price)),
             h('td', null,
               h('button', { class: 'btn', onclick: () => { editing = i; render(); window.scrollTo(0, 0); } }, '수정'), ' ',
-              h('button', { class: 'btn', onclick: () => act('/api/admin/item-active', { id: i.id, active: !i.active }) }, i.active ? '판매 중지' : '다시 판매'))))))),
+              h('button', { class: 'btn', onclick: () => act('/api/admin/item-active', { id: i.id, active: !i.active }) }, i.active ? '판매 중지' : '다시 판매'), ' ',
+              h('button', { class: 'btn bad', onclick: () => removeItems(i) }, '삭제'))))))),
     ];
   }
 

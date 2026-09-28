@@ -240,6 +240,26 @@ async function importItems(db, text) {
   return { added, updated, errors: [] };
 }
 
+/**
+ * 품목 삭제. 지난 주문은 이름·규격·가격을 따로 저장해 두어 영향 없음.
+ * ids 가 없으면 판매 중지한 품목 전부. 지운 개수와 지울 사진 이름들을 돌려준다.
+ */
+async function deleteItems(db, ids) {
+  const rows = ids
+    ? await db.all(`SELECT id, image FROM items WHERE id IN (${ids.map(() => '?').join(',') || 'NULL'})`, ids.map(Number))
+    : await db.all('SELECT id, image FROM items WHERE active = 0');
+  if (!rows.length) return { deleted: 0, images: [] };
+  const idList = rows.map((r) => r.id);
+  const qs = idList.map(() => '?').join(',');
+  await db.batch([
+    // 담아 둔 매장은 장바구니 버전을 올려 확인 중이던 주문이 옛 내용으로 접수되지 않게
+    [`UPDATE stores SET cart_rev = cart_rev + 1 WHERE id IN (SELECT DISTINCT store_id FROM cart WHERE item_id IN (${qs}))`, idList],
+    [`DELETE FROM cart WHERE item_id IN (${qs})`, idList],
+    [`DELETE FROM items WHERE id IN (${qs})`, idList],
+  ]);
+  return { deleted: rows.length, images: rows.map((r) => r.image).filter(Boolean) };
+}
+
 // ── 장바구니 ─────────────────────────────────────────
 const bumpSql = (storeId) => ['UPDATE stores SET cart_rev = cart_rev + 1 WHERE id = ?', [storeId]];
 
@@ -380,7 +400,7 @@ module.exports = {
   limited, clearAttempts, note,
   createStore, reissueCode, storeOf, storeByUser, storesOfUser, useStore, linkUser,
   categoriesOf, accessStates, requestAccess, decideAccess,
-  itemsFor, groupsFor, orderableItem, parseItems, importItems,
+  itemsFor, groupsFor, orderableItem, parseItems, importItems, deleteItems,
   cartOf, setQty, addQty, replaceCart, clearCart, lastOrder, reorder,
   submit, ordersOf, setStatus, kstDay,
 };
