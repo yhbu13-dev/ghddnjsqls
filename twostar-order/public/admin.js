@@ -149,6 +149,11 @@
       } catch (e) { toast(e.message); }
     };
     return [
+      D.skillUrl ? h('div', { class: 'panel' },
+        h('h2', null, '카카오 오픈빌더 스킬 URL'),
+        h('p', { class: 'small muted' }, '오픈빌더 → 스킬 → 발주서버 의 URL 칸에 이 주소를 넣고 저장·배포하세요.'),
+        h('p', { class: 'small', style: 'word-break:break-all' }, D.skillUrl),
+        h('button', { class: 'btn', onclick: () => navigator.clipboard.writeText(D.skillUrl).then(() => toast('스킬 URL 을 복사했어요'), () => toast('복사하지 못했어요. 주소를 직접 선택해 복사해 주세요')) }, '복사')) : null,
       flash ? h('div', { class: 'panel', style: 'border:2px solid #fee500' },
         h('h2', null, `${flash.name} — 점주에게 전달하세요`),
         flash.code ? [h('div', null, '카톡 연결 코드 (한 번만 사용)'), h('div', { class: 'codebox' }, flash.code),

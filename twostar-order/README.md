@@ -15,7 +15,22 @@
 - 다른 품목은 점주가 [품목 추가 신청] → 관리자가 [품목 승인] 탭에서 승인해야 보입니다. 승인을 해제하면 장바구니에서도 빠집니다.
 - 같은 주문을 두 번 눌러도 한 번만 접수됩니다 (장바구니 버전 확인).
 
-## 0. 클라우드(Render)에 올리기 — 운영 권장
+## 0. Cloudflare 에 올리기 — 운영 권장
+
+PC 를 켜 둘 필요 없고 주소(`https://twostar-order.○○.workers.dev`)가 바뀌지 않습니다.
+Cloudflare Workers(서버) + D1(데이터베이스)을 쓰며, 이 규모는 무료 한도 안에서 운영됩니다.
+
+1. Windows 에서 `twostar-order` 폴더의 **`deploy-cloudflare.bat`** 더블클릭
+2. 브라우저가 열리면 Cloudflare 로그인 → **Allow**
+3. 관리자 비밀번호(8자 이상) 입력
+4. 화면에 나온 **관리자 주소**와 **오픈빌더 스킬 URL**(클립보드에 복사됨)을 사용 → 오픈빌더 스킬 URL 교체 → 배포
+
+- 코드를 새로 받은 뒤 같은 파일을 다시 실행하면 업데이트됩니다. 데이터(D1)는 그대로입니다.
+- 스킬 URL 은 관리자 화면 **[매장] 탭 맨 위**에서도 언제든 복사할 수 있습니다.
+- 카톡 요청 기록: Cloudflare 대시보드 → Workers → twostar-order → **Logs**
+- 실제 운영 전: `wrangler.toml` 의 `SEED_SAMPLE` 을 `"0"` 으로 바꾸고 다시 배포, 샘플 매장은 [숨기기]
+
+## 0-1. (대안) Render 에 올리기
 
 PC 를 켜 둘 필요 없고 주소가 바뀌지 않습니다. 저장소 맨 위의 `render.yaml` 이 설정을 모두 담고 있습니다.
 
@@ -91,4 +106,5 @@ bash start-mac.sh
 npm test
 ```
 
-구성: `src/order.js`(발주 규칙) · `src/kakao.js`(챗봇 화면) · `src/server.js`(HTTP·관리자) · `public/`(발주서·관리자 화면)
+구성: `src/order.js`(발주 규칙) · `src/kakao.js`(챗봇 화면) · `src/app.js`(요청 처리·관리자) · `public/`(발주서·관리자 화면)
+실행 환경: `src/server.js`(내 컴퓨터·Render, SQLite 파일) · `src/worker.mjs`(Cloudflare Workers, D1) — 같은 코드를 씁니다.

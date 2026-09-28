@@ -38,7 +38,7 @@ function lineText(l) {
 /**
  * 스킬 처리. ctx = { db, blockId, orderLink(storeId), minAmount, guest: { label, url }, now }
  */
-function skill(ctx, body) {
+async function skill(ctx, body) {
   const { db } = ctx;
   const now = ctx.now || Date.now();
   const U = ui(ctx.blockId);
@@ -48,22 +48,22 @@ function skill(ctx, body) {
   if (!userKey) return U.res([U.text('사용자 정보를 확인하지 못했어요. 잠시 후 다시 시도해 주세요.')]);
 
   const home = U.btn('처음으로', { s: 'home' });
-  let store = O.storeByUser(db, userKey);
+  let store = await O.storeByUser(db, userKey);
   const code = x.s ? '' : utter.replace(/[\s-]/g, '');
 
   // ── 연결 코드 6자리: 처음 연결 · 다른 지점 추가 모두 여기서 ───────
   if (/^\d{6}$/.test(code)) {
-    if (limited(userKey, now)) return U.res([U.text('입력 횟수를 넘었어요. 10분 뒤에 다시 입력해 주세요.')]);
-    const linked = O.linkUser(db, userKey, code, now);
+    if (await O.limited(db, `link:${userKey}`, 5, 10 * 60e3, now)) return U.res([U.text('입력 횟수를 넘었어요. 10분 뒤에 다시 입력해 주세요.')]);
+    const linked = await O.linkUser(db, userKey, code, now);
     if (!linked) {
       return U.res([U.text('연결 코드가 맞지 않아요. 투스타글로벌 담당자에게 받은 6자리 숫자를 다시 입력해 주세요.\n(코드는 한 번 쓰면 사라져요. 필요하면 새 코드를 받아 주세요)')],
-        store ? tag(homeQuick(U, db, userKey), store) : []);
+        store ? tag(await homeQuick(U, db, userKey), store) : []);
     }
-    const many = O.storesOfUser(db, userKey).length > 1;
+    const many = (await O.storesOfUser(db, userKey)).length > 1;
     return tag(U.res([
       U.text(`✅ ${linked.name} 매장과 연결되었어요.${many ? '\n다른 지점은 [매장 바꾸기]로 오갈 수 있어요.' : '\n이제부터 버튼만 눌러 발주하시면 됩니다.'}`),
-      homeCard(ctx, U, linked),
-    ], homeQuick(U, db, userKey)), linked);
+      await homeCard(ctx, U, linked),
+    ], await homeQuick(U, db, userKey)), linked);
   }
 
   if (!store) {
@@ -75,16 +75,16 @@ function skill(ctx, body) {
 
   // 버튼에는 어느 매장 화면에서 눌렀는지(st)가 들어 있다 → 매장을 바꾼 뒤 예전 버튼을 눌러도 그 매장으로 처리
   if (x.st && Number(x.st) !== store.id) {
-    const other = O.useStore(db, userKey, Number(x.st), now);
+    const other = await O.useStore(db, userKey, Number(x.st), now);
     if (other) store = other;
   }
   if (x.s === 'use') {
-    const next = O.useStore(db, userKey, Number(x.to), now);
-    if (!next) return U.res([U.text('연결되지 않은 매장이에요.')], tag(homeQuick(U, db, userKey), store));
-    return tag(U.res([U.text(`🔄 ${next.name} 매장으로 바꿨어요.`), homeCard(ctx, U, next)], homeQuick(U, db, userKey)), next);
+    const next = await O.useStore(db, userKey, Number(x.to), now);
+    if (!next) return U.res([U.text('연결되지 않은 매장이에요.')], tag(await homeQuick(U, db, userKey), store));
+    return tag(U.res([U.text(`🔄 ${next.name} 매장으로 바꿨어요.`), await homeCard(ctx, U, next)], await homeQuick(U, db, userKey)), next);
   }
   if (x.s === 'stores') {
-    const list = O.storesOfUser(db, userKey);
+    const list = await O.storesOfUser(db, userKey);
     return tag(U.res([
       U.text(`지금 매장: ${store.name}\n다른 지점을 고르세요.\n(새 지점은 담당자에게 받은 연결 코드 6자리를 입력하면 추가돼요)`),
     ], [
@@ -94,7 +94,7 @@ function skill(ctx, body) {
   }
 
   try {
-    return tag(step(ctx, U, store, x, now) || U.res([homeCard(ctx, U, store)], homeQuick(U, db, userKey)), store);
+    return tag((await step(ctx, U, store, x, now)) || U.res([await homeCard(ctx, U, store)], await homeQuick(U, db, userKey)), store);
   } catch (e) {
     if (e instanceof O.UserError) return tag(U.res([U.text(`⚠️ ${e.message}`)], [U.btn('장바구니', { s: 'cart' }), home]), store);
     throw e;
@@ -116,8 +116,8 @@ function tag(res, store) {
   return res;
 }
 
-function homeCard(ctx, U, store) {
-  const cart = O.cartOf(ctx.db, store);
+async function homeCard(ctx, U, store) {
+  const cart = await O.cartOf(ctx.db, store);
   const hint = '👇 [📋 전체 품목 발주서]\n전체 품목을 한 화면에서 보고 수량만 누르면 돼요.';
   const desc = cart.count ? `🛒 장바구니 ${cart.count}품목 · ${O.won(cart.total)}\n\n${hint}` : hint;
   // 주 경로는 발주서(한 화면에서 +/−). 대화창에 메시지가 쌓이지 않는다
@@ -128,8 +128,8 @@ function homeCard(ctx, U, store) {
   ]);
 }
 
-function homeQuick(U, db, userKey) {
-  const many = db && O.storesOfUser(db, userKey).length > 1;
+async function homeQuick(U, db, userKey) {
+  const many = db && (await O.storesOfUser(db, userKey)).length > 1;
   return [
     U.btn('카톡에서 고르기', { s: 'cats' }),
     U.btn('발주 내역', { s: 'history' }),
@@ -138,25 +138,26 @@ function homeQuick(U, db, userKey) {
   ];
 }
 
-function step(ctx, U, store, x, now) {
+async function step(ctx, U, store, x, now) {
   const { db } = ctx;
   const home = U.btn('처음으로', { s: 'home' });
   const toCart = (cart) => U.btn(cart.count ? `장바구니 (${cart.count})` : '장바구니', { s: 'cart' });
 
   switch (x.s) {
     case 'cats': {
-      const cats = O.categoriesOf(db, store);
+      const cats = await O.categoriesOf(db, store);
       if (cats.length === 1) return step(ctx, U, store, { s: 'groups', c: cats[0] }, now);
-      return U.res([U.carousel(cats.map((c) => U.card(O.CATEGORIES[c], `${O.itemsFor(db, store, c).length}개 품목`, [
+      const counts = await Promise.all(cats.map((c) => O.itemsFor(db, store, c, cats).then((l) => l.length)));
+      return U.res([U.carousel(cats.map((c, k) => U.card(O.CATEGORIES[c], `${counts[k]}개 품목`, [
         U.btn('보기', { s: 'groups', c }, `${O.CATEGORIES[c]} 보기`),
       ])))], [home]);
     }
 
     case 'groups': {
       const c = String(x.c || '');
-      const groups = O.groupsFor(db, store, c);
+      const groups = await O.groupsFor(db, store, c);
       if (!groups.length) return U.res([U.text('발주할 수 있는 품목이 없어요.')], [home]);
-      const cart = O.cartOf(db, store);
+      const cart = await O.cartOf(db, store);
       // 분류가 10개를 넘으면 바로가기에서 나머지를 고른다
       return U.res([
         U.text(`${O.CATEGORIES[c] || ''} — 분류를 고르세요`),
@@ -171,10 +172,11 @@ function step(ctx, U, store, x, now) {
       // 새 캐러셀이 항상 대화 맨 아래 · 방금 누른 품목이 첫 장에 온다 (위로 올려서 찾을 필요 없음)
       const c = String(x.c || '');
       const g = String(x.g || '');
-      const all = O.itemsFor(db, store, c).filter((i) => i.grp === g);
+      const cats = await O.categoriesOf(db, store);
+      const all = (await O.itemsFor(db, store, c, cats)).filter((i) => i.grp === g);
       if (!all.length) return U.res([U.text('품목이 없어요.')], [home]);
       const o = Math.min(Math.max(0, Math.trunc(Number(x.o ?? (Number(x.p) || 0) * PAGE) || 0)), all.length - 1);
-      const cart = O.cartOf(db, store);
+      const cart = await O.cartOf(db, store, cats);
       const inCart = new Map(cart.lines.map((l) => [l.item_id, l.qty]));
       const page = all.slice(o, o + PAGE);
       const cards = page.map((i, k) => {
@@ -204,13 +206,13 @@ function step(ctx, U, store, x, now) {
     }
 
     case 'add': {
-      const it = O.orderableItem(db, store, Number(x.i));
+      const it = await O.orderableItem(db, store, Number(x.i));
       if (!it) throw new O.UserError('발주할 수 없는 품목입니다');
-      const qty = O.addQty(db, store, it.id, Math.trunc(Number(x.n) || 0));
+      const qty = await O.addQty(db, store, it.id, Math.trunc(Number(x.n) || 0));
       const msg = qty ? `✔ ${it.name} ${qty}${it.unit} 담았어요` : `✔ ${it.name} 뺐어요`;
       // 같은 캐러셀을 방금 누른 품목부터 다시 보여줌
       if (x.g) return step(ctx, U, store, { s: 'items', c: x.c || it.category, g: x.g, o: x.o, msg }, now);
-      const cart = O.cartOf(db, store);
+      const cart = await O.cartOf(db, store);
       return U.res([U.text(`${msg}\n장바구니 ${cart.count}품목 · ${O.won(cart.total)}`)], [
         ...(cart.count ? [U.btn('주문하기', { s: 'confirm' })] : []),
         toCart(cart),
@@ -219,7 +221,7 @@ function step(ctx, U, store, x, now) {
     }
 
     case 'cart': {
-      const cart = O.cartOf(db, store);
+      const cart = await O.cartOf(db, store);
       if (!cart.count) {
         return U.res([U.card('장바구니가 비어 있어요', '품목을 골라 담거나 지난 발주를 불러오세요.', [
           U.btn('품목 골라 담기', { s: 'cats' }),
@@ -238,18 +240,18 @@ function step(ctx, U, store, x, now) {
     }
 
     case 'clear': {
-      O.clearCart(db, store);
+      await O.clearCart(db, store);
       return U.res([U.text('장바구니를 비웠어요.')], [U.btn('품목 골라 담기', { s: 'cats' }), home]);
     }
 
     case 'reorder': {
-      const n = O.reorder(db, store);
+      const n = await O.reorder(db, store);
       if (!n) return U.res([U.text('불러올 지난 발주가 없어요.')], [U.btn('품목 골라 담기', { s: 'cats' }), home]);
       return step(ctx, U, store, { s: 'cart' }, now);
     }
 
     case 'confirm': {
-      const cart = O.cartOf(db, store);
+      const cart = await O.cartOf(db, store);
       if (!cart.count) return step(ctx, U, store, { s: 'cart' }, now);
       if (cart.total < (ctx.minAmount || 0)) {
         throw new O.UserError(`최소 발주 금액은 ${O.won(ctx.minAmount)}입니다 (현재 ${O.won(cart.total)})`);
@@ -263,8 +265,8 @@ function step(ctx, U, store, x, now) {
     }
 
     case 'submit': {
-      const { order, duplicate } = O.submit(db, store, x.r, { via: 'chat', minAmount: ctx.minAmount || 0 }, now);
-      ctx.onOrder?.(order, duplicate);
+      const { order, duplicate } = await O.submit(db, store, x.r, { via: 'chat', minAmount: ctx.minAmount || 0 }, now);
+      await ctx.onOrder?.(order, duplicate);
       return U.res([U.card(duplicate ? '이미 접수된 주문이에요' : '✅ 주문이 접수되었어요',
         `주문번호 ${order.no}\n합계 ${O.won(order.total)}\n\n담당자가 확인하면 알려 드릴게요.`, [
           U.btn('발주 내역', { s: 'history' }),
@@ -272,14 +274,14 @@ function step(ctx, U, store, x, now) {
     }
 
     case 'history': {
-      const list = O.ordersOf(db, store, 5);
+      const list = await O.ordersOf(db, store, 5);
       if (!list.length) return U.res([U.text('아직 발주 내역이 없어요.')], [home]);
       const lines = list.map((o) => `${o.no}  ${O.STATUS[o.status]}  ${O.won(o.total)}`);
       return U.res([U.text(`📦 최근 발주\n\n${lines.join('\n')}`)], [U.btn('지난 발주 그대로', { s: 'reorder' }), home]);
     }
 
     case 'req': {
-      const states = O.accessStates(db, store).filter((a) => a.state !== 'base');
+      const states = (await O.accessStates(db, store)).filter((a) => a.state !== 'base');
       const label = { none: '신청 가능', pending: '⏳ 승인 대기 중', approved: '✅ 이용 중', rejected: '반려됨 · 다시 신청 가능' };
       return U.res([
         U.text('다른 품목도 발주하시려면 신청해 주세요.\n담당자 승인 후 발주 목록에 나타납니다.'),
@@ -289,8 +291,8 @@ function step(ctx, U, store, x, now) {
     }
 
     case 'reqgo': {
-      const r = O.requestAccess(db, store, String(x.c || ''), now);
-      if (r === 'requested') ctx.onAccess?.(store, x.c);
+      const r = await O.requestAccess(db, store, String(x.c || ''), now);
+      if (r === 'requested') await ctx.onAccess?.(store, x.c);
       return U.res([U.text(r === 'pending'
         ? '이미 신청되어 승인을 기다리고 있어요.'
         : `📨 ${O.CATEGORIES[x.c]} 이용을 신청했어요.\n승인되면 발주 목록에 바로 나타납니다.`)], [home]);
@@ -299,17 +301,6 @@ function step(ctx, U, store, x, now) {
     default:
       return null;
   }
-}
-
-// 연결 코드 대입 방지: 사용자당 10분에 5번
-const tries = new Map();
-function limited(key, now, max = 5, windowMs = 10 * 60e3) {
-  const arr = (tries.get(key) || []).filter((t) => now - t < windowMs);
-  if (tries.size > 5000) tries.clear();
-  tries.set(key, arr);
-  if (arr.length >= max) return true;
-  arr.push(now);
-  return false;
 }
 
 module.exports = { skill };
