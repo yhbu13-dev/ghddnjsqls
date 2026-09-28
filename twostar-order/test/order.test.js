@@ -321,3 +321,32 @@ test('모든 카톡 화면이 오픈빌더 응답 규격을 지킨다 (42품목 
   say({}, '123456'); say({ s: 'use', to: 99999 });
   assert.ok(seen.size > 20);
 });
+
+test('클라우드 설정: 고정 주소 · 첫 실행 샘플 · 접속자별 로그인 제한 · 매장 숨기기', async () => {
+  const { config } = require('../src/server');
+  const c = config({ RENDER_EXTERNAL_URL: 'https://twostar-order.onrender.com/', SECRET: 's', DATA_DIR: '/tmp/x', TRUST_PROXY: '1', SEED_SAMPLE: '1' });
+  assert.equal(c.publicUrl, 'https://twostar-order.onrender.com');
+  assert.equal(config({ PUBLIC_URL: 'https://a.example', RENDER_EXTERNAL_URL: 'https://b', SECRET: 's' }).publicUrl, 'https://a.example');
+  const { server, db } = createApp({ ...c, port: 0, adminPassword: 'pw', skillKey: 'k', guest: {}, dbFile: ':memory:', imageDir: '/tmp/x/img' });
+  await new Promise((r) => server.listen(0, r));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  try {
+    assert.equal(db.get('SELECT COUNT(*) AS n FROM items').n, 69, '첫 실행에 샘플 품목');
+    const login = (ip, password) => fetch(`${base}/admin/login`, { method: 'POST', headers: { 'x-forwarded-for': ip }, body: JSON.stringify({ password }) });
+    for (let i = 0; i < 10; i++) await login('1.1.1.1', 'no');
+    assert.equal((await login('1.1.1.1', 'pw')).status, 429, '같은 접속자는 잠김');
+    const ok = await login('2.2.2.2', 'pw');
+    assert.equal(ok.status, 200, '다른 접속자는 영향 없음');
+    assert.match(ok.headers.get('set-cookie'), /Secure/);
+    const H = { cookie: ok.headers.get('set-cookie').split(';')[0], 'x-ts': '1' };
+    const u = 'hidden-user';
+    const s = db.get("SELECT * FROM stores WHERE name = '카페 온도'");
+    O.linkUser(db, u, s.code);
+    let r = await fetch(`${base}/api/admin/store-hide`, { method: 'POST', headers: H, body: JSON.stringify({ id: s.id }) });
+    assert.ok(!(await r.json()).stores.some((x) => x.id === s.id));
+    assert.equal(O.storeByUser(db, u), null, '숨긴 매장은 카톡에서도 빠짐');
+    assert.equal(db.get('SELECT code FROM stores WHERE id = ?', [s.id]).code, null);
+  } finally {
+    server.close();
+  }
+});

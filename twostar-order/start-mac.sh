@@ -54,6 +54,7 @@ if [ ! -f "$CONF" ]; then
   say "설정 파일을 만들었습니다: $CONF (비밀번호·키가 들어 있으니 남에게 보내지 마세요)"
 fi
 set -a; . "$CONF"; set +a
+export HOST=127.0.0.1 TRUST_PROXY=1   # 이 Mac 안에서만 받고(외부는 터널이 담당), 터널이 알려 주는 접속자 주소 사용
 
 # 4) 샘플 품목·매장 (데이터가 없을 때만)
 if [ ! -f "$DATA/order.db" ]; then
@@ -65,7 +66,7 @@ fi
 say "외부 주소 만드는 중…"
 LOG="$DATA/tunnel.log"
 : > "$LOG"
-"$CF" tunnel --no-autoupdate --url "http://localhost:$PORT" > "$LOG" 2>&1 &
+"$CF" tunnel --no-autoupdate --url "http://127.0.0.1:$PORT" > "$LOG" 2>&1 &
 CF_PID=$!
 trap 'kill $CF_PID 2>/dev/null' EXIT
 PUBLIC_URL=""

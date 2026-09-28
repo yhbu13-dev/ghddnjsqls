@@ -65,6 +65,7 @@ foreach ($line in Get-Content -LiteralPath $Conf) {
 $Port = $env:PORT
 if (-not $Port) { $Port = '8080'; $env:PORT = $Port }
 $env:HOST = '127.0.0.1'    # 이 PC 안에서만 받음 (외부 연결은 터널이 담당) → 방화벽 경고 창 안 뜸
+$env:TRUST_PROXY = '1'     # 터널이 알려 주는 실제 접속자 주소로 로그인 시도 횟수를 센다
 
 # 3-1) 이미 켜진 서버가 있으면 멈춤 (두 번 켜면 주소만 새로 생기고 서버는 부딪힘)
 $busy = $false

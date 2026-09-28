@@ -169,7 +169,8 @@
             h('td', null, s.kakao ? `연결됨${s.kakao > 1 ? ` (${s.kakao}명)` : ''}` : s.code ? `코드 ${s.code}` : '미연결'),
             h('td', null,
               h('button', { class: 'btn', onclick: () => showCode(s) }, '연결 코드'), ' ',
-              h('button', { class: 'btn', onclick: () => copyLink(s) }, '발주서 링크'),
+              h('button', { class: 'btn', onclick: () => copyLink(s) }, '발주서 링크'), ' ',
+              h('button', { class: 'btn bad', onclick: () => confirm(`${s.name} 매장을 숨길까요?\n(주문 기록은 남고, 목록과 카톡 연결에서 빠집니다)`) && act('/api/admin/store-hide', { id: s.id }, '매장을 숨겼습니다') }, '숨기기'),
               (s.extra || '').split(',').filter(Boolean).map((c) => [' ', h('button', {
                 class: 'btn bad', onclick: () => confirm(`${s.name}의 ${L.categories[c]} 승인을 취소할까요?`) && act('/api/admin/access', { store_id: s.id, category: c, decision: 'revoke' }, '승인을 취소했습니다'),
               }, `${L.categories[c]} 해제`)])))))),

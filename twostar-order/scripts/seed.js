@@ -1,5 +1,6 @@
 'use strict';
 // 샘플 품목·매장 넣기 (데모용). 이미 품목이 있으면 건너뜀.
+// 클라우드에서는 SEED_SAMPLE=1 이면 서버가 처음 켜질 때 자동으로 넣는다.
 //   npm run seed
 
 const path = require('node:path');
@@ -26,12 +27,11 @@ const BEV = {
   '생수·기타': [['삼다수 500 20입', 9500], ['삼다수 2L 6입', 6500], ['갈아만든배 238 24입', 16000], ['옥수수수염차 500 20입', 18000]],
 };
 
-function main() {
-  const file = process.env.DB_FILE || path.join(process.env.DATA_DIR || path.join(__dirname, '../data'), 'order.db');
-  const db = open(file);
+/** 품목이 하나도 없을 때만 샘플을 넣는다. 넣었으면 true */
+function seed(db, log = console.log) {
   if (db.get('SELECT COUNT(*) AS n FROM items').n > 0) {
-    console.log('이미 품목이 있어 건너뜁니다.');
-    return;
+    log('이미 품목이 있어 건너뜁니다.');
+    return false;
   }
   db.tx(() => {
     let sort = 0;
@@ -54,9 +54,15 @@ function main() {
   ];
   for (const s of stores) {
     const r = O.createStore(db, s);
-    console.log(`${s.name} (${O.BIZ[s.biz].label}) 연결 코드: ${r.code}`);
+    log(`${s.name} (${O.BIZ[s.biz].label}) 연결 코드: ${r.code}`);
   }
-  console.log(`품목 ${db.get('SELECT COUNT(*) AS n FROM items').n}개를 넣었습니다.`);
+  log(`품목 ${db.get('SELECT COUNT(*) AS n FROM items').n}개를 넣었습니다.`);
+  return true;
 }
 
-main();
+if (require.main === module) {
+  const file = process.env.DB_FILE || path.join(process.env.DATA_DIR || path.join(__dirname, '../data'), 'order.db');
+  seed(open(file));
+}
+
+module.exports = { seed };

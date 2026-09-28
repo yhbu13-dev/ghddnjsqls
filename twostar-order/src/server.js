@@ -37,7 +37,10 @@ function config(env = process.env) {
   return {
     port: Number(env.PORT || 8080),
     host: env.HOST || undefined, // 127.0.0.1 이면 이 컴퓨터 안에서만 접속 (터널이 대신 외부 연결)
-    publicUrl: String(env.PUBLIC_URL || `http://localhost:${env.PORT || 8080}`).replace(/\/+$/, ''),
+    // Render 는 RENDER_EXTERNAL_URL 에 고정 주소(https://….onrender.com)를 넣어 준다
+    publicUrl: String(env.PUBLIC_URL || env.RENDER_EXTERNAL_URL || `http://localhost:${env.PORT || 8080}`).replace(/\/+$/, ''),
+    trustProxy: env.TRUST_PROXY === '1', // 앞단 프록시(Render·터널)가 넣어 주는 X-Forwarded-For 로 접속자 구분
+    seedSample: env.SEED_SAMPLE === '1',
     adminPassword: env.ADMIN_PASSWORD || '',
     skillKey: env.SKILL_KEY || '',
     blockId: env.BLOCK_ID || '',
@@ -110,6 +113,7 @@ function safeEq(a, b) {
 // ── 앱 ──────────────────────────────────────────────
 function createApp(cfg) {
   const db = open(cfg.dbFile);
+  if (cfg.seedSample) require('../scripts/seed').seed(db, (m) => console.log(`[샘플] ${m}`));
   const imageDir = cfg.imageDir || path.join(os.tmpdir(), `twostar-img-${process.pid}`);
   const tk = tokens.make(cfg.secret);
   const orderLink = (storeId) => `${cfg.publicUrl}/o/${tk.sign('o', storeId, LINK_TTL)}`;
@@ -282,7 +286,7 @@ function createApp(cfg) {
     if (p === '/admin/login') {
       if (m === 'GET') return send(res, 200, page('login'), 'text/html; charset=utf-8');
       if (m === 'POST') {
-        const ip = req.socket.remoteAddress || '';
+        const ip = (cfg.trustProxy && String(req.headers['x-forwarded-for'] || '').split(',')[0].trim()) || req.socket.remoteAddress || '';
         const fails = (loginFails.get(ip) || []).filter((t) => Date.now() - t < 15 * 60e3);
         if (fails.length >= 10) return send(res, 429, { error: '잠시 후 다시 시도해 주세요' });
         const b = await readJson(req);
@@ -331,6 +335,10 @@ function createApp(cfg) {
         const name = b.remove ? '' : images.save(imageDir, it.id, b.data);
         db.run('UPDATE items SET image = ? WHERE id = ?', [name, it.id]);
         images.remove(imageDir, it.image);
+      } else if (sub === 'store-hide' && m === 'POST') {
+        // 매장 숨기기: 주문 기록은 남기고 목록·카톡 연결에서만 뺀다
+        const r = db.run('UPDATE stores SET active = 0, code = NULL WHERE id = ? AND active = 1', [Number(b.id)]);
+        if (!r.changes) throw new O.UserError('매장을 찾을 수 없습니다');
       } else if (sub === 'item-active' && m === 'POST') db.run('UPDATE items SET active = ? WHERE id = ?', [b.active ? 1 : 0, Number(b.id)]);
       else return send(res, 404, { error: 'not found' });
       return send(res, 200, adminData());
