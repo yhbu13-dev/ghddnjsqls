@@ -114,14 +114,22 @@ const STATEMENTS = SCHEMA.split(';')
   .map((s) => s.split('\n').map((l) => l.replace(/--.*$/, '')).join('\n').trim())
   .filter(Boolean);
 
+// 구조가 바뀌면 이 값이 바뀐다 → 이미 준비된 DB 는 확인 한 번으로 건너뜀 (클라우드는 서버가 자주 새로 켜져서 중요)
+const VERSION = `${require('node:crypto').createHash('sha256').update(SCHEMA).digest('hex').slice(0, 12)}-m3`;
+
 /** 테이블 만들기 + 예전 버전 DB 업그레이드. 여러 번 불러도 안전 */
 async function migrate(db) {
+  try {
+    const row = await db.get("SELECT value FROM meta WHERE key = 'schema'");
+    if (row && row.value === VERSION) return;
+  } catch { /* 처음: meta 테이블이 아직 없음 */ }
   await db.batch(STATEMENTS.map((s) => [s, []]));
   const cols = await db.all('PRAGMA table_info(items)');
   if (!cols.some((c) => c.name === 'image')) await db.run("ALTER TABLE items ADD COLUMN image TEXT NOT NULL DEFAULT ''");
   const scols = await db.all('PRAGMA table_info(stores)');
   if (!scols.some((c) => c.name === 'link_ver')) await db.run('ALTER TABLE stores ADD COLUMN link_ver INTEGER NOT NULL DEFAULT 0');
   await db.run('INSERT OR IGNORE INTO user_stores (user_key, store_id, linked_at) SELECT user_key, store_id, linked_at FROM links');
+  await db.run("INSERT INTO meta (key, value) VALUES ('schema', ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value", [VERSION]);
 }
 
 /** 서버가 스스로 만들어 보관하는 값 (없으면 만들어 저장) */

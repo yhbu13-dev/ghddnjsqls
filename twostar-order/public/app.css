@@ -10,6 +10,8 @@
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
 body { margin: 0; background: #fff; color: var(--g900); font: 16px/1.5 var(--font); letter-spacing: -0.01em; -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent; }
+/* 빠르게 연속으로 눌러도 '두 번 눌러 확대'로 착각하지 않게 (휴대폰 누름 지연 없앰) */
+html, button, a, input, select { touch-action: manipulation; }
 button { font: inherit; letter-spacing: inherit; cursor: pointer; border: 0; background: none; color: inherit; }
 button:disabled { cursor: default; }
 a { color: var(--blue); text-decoration: none; }

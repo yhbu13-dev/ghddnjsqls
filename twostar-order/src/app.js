@@ -196,7 +196,12 @@ function createHandler({ db, cfg, assets, log = console.log, fetch: fetchImpl = 
       const act = mm[2];
       if (!act && m === 'GET') return json(200, await sheetView(store, url.searchParams.get('fresh') === '1', docLink));
       const b = await readJson(request);
-      if (act === 'cart' && m === 'PUT') { await O.replaceCart(db, store, b.cart); return json(200, await sheetView(store)); }
+      if (act === 'cart' && m === 'PUT') {
+        // 수량을 바꿀 때마다 불리므로 가볍게: 장바구니 버전과 수량만 돌려준다
+        await O.replaceCart(db, store, b.cart);
+        const c = await O.cartOf(db, store);
+        return json(200, { rev: c.rev, cart: Object.fromEntries(c.lines.map((l) => [l.item_id, l.qty])) });
+      }
       if (act === 'reorder' && m === 'POST') { await O.reorder(db, store); return json(200, await sheetView(store)); }
       if (act === 'request' && m === 'POST') {
         const r = await O.requestAccess(db, store, String(b.category || ''));
@@ -346,18 +351,19 @@ function createHandler({ db, cfg, assets, log = console.log, fetch: fetchImpl = 
       cart = await O.cartOf(db, store);
       prefilled = cart.count > 0;
     }
-    const last = await O.lastOrder(db, store);
+    // 서로 관계없는 조회는 한꺼번에 (클라우드 DB 왕복 시간을 줄임)
+    const [last, cats, access, s, recent] = await Promise.all([
+      O.lastOrder(db, store), O.categoriesOf(db, store), O.accessStates(db, store), O.getSettings(db), O.ordersOf(db, store, 5),
+    ]);
     const lastQty = {};
     if (last) for (const l of last.lines) lastQty[l.item_id] = l.qty;
-    const cats = await O.categoriesOf(db, store);
     const items = (await O.itemsFor(db, store, null, cats)).map((i) => ({
       id: i.id, category: i.category, grp: i.grp, name: i.name, spec: i.spec, unit: i.unit, price: i.price, image: i.image, last: lastQty[i.id] || 0,
     }));
-    const s = await O.getSettings(db);
     return {
       store: { name: store.name, biz: O.BIZ[store.biz].label },
       categories: cats.map((c) => ({ id: c, label: O.CATEGORIES[c] })),
-      access: await O.accessStates(db, store),
+      access,
       items,
       cart: Object.fromEntries(cart.lines.map((l) => [l.item_id, l.qty])),
       rev: cart.rev,
@@ -367,7 +373,7 @@ function createHandler({ db, cfg, assets, log = console.log, fetch: fetchImpl = 
       rules: { cutoffHour: s.cutoffHour, deliveryMin: s.deliveryMin, deliveryMax: s.deliveryMax, skipWeekend: s.skipWeekend },
       eta: O.eta(Date.now(), s),
       last: last ? { no: last.no, at: last.created_at, total: last.total } : null,
-      orders: (await O.ordersOf(db, store, 5)).map((o) => ({
+      orders: recent.map((o) => ({
         no: o.no, status: O.STATUS[o.status], total: o.total, at: o.created_at, doc: docLink ? docLink(o.id) : null,
       })),
     };

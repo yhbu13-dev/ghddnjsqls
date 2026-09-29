@@ -12,6 +12,10 @@ routes = [
   { pattern = "order.twostarorder.com", custom_domain = true },
 ]
 
+# 서버 코드를 DB(D1) 가까운 곳에서 실행 → 한 요청에 DB 를 여러 번 읽을 때 빨라짐
+[placement]
+mode = "smart"
+
 [assets]
 directory = "./public"          # 발주서·관리자 화면 파일
 binding = "ASSETS"
