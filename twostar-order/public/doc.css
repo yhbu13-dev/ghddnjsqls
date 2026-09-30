@@ -57,3 +57,47 @@ table.lines tr.first td { border-top: 1px solid #9ca3af; }
   table.lines th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   tr { break-inside: avoid; }
 }
+
+/* ── 발주 확인서: 종이 거래명세표 양식 ── */
+.fwrap { padding: 8px 12px 40px; }
+.fdoc { --ln: #2743d8; position: relative; width: 760px; margin: 0 auto; background: #fff; padding: 22px; color: #111; font-size: 13px; box-shadow: 0 1px 3px rgba(0,0,0,.08), 0 8px 24px rgba(0,0,0,.06); transform-origin: top left; }
+.fdoc table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.fdoc th, .fdoc td { border: 1px solid var(--ln); padding: 4px 6px; vertical-align: middle; }
+.fdoc th { color: var(--ln); font-weight: 500; text-align: center; font-size: 12px; line-height: 1.2; }
+.fdoc .n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fdoc .c { text-align: center; }
+.ftop { margin-bottom: -1px; }
+.ftop th.lb { width: 56px; }
+.ftop td.dt { width: 200px; font-size: 13px; }
+.ftop td.ttl { text-align: center; border: 0; padding: 6px 0; }
+.ftop td.ttl span { display: inline-block; border: 1.5px solid var(--ln); color: var(--ln); font-size: 24px; letter-spacing: 6px; padding: 2px 22px; }
+.ftop td.rt { width: 110px; border: 0; color: var(--ln); font-size: 12px; text-align: right; vertical-align: top; }
+.fparty .cv { width: 24px; } .fparty .ck { width: 40px; } .fparty .cn { width: 70px; }
+.fparty th.v { padding: 2px; }
+.fparty td { height: 30px; font-size: 13px; }
+.fparty td.big { font-size: 16px; text-align: center; letter-spacing: 1px; }
+.flines .w-u { width: 48px; } .flines .w-q { width: 62px; } .flines .w-p { width: 80px; } .flines .w-a { width: 96px; } .flines .w-t { width: 84px; }
+.flines thead th { font-size: 14px; letter-spacing: 2px; padding: 6px; }
+.flines td { height: 30px; border-top-color: #c9d1f7; border-bottom-color: #c9d1f7; }
+.flines td.nm { word-break: keep-all; }
+.flines td.blank-end { text-align: center; color: #333; letter-spacing: 1px; }
+.fnote { margin-top: -1px; }
+.fnote th.v { width: 44px; }
+.fnote td { height: 76px; line-height: 1.7; font-size: 12.5px; vertical-align: top; }
+.fsum { margin-top: -1px; }
+.fsum th { width: 44px; }
+.fsum td { font-size: 14px; }
+.fsum td.grand { font-weight: 700; font-size: 15px; }
+.fsum td.sig { width: 96px; }
+.fconfirm { text-align: right; margin: 12px 0 0; font-size: 12.5px; color: #333; }
+@media print {
+  .fwrap { padding: 0; }
+  .fdoc { box-shadow: none; padding: 0; width: 100%; transform: none !important; }
+  .fdoc th, .fdoc td { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+.pdfout { position: fixed; inset: 0; z-index: 30; overflow: auto; background: #eef0f3; padding: 12px; }
+.pdfout-hd { position: sticky; top: 0; background: #fff; border-radius: 12px; padding: 12px; margin-bottom: 12px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+.pdfout-hd p { margin: 0; flex: 1 1 100%; font-size: 14px; color: #333; }
+.pdfout img { display: block; width: 100%; max-width: 800px; margin: 0 auto 12px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+.tbtn:disabled { opacity: .6; }
+.toolbar .tbtn.primary { margin-left: auto; }

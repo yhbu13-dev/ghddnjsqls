@@ -33,6 +33,9 @@ const FILES = {
   '/assets/admin.js': ['admin.js', 'text/javascript; charset=utf-8'],
   '/assets/doc.css': ['doc.css', 'text/css; charset=utf-8'],
   '/assets/doc.js': ['doc.js', 'text/javascript; charset=utf-8'],
+  // 확인서·명세서를 휴대폰에서 바로 PDF 파일로 (MIT 라이선스, [PDF 저장]을 누를 때만 불러옴)
+  '/assets/html2canvas.min.js': ['html2canvas.min.js', 'text/javascript; charset=utf-8'],
+  '/assets/jspdf.umd.min.js': ['jspdf.umd.min.js', 'text/javascript; charset=utf-8'],
   '/assets/icon-192.png': ['icon-192.png', 'image/png'],
   '/assets/icon-512.png': ['icon-512.png', 'image/png'],
 };

@@ -589,7 +589,9 @@ test('주문 확인 → 카톡 알림(Event API · 채팅방) · 발주 확인�
   let html = await r.text();
   assert.match(html, /발주 확인서/);
   assert.match(html, /새우깡 &lt;b&gt;/);
-  assert.match(html, /11,000원/);
+  assert.match(html, /₩11,000/);
+  assert.match(html, /발 주 확 인 서/);
+  assert.match(html, /₩12,100/);
   assert.equal((await call('/d/d.1.xxxxxx.forgedforgedforged')).status, 404);
 
   // 설정 전: 확인 처리 → 알림은 DB 에 쌓이고, 점주가 채팅방을 열면 맨 위에 보임

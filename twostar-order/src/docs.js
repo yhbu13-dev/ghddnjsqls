@@ -39,7 +39,7 @@ function vatSplit(amount, vat) {
 }
 const VAT_NOTE = { included: '단가는 부가세 포함 금액입니다.', excluded: '단가는 부가세 별도 금액입니다.', none: '면세 품목입니다.' };
 
-function page(title, body, { back } = {}) {
+function page(title, body, { back, file = 'twostar' } = {}) {
   return `<!doctype html><html lang="ko"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(title)}</title>
@@ -47,7 +47,8 @@ function page(title, body, { back } = {}) {
 <script src="/assets/doc.js" defer></script></head>
 <body><div class="toolbar noprint">
 ${back ? `<a class="tbtn" href="${esc(back)}">← 관리자</a>` : ''}
-<button class="tbtn primary" type="button" data-print>인쇄 · PDF 저장</button></div>
+<button class="tbtn primary" type="button" data-pdf="${esc(file.replace(/[^\w.-]+/g, '_'))}">PDF 저장</button></div>
+<div id="pdfout" class="pdfout noprint" hidden></div>
 ${body}
 </body></html>`;
 }
@@ -68,37 +69,61 @@ const parties = (settings, store, a = '공급자', b = '공급받는자') => `
 </div>`;
 
 /** 발주 확인서: order = orderWithStore(...) */
+/** 발주 확인서: 종이 거래명세표 양식 (파란 선 칸) — order = orderWithStore(...) */
 function orderDoc(order, settings, { back } = {}) {
   const store = order.store;
   const base = order.status === 'received' ? order.created_at : order.updated_at;
   const e = O.eta(base, settings);
-  // 줄마다 공급가액·부가세(10%)를 계산하고 그 합으로 합계 (명세서와 같은 방식이라 1원도 안 어긋남)
+  // 줄마다 공급가액·세액(10%)을 계산하고 그 합으로 합계 (명세서와 같은 방식이라 1원도 안 어긋남)
   const lv = order.lines.map((l) => vatSplit(l.price * l.qty, settings.vat));
   const v = lv.reduce((a, x) => ({ supply: a.supply + x.supply, tax: a.tax + x.tax, total: a.total + x.total }), { supply: 0, tax: 0, total: 0 });
   const canceled = order.status === 'canceled';
-  const rows = order.lines.map((l, i) => `<tr><td class="c hide-m">${i + 1}</td><td>${esc(l.name)}${l.spec ? `<div class="muted show-m">${esc(l.spec)}</div>` : ''}</td><td class="hide-m">${esc(l.spec)}</td>
-    <td class="n">${num(l.qty)}${esc(l.unit)}</td><td class="n">${num(l.price)}</td><td class="n">${num(lv[i].supply)}</td><td class="n">${num(lv[i].tax)}</td></tr>`).join('');
-  const body = `<article class="doc${canceled ? ' void' : ''}">
-<header class="dh"><div><h1>발주 확인서</h1><div class="sub">주문번호 <b>${esc(order.no)}</b></div></div>
-<div class="stamp st-${esc(order.status)}">${esc(O.STATUS[order.status])}</div></header>
-${parties(settings, store, '공급처', '발주처')}
-<dl class="facts">
-  <div><dt>주문 일시</dt><dd>${when(order.created_at)}</dd></div>
-  <div><dt>접수 경로</dt><dd>${order.via === 'chat' ? '카카오톡' : '발주서'}</dd></div>
-  <div><dt>품목 수</dt><dd>${order.lines.length}품목</dd></div>
-  <div><dt>배송 예정</dt><dd>${canceled ? '-' : `${esc(e.range)} <span class="muted">(${esc(e.days)}${settings.skipWeekend ? ', 주말 제외' : ''})</span>`}</dd></div>
-</dl>
-<table class="lines"><thead><tr><th class="c hide-m">No</th><th>품목</th><th class="hide-m">규격</th><th class="n">수량</th><th class="n">단가</th><th class="n">공급가액</th><th class="n">부가세(10%)</th></tr></thead>
-<tbody>${rows}</tbody></table>
-<div class="sum">
-  ${settings.vat === 'none' ? '' : `<div><span>공급가액</span><b>${num(v.supply)}원</b></div><div><span>부가세</span><b>${num(v.tax)}원</b></div>`}
-  <div class="grand"><span>합계</span><b>${num(v.total)}원</b></div>
-</div>
-${order.memo ? `<p class="memo"><b>요청 사항</b> ${esc(order.memo)}</p>` : ''}
-<p class="fine">${VAT_NOTE[settings.vat]} ${canceled ? '이 주문은 취소되었습니다.' : '위와 같이 발주를 확인합니다.'}</p>
-<footer class="sign">${day(Date.now())}<br><b>${esc(settings.company)}</b>${settings.tel ? ` · ${esc(settings.tel)}` : ''}</footer>
-</article>`;
-  return page(`발주 확인서 ${order.no} · ${store.name}`, body, { back });
+  const d = new Date(order.created_at + 9 * 3600e3);
+  const ymd = `${d.getUTCFullYear()}년 ${String(d.getUTCMonth() + 1).padStart(2, '0')}월 ${String(d.getUTCDate()).padStart(2, '0')}일`;
+  const vert = (t) => [...t].join('<br>');
+  const cell = (x) => esc(x || '');
+  const rows = order.lines.map((l, i) => `<tr><td class="nm">${esc(l.name)}${l.spec ? ` / ${esc(l.spec)}` : ''}</td><td class="c">${esc(l.unit)}</td>
+    <td class="n">${num(l.qty)}</td><td class="n">${num(l.price)}</td><td class="n">${num(lv[i].supply)}</td><td class="n">${num(lv[i].tax)}</td></tr>`);
+  rows.push('<tr><td class="blank-end">===== 이 &nbsp;&nbsp; 하 &nbsp;&nbsp; 여 &nbsp;&nbsp; 백 =====</td><td></td><td></td><td></td><td></td><td></td></tr>');
+  while (rows.length < 14) rows.push('<tr class="empty"><td></td><td></td><td></td><td></td><td></td><td></td></tr>');
+  const notes = [
+    `주문번호 ${esc(order.no)} · ${order.via === 'chat' ? '카카오톡' : '발주서'} 접수 · 상태: ${esc(O.STATUS[order.status])}`,
+    canceled ? '이 주문은 취소되었습니다.' : `배송 예정: ${esc(e.range)} (${esc(e.days)}${settings.skipWeekend ? ', 주말 제외' : ''})`,
+    order.memo ? `요청 사항: ${esc(order.memo)}` : '',
+    '단가는 부가세 별도 금액입니다.',
+  ].filter(Boolean).join('<br>');
+  const body = `<div class="fwrap"><article class="fdoc${canceled ? ' void' : ''}" id="fdoc">
+<table class="ftop"><tr>
+  <th class="lb">일 자</th><td class="dt">${ymd} &nbsp; ${esc(order.no)}</td>
+  <td class="ttl"><span>발 주 확 인 서</span></td>
+  <td class="rt">[${esc(O.STATUS[order.status])}]</td>
+</tr></table>
+<table class="fparty">
+<colgroup><col class="cv"><col class="ck"><col><col class="ck"><col class="cn"><col class="cv"><col class="ck"><col><col class="ck"><col class="cn"></colgroup>
+<tr><th rowspan="4" class="v">${vert('공급자')}</th><th>등록<br>번호</th><td colspan="3" class="big">${cell(settings.bizNo)}</td>
+    <th rowspan="4" class="v">${vert('공급받는자')}</th><th>등록<br>번호</th><td colspan="3" class="big"></td></tr>
+<tr><th>상호</th><td>${cell(settings.company)}</td><th>성명</th><td>${cell(settings.ceo)}</td>
+    <th>상호</th><td>${cell(store.name)}</td><th>성명</th><td>${cell(store.owner)}</td></tr>
+<tr><th>주소</th><td colspan="3">${cell(settings.address)}</td>
+    <th>연락처</th><td colspan="3">${cell(store.phone)}</td></tr>
+<tr><th>업태</th><td>${cell(settings.bizType)}</td><th>종목</th><td>${cell(settings.bizItem)}</td>
+    <th>업종</th><td>${cell(O.BIZ[store.biz]?.label)}</td><th>종목</th><td></td></tr>
+</table>
+<table class="flines">
+<colgroup><col><col class="w-u"><col class="w-q"><col class="w-p"><col class="w-a"><col class="w-t"></colgroup>
+<thead><tr><th>품 목 / 규 격</th><th>단위</th><th>수 량</th><th>단 가</th><th>금 액</th><th>세 액</th></tr></thead>
+<tbody>${rows.join('')}</tbody></table>
+<table class="fnote"><tr><th class="v">${vert('비고')}</th><td>${notes}</td></tr></table>
+<table class="fsum"><tr>
+  <th>공급<br>가액</th><td class="n">₩${num(v.supply)}</td>
+  <th>세액</th><td class="n">₩${num(v.tax)}</td>
+  <th>합계</th><td class="n grand">₩${num(v.total)}</td>
+  <th>인수자</th><td class="sig"></td>
+</tr></table>
+<p class="fconfirm">위와 같이 발주를 확인합니다. &nbsp; ${day(Date.now())} &nbsp; <b>${esc(settings.company)}</b>${settings.tel ? ` · ${esc(settings.tel)}` : ''}</p>
+</article></div>`;
+  // 파일 이름은 영문·숫자로 (휴대폰마다 한글 파일 이름이 깨지는 경우가 있음)
+  return page(`발주 확인서 ${order.no} · ${store.name}`, body, { back, file: `twostar_order_${order.no}` });
 }
 
 /**
@@ -131,7 +156,7 @@ ${settings.account ? `<p class="memo"><b>입금 계좌</b> ${esc(settings.accoun
 <p class="fine">${VAT_NOTE[settings.vat]} 취소된 주문은 포함하지 않습니다.</p>
 <footer class="sign">${day(Date.now())}<br><b>${esc(settings.company)}</b>${settings.tel ? ` · ${esc(settings.tel)}` : ''}</footer>
 </article>`;
-  return page(`거래명세서 ${store.name} ${period}`, body, { back });
+  return page(`거래명세서 ${store.name} ${period}`, body, { back, file: `twostar_statement_${store.id}_${String(period).replace(/[^\d]+/g, '-').replace(/^-|-$/g, '')}` });
 }
 
 module.exports = { orderDoc, statementDoc, korean, vatSplit, esc };
