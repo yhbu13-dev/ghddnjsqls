@@ -46,7 +46,7 @@
     V = v;
     qty = { ...v.cart };
     if (!cat || !v.categories.some((c) => c.id === cat)) cat = v.categories[0] ? v.categories[0].id : null;
-    if (!tab) tab = usual().length ? 'usual' : 'all';
+    if (!tab) tab = 'all'; // 처음엔 전체 상품부터
     if (tab === 'usual' && !usual().length) tab = 'all';
   }
   const usual = () => V.items.filter((i) => i.last > 0);
@@ -207,7 +207,7 @@
         h('h1', { id: 'dl-title', class: D.soon ? 'soon' : null }, D.title),
         h('p', { id: 'dl-sub', class: 'sub' }, D.sub)),
       homeTip(),
-      usual().length ? h('div', { class: 'seg2' }, [['usual', '자주 시키는 품목'], ['all', '전체 상품']].map(([k, l]) => h('button', {
+      usual().length ? h('div', { class: 'seg2' }, [['all', '전체 상품'], ['usual', '자주 시키는 품목']].map(([k, l]) => h('button', {
         class: tab === k ? 'on' : null, 'aria-pressed': tab === k ? 'true' : 'false', onclick: () => { tab = k; render(); window.scrollTo(0, 0); },
       }, l))) : null,
       body,
