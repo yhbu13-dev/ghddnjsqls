@@ -589,9 +589,9 @@ test('주문 확인 → 카톡 알림(Event API · 채팅방) · 발주 확인�
   let html = await r.text();
   assert.match(html, /발주 확인서/);
   assert.match(html, /새우깡 &lt;b&gt;/);
-  assert.match(html, /₩11,000/);
-  assert.match(html, /발 주 확 인 서/);
-  assert.match(html, /₩12,100/);
+  assert.match(html, /11,000원/);
+  assert.match(html, /<h1>발주 확인서<\/h1>/);
+  assert.match(html, /12,100원/);
   assert.equal((await call('/d/d.1.xxxxxx.forgedforgedforged')).status, 404);
 
   // 설정 전: 확인 처리 → 알림은 DB 에 쌓이고, 점주가 채팅방을 열면 맨 위에 보임
@@ -647,7 +647,7 @@ test('주문 확인 → 카톡 알림(Event API · 채팅방) · 발주 확인�
   html = await r.text();
   assert.match(html, /거래명세서/);
   assert.match(html, /금 일만이천일백원정/); // 부가세 별도: 11,000 + 1,100
-  assert.match(html, /1,100원/);
+  assert.match(html, /₩1,100/);
   assert.match(html, /부가세 별도 금액입니다/);
   assert.match(html, /국민 000-000/);
   const today = O.kstYmd(Date.now());

@@ -304,7 +304,7 @@ function createHandler({ db, cfg, assets, log = console.log, fetch: fetchImpl = 
           const o = await O.orderWithStore(db, Number(q.get('order')));
           if (!o) return json(404, { error: '주문을 찾을 수 없습니다' });
           const list = o.status === 'canceled' ? [] : [o];
-          return html(200, docs.statementDoc(o.store, list, s, `주문번호 ${o.no} · ${O.kstYmd(o.created_at)}`, { back }));
+          return html(200, docs.statementDoc(o.store, list, s, `주문번호 ${o.no} · ${O.kstYmd(o.created_at)}`, { back, single: true }));
         }
         const store = await db.get('SELECT * FROM stores WHERE id = ?', [Number(q.get('store'))]);
         if (!store) return json(404, { error: '매장을 찾을 수 없습니다' });
