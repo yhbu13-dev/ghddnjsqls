@@ -15,7 +15,7 @@ const tokens = require('./tokens');
 
 const ROOT = path.join(__dirname, '..');
 const PUBLIC = path.join(ROOT, 'public');
-const MAX_BODY = 4 * 1024 * 1024;
+const MAX_BODY = 12 * 1024 * 1024; // 명세서 사진 여러 장
 
 function loadSecret(file) {
   try { return fs.readFileSync(file, 'utf8').trim(); } catch { /* 처음 실행 */ }

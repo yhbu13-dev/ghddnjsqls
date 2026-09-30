@@ -24,6 +24,8 @@ function orderMessage(o, kind, s, now = Date.now()) {
       return { title: '🚚 상품이 출고되었어요', text: `${head}\n\n곧 도착합니다. 받으신 뒤 수량을 확인해 주세요.` };
     case 'canceled':
       return { title: '❌ 발주가 취소되었어요', text: `${head}\n\n궁금한 점은 투스타글로벌 담당자에게 문의해 주세요.` };
+    case 'statement':
+      return { title: '🧾 명세서가 올라왔어요', text: `${o.store.name} · 주문번호 ${o.no}\n[발주 확인서]에서 [실물 명세서]를 눌러 보세요.` };
     case 'test':
       return { title: '🔔 알림 테스트', text: `${o.store.name}\n투스타글로벌 발주 알림이 이 카톡으로 옵니다.` };
     default:

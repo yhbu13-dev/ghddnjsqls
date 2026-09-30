@@ -120,9 +120,57 @@
       render();
     } catch (e) { toast(e.message); }
   }
+  // ── 실물 명세서 사진 올리기: 휴대폰 사진·스캔 파일을 긴 변 2000px JPEG 로 줄여서 (한 장 2MB 이하) ──
+  function shrinkDoc(file) {
+    return new Promise((resolve, reject) => {
+      const fr = new FileReader();
+      fr.onerror = () => reject(new Error('사진 파일을 읽지 못했어요'));
+      fr.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          const k = Math.min(1, 2000 / Math.max(img.width, img.height));
+          const cv = document.createElement('canvas');
+          cv.width = Math.round(img.width * k); cv.height = Math.round(img.height * k);
+          const g = cv.getContext('2d');
+          g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height);
+          g.drawImage(img, 0, 0, cv.width, cv.height);
+          let q = 0.88; let url = cv.toDataURL('image/jpeg', q);
+          while (url.length > 2.6e6 && q > 0.4) { q -= 0.12; url = cv.toDataURL('image/jpeg', q); }
+          resolve(url);
+        };
+        img.onerror = () => reject(new Error('이 사진 형식은 열 수 없어요 (JPG·PNG 권장. PDF는 캡처해서 사진으로 올려 주세요)'));
+        img.src = fr.result;
+      };
+      fr.readAsDataURL(file);
+    });
+  }
+  function uploadStatement({ storeId, orderId, title }, after) {
+    const input = h('input', { type: 'file', accept: 'image/*', multiple: true, class: 'hidden' });
+    input.addEventListener('change', async () => {
+      const files = [...input.files].slice(0, 5);
+      if (!files.length) return;
+      if (input.files.length > 5) toast('한 번에 5장까지만 올라가요');
+      toast('명세서를 올리는 중…');
+      try {
+        const images = [];
+        for (const f of files) images.push(await shrinkDoc(f));
+        const r = await call('/api/admin/statement', { store_id: storeId, order_id: orderId || null, title, images });
+        D = r.data;
+        toast(`명세서 ${r.pages}장을 올렸어요${orderId ? notifyMsg(r.notify) : ''}`);
+        if (after) await after(); else render();
+      } catch (e) { toast(e.message); }
+      input.remove();
+    });
+    document.body.append(input);
+    input.click();
+  }
   const docBtns = (o) => [
-    h('a', { class: 'btn small', href: `/admin/doc/order/${o.id}`, target: '_blank', rel: 'noopener' }, '확인서'),
-    h('a', { class: 'btn small', href: `/admin/doc/statement?order=${o.id}`, target: '_blank', rel: 'noopener' }, '명세서'),
+    h('a', { class: 'btn small', href: `/admin/doc/order/${o.id}`, target: '_blank', rel: 'noopener' }, o.stmts ? `확인서 · 실물 명세서 ${o.stmts}` : '확인서'),
+    h('a', { class: 'btn small', href: `/admin/doc/statement?order=${o.id}`, target: '_blank', rel: 'noopener' }, '거래명세서'),
+    h('button', {
+      class: 'btn small soft',
+      onclick: () => uploadStatement({ storeId: o.store_id, orderId: o.id, title: `${o.no} 거래명세서` }, storeView ? () => openStore(storeView.id, storeView.data.month) : null),
+    }, '실물 명세서 올리기'),
   ];
   function orderCard(o, inStore) {
     const L = D.labels;
@@ -185,10 +233,35 @@
         kpi('누적 발주', won(all), `${months.reduce((a, m) => a + m.count, 0)}건 · ${months.length}개월`),
         kpi('평균 발주 금액', live.length ? won(Math.round(sum / live.length)) : '-', ym(month))),
       h('div', { class: 'panel' },
-        h('h2', null, '거래명세서'),
+        h('h2', null, '기간 거래명세서', h('span', { class: 'small muted' }, '발주 기록으로 자동으로 만들어요')),
         h('div', { class: 'form' },
           h('label', null, '시작일', pf), h('label', null, '종료일', pt),
           h('button', { class: 'btn primary', onclick: () => window.open(`/admin/doc/statement?store=${s.id}&from=${pf.value}&to=${pt.value}`, '_blank', 'noopener') }, '명세서 만들기'))),
+      h('div', { class: 'panel' },
+        h('h2', null, '실물 명세서', h('span', { class: 'small muted' }, '회사 프로그램에서 뽑은 명세서 사진 · 점주가 발주서·확인서·카톡에서 봐요')),
+        (() => {
+          const t = h('input', { placeholder: `예: ${ym(month)} 거래명세서`, value: `${ym(month)} 거래명세서` });
+          const sel = h('select', null, h('option', { value: '' }, '주문 연결 안 함 (매장 전체)'),
+            list.map((o) => h('option', { value: o.id }, `${o.no} · ${won(o.total)}`)));
+          return h('div', { class: 'form' },
+            h('label', null, '제목', t), h('label', null, '연결할 주문', sel),
+            h('button', { class: 'btn primary', onclick: () => uploadStatement({ storeId: s.id, orderId: sel.value ? Number(sel.value) : null, title: t.value }, () => openStore(s.id, month)) }, '사진 골라 올리기 (5장까지)'));
+        })(),
+        storeView.data.statements.length ? h('div', { class: 'tbl', style: 'margin-top:12px' }, h('table', null,
+          h('tr', null, h('th', null, '명세서'), h('th', null, '연결 주문'), h('th', null, '올린 날'), h('th', null, '')),
+          storeView.data.statements.map((x) => h('tr', null,
+            h('td', null, h('b', null, x.title || '거래명세서'), h('div', { class: 'small muted' }, `${x.pages}장`)),
+            h('td', { class: 'muted' }, x.order_id ? (list.find((o) => o.id === x.order_id)?.no || `주문 #${x.order_id}`) : '매장 전체'),
+            h('td', { class: 'muted' }, time(x.created_at)),
+            h('td', null, h('div', { class: 'acts' },
+              h('a', { class: 'btn small', href: `/admin/doc/st/${x.id}`, target: '_blank', rel: 'noopener' }, '보기'),
+              h('button', {
+                class: 'btn small bad',
+                onclick: async () => {
+                  if (!confirm(`'${x.title || '거래명세서'}'를 삭제할까요? 점주도 더 이상 볼 수 없어요.`)) return;
+                  try { const r = await call('/api/admin/statement-delete', { id: x.id }); D = r.data; toast('명세서를 삭제했어요'); await openStore(s.id, month); } catch (e) { toast(e.message); }
+                },
+              }, '삭제'))))))) : h('p', { class: 'small muted', style: 'margin-top:10px' }, '아직 올린 명세서가 없어요.')),
       h('div', { class: 'panel' },
         h('h2', null, '발주 내역'),
         months.length ? h('div', { class: 'filters' }, months.map((m) => h('button', {

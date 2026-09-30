@@ -10,6 +10,7 @@ const O = require('./order');
 const { skill } = require('./kakao');
 const tokens = require('./tokens');
 const images = require('./images');
+const ST = require('./statements');
 const docs = require('./docs');
 const { sendEvent, orderMessage } = require('./notify');
 const { migrate, metaValue } = require('./schema');
@@ -100,6 +101,9 @@ function createHandler({ db, cfg, assets, log = console.log, fetch: fetchImpl = 
     const skillUrl = `${base}/kakao/skill?key=${S.skillKey}`;
     // 발주 확인서 링크 (점주에게 보내는 용, 1년)
     const docLink = (orderId) => `${base}/d/${tk.sign('d', String(orderId), LINK_TTL)}`;
+    // 실물 명세서 링크 (점주용, 1년). 사진은 이 링크 아래에서만 열린다
+    const stLink = (stId) => `${base}/st/${tk.sign('st', String(stId), LINK_TTL)}`;
+    const stLinks = (list, on) => list.map((x, i) => ({ label: `실물 명세서${list.length > 1 ? ` ${i + 1}` : ''}`, href: stLink(x.id), on: on === x.id }));
     // 주문 상태가 바뀌면 점주 카톡으로 알림 (Event API 설정이 없으면 다음에 채팅방을 열 때 보여 줌)
     const notifyOrder = async (orderId, kind) => {
       const o = await O.orderWithStore(db, orderId);
@@ -146,7 +150,7 @@ function createHandler({ db, cfg, assets, log = console.log, fetch: fetchImpl = 
       log(`[카톡 ${new Date().toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul', hour12: false })}] 사용자 ${who} · ${what}`);
       let out;
       try {
-        out = await skill({ db, blockId: cfg.blockId, orderLink, docLink, minAmount: cfg.minAmount, guest: cfg.guest, ...hooks }, body);
+        out = await skill({ db, blockId: cfg.blockId, orderLink, docLink, stLink, minAmount: cfg.minAmount, guest: cfg.guest, ...hooks }, body);
       } catch (e) {
         // 어떤 오류가 나도 카카오에는 규격에 맞는 답을 보낸다 (500을 보내면 '스킬 응답 오류'로 끝남)
         console.error(`[카톡 오류] ${what}:`, e);
@@ -162,7 +166,27 @@ function createHandler({ db, cfg, assets, log = console.log, fetch: fetchImpl = 
       const id = Number(tk.verify('d', md[1]));
       const o = id ? await O.orderWithStore(db, id) : null;
       if (!o) return html(404, '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/assets/app.css"><p class="pad24">확인서를 찾을 수 없어요. 카카오톡 [발주 내역]에서 다시 열어 주세요.</p>');
-      return html(200, docs.orderDoc(o, await O.getSettings(db)));
+      const sts = await ST.ofOrder(db, o.id);
+      const links = sts.length ? [{ label: '발주 확인서', href: `/d/${md[1]}`, on: true }, ...stLinks(sts)] : [];
+      return html(200, docs.orderDoc(o, await O.getSettings(db), { links }));
+    }
+
+    // ── 실물 명세서 (점주용 링크): /st/<토큰> 보기 · /st/<토큰>/<쪽> 사진 ──
+    md = p.match(/^\/st\/([\w.-]{10,200})(?:\/(\d{1,2}))?$/);
+    if (md && m === 'GET') {
+      const st = await ST.get(db, Number(tk.verify('st', md[1])) || 0);
+      if (!st) return html(404, '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/assets/app.css"><p class="pad24">명세서를 찾을 수 없어요. 담당자에게 문의해 주세요.</p>');
+      if (md[2] != null) {
+        const img = st.images[Number(md[2])] && await images.readDoc(db, st.images[Number(md[2])]);
+        return img ? reply(200, img.body, img.type, { 'cache-control': 'private, max-age=86400' }) : reply(404, 'not found', 'text/plain');
+      }
+      const store = await db.get('SELECT * FROM stores WHERE id = ?', [st.store_id]);
+      const links = [];
+      if (st.order_id) {
+        links.push({ label: '발주 확인서', href: docLink(st.order_id) });
+        links.push(...stLinks(await ST.ofOrder(db, st.order_id), st.id));
+      }
+      return html(200, docs.statementView(st, store, st.images.map((_, i) => `/st/${md[1]}/${i}`), { links }));
     }
 
     // ── 점주 발주서 ──
@@ -197,7 +221,7 @@ function createHandler({ db, cfg, assets, log = console.log, fetch: fetchImpl = 
       if (!store) return json(404, { error: '링크가 만료되었어요. 카카오톡에서 다시 열어 주세요' });
       if (m !== 'GET' && request.headers.get('x-ts') !== '1') return json(403, { error: 'forbidden' });
       const act = mm[2];
-      if (!act && m === 'GET') return json(200, await sheetView(store, url.searchParams.get('fresh') === '1', docLink));
+      if (!act && m === 'GET') return json(200, await sheetView(store, url.searchParams.get('fresh') === '1', docLink, stLink));
       const b = await readJson(request);
       if (act === 'cart' && m === 'PUT') {
         // 수량을 바꿀 때마다 불리므로 가볍게: 장바구니 버전과 수량만 돌려준다
@@ -257,7 +281,22 @@ function createHandler({ db, cfg, assets, log = console.log, fetch: fetchImpl = 
       md = p.match(/^\/admin\/doc\/order\/(\d+)$/);
       if (md) {
         const o = await O.orderWithStore(db, Number(md[1]));
-        return o ? html(200, docs.orderDoc(o, s, { back })) : json(404, { error: '주문을 찾을 수 없습니다' });
+        if (!o) return json(404, { error: '주문을 찾을 수 없습니다' });
+        const sts = await ST.ofOrder(db, o.id);
+        const links = sts.map((x, i) => ({ label: `실물 명세서${sts.length > 1 ? ` ${i + 1}` : ''}`, href: `/admin/doc/st/${x.id}` }));
+        return html(200, docs.orderDoc(o, s, { back, links }));
+      }
+      md = p.match(/^\/admin\/doc\/st\/(\d+)(?:\/(\d{1,2}))?$/);
+      if (md) {
+        const st = await ST.get(db, Number(md[1]));
+        if (!st) return json(404, { error: '명세서를 찾을 수 없습니다' });
+        if (md[2] != null) {
+          const img = st.images[Number(md[2])] && await images.readDoc(db, st.images[Number(md[2])]);
+          return img ? reply(200, img.body, img.type) : reply(404, 'not found', 'text/plain');
+        }
+        const store = await db.get('SELECT * FROM stores WHERE id = ?', [st.store_id]);
+        const links = st.order_id ? [{ label: '발주 확인서', href: `/admin/doc/order/${st.order_id}` }] : [];
+        return html(200, docs.statementView(st, store, st.images.map((_, i) => `/admin/doc/st/${st.id}/${i}`), { back, links }));
       }
       if (p === '/admin/doc/statement') {
         const q = url.searchParams;
@@ -281,12 +320,23 @@ function createHandler({ db, cfg, assets, log = console.log, fetch: fetchImpl = 
       const data = async () => adminData(skillUrl);
       if (sub === 'data' && m === 'GET') return json(200, await data());
       if (sub === 'store' && m === 'GET') return json(200, await storeDetail(Number(url.searchParams.get('id')), url.searchParams.get('month')));
-      const b = m === 'GET' ? {} : await readJson(request, sub === 'item-image' ? 3 * 1024 * 1024 : undefined);
+      const limit = { 'item-image': 3 * 1024 * 1024, statement: 12 * 1024 * 1024 }[sub];
+      const b = m === 'GET' ? {} : await readJson(request, limit);
       if (sub === 'status' && m === 'POST') {
         await O.setStatus(db, Number(b.id), String(b.status));
         const notify = await notifyOrder(Number(b.id), String(b.status));
         return json(200, { ...(await data()), notify });
       } else if (sub === 'settings' && m === 'POST') await O.saveSettings(db, b);
+      else if (sub === 'statement' && m === 'POST') {
+        // 실물 명세서 올리기 (주문에 붙이면 점주 카톡으로 알림)
+        const st = await ST.create(db, { storeId: Number(b.store_id), orderId: b.order_id ? Number(b.order_id) : null, title: b.title, images: b.images });
+        let notify = null;
+        if (st.order_id) notify = await notifyOrder(st.order_id, 'statement');
+        return json(200, { id: st.id, pages: st.images.length, notify, data: await data() });
+      } else if (sub === 'statement-delete' && m === 'POST') {
+        await ST.remove(db, Number(b.id));
+        return json(200, { data: await data() });
+      }
       else if (sub === 'notify-test' && m === 'POST') {
         // 알림 테스트: 매장에 연결된 카톡으로 테스트 알림
         const store = await O.storeOf(db, Number(b.id));
@@ -345,7 +395,7 @@ function createHandler({ db, cfg, assets, log = console.log, fetch: fetchImpl = 
     return json(404, { error: 'not found' });
   }
 
-  async function sheetView(store, prefill = false, docLink = null) {
+  async function sheetView(store, prefill = false, docLink = null, stLink = null) {
     let cart = await O.cartOf(db, store);
     let prefilled = false;
     // 사우나: 품목이 많아 매번 지난 발주를 채운 발주서로 시작 (빈 장바구니일 때만)
@@ -376,6 +426,7 @@ function createHandler({ db, cfg, assets, log = console.log, fetch: fetchImpl = 
       rules: { cutoffHour: s.cutoffHour, deliveryMin: s.deliveryMin, deliveryMax: s.deliveryMax, skipWeekend: s.skipWeekend },
       eta: O.eta(Date.now(), s),
       last: last ? { no: last.no, at: last.created_at, total: last.total } : null,
+      statements: (await ST.ofStore(db, store.id, 10)).map((x) => ({ title: x.title, at: x.created_at, pages: x.images.length, url: stLink ? stLink(x.id) : null })),
       orders: recent.map((o) => ({
         no: o.no, status: O.STATUS[o.status], total: o.total, at: o.created_at, doc: docLink ? docLink(o.id) : null,
       })),
@@ -388,10 +439,11 @@ function createHandler({ db, cfg, assets, log = console.log, fetch: fetchImpl = 
     const lines = orders.length
       ? await db.all('SELECT * FROM order_lines WHERE order_id >= ? ORDER BY rowid', [orders[orders.length - 1].id])
       : [];
+    const stCount = await ST.countByOrders(db, orders.map((o) => o.id));
     const byOrder = new Map();
     for (const l of lines) (byOrder.get(l.order_id) || byOrder.set(l.order_id, []).get(l.order_id)).push(l);
     return {
-      orders: orders.map((o) => ({ ...o, status_label: O.STATUS[o.status], next: O.FLOW[o.status], lines: byOrder.get(o.id) || [] })),
+      orders: orders.map((o) => ({ ...o, status_label: O.STATUS[o.status], next: O.FLOW[o.status], lines: byOrder.get(o.id) || [], stmts: stCount[o.id] || 0 })),
       // 출고 집계: 접수·확인 상태 주문의 품목별 합계
       pick: await db.all(`SELECT l.name, l.spec, l.unit, SUM(l.qty) AS qty, COUNT(DISTINCT o.id) AS stores
                           FROM order_lines l JOIN orders o ON o.id = l.order_id
@@ -421,9 +473,11 @@ function createHandler({ db, cfg, assets, log = console.log, fetch: fetchImpl = 
     const last = new Date(Date.UTC(y, mo, 0)).getUTCDate();
     const from = `${mon}-01`;
     const to = `${mon}-${String(last).padStart(2, '0')}`;
-    const orders = (await O.storeOrders(db, id, from, to)).reverse()
-      .map((o) => ({ ...o, status_label: O.STATUS[o.status], next: O.FLOW[o.status] }));
-    return { store, months, month: mon, from, to, orders };
+    const list = (await O.storeOrders(db, id, from, to)).reverse();
+    const stCount = await ST.countByOrders(db, list.map((o) => o.id));
+    const orders = list.map((o) => ({ ...o, status_label: O.STATUS[o.status], next: O.FLOW[o.status], stmts: stCount[o.id] || 0 }));
+    const statements = (await ST.ofStore(db, id, 50)).map((x) => ({ id: x.id, title: x.title, order_id: x.order_id, pages: x.images.length, created_at: x.created_at }));
+    return { store, months, month: mon, from, to, orders, statements };
   }
 
   async function saveItem(b) {

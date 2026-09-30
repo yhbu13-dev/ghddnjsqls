@@ -29,7 +29,29 @@ async function save(db, itemId, dataUrl, now = Date.now()) {
   return name;
 }
 
+// ── 실물 명세서 사진: 이름이 품목 사진과 달라 /img/ 로는 열리지 않는다 (명세서 링크로만) ──
+const DOC_NAME = /^s\d{1,9}-\d{1,2}-[0-9a-f]{16}\.(jpg|png|webp)$/;
+
+async function saveDoc(db, stmtId, n, dataUrl, now = Date.now()) {
+  const m = /^data:image\/[a-z]+;base64,([A-Za-z0-9+/=]+)$/.exec(String(dataUrl || ''));
+  if (!m) throw new UserError('명세서 사진을 읽지 못했어요');
+  const buf = Buffer.from(m[1], 'base64');
+  if (buf.length > MAX_BYTES) throw new UserError('명세서 사진이 너무 큽니다 (한 장 2MB 이하)');
+  const ext = sniff(buf);
+  if (!ext) throw new UserError('JPG·PNG·WEBP 사진만 올릴 수 있어요');
+  const name = `s${Number(stmtId)}-${n}-${crypto.randomBytes(8).toString('hex')}.${ext}`;
+  await db.run('INSERT INTO images (name, type, data, created_at) VALUES (?, ?, ?, ?)', [name, TYPES[ext], buf.toString('base64'), now]);
+  return name;
+}
+
+async function readDoc(db, name) {
+  if (!DOC_NAME.test(name)) return null;
+  const row = await db.get('SELECT type, data FROM images WHERE name = ?', [name]);
+  return row ? { type: row.type, body: new Uint8Array(Buffer.from(row.data, 'base64')) } : null;
+}
+
 async function remove(db, name) {
+  if (name && DOC_NAME.test(name)) return db.run('DELETE FROM images WHERE name = ?', [name]);
   if (name && NAME.test(name)) await db.run('DELETE FROM images WHERE name = ?', [name]);
 }
 
@@ -40,4 +62,4 @@ async function read(db, name) {
   return row ? { type: row.type, body: new Uint8Array(Buffer.from(row.data, 'base64')) } : null;
 }
 
-module.exports = { save, remove, read, NAME };
+module.exports = { save, remove, read, NAME, saveDoc, readDoc };

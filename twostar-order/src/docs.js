@@ -39,7 +39,7 @@ function vatSplit(amount, vat) {
 }
 const VAT_NOTE = { included: '단가는 부가세 포함 금액입니다.', excluded: '단가는 부가세 별도 금액입니다.', none: '면세 품목입니다.' };
 
-function page(title, body, { back, file = 'twostar' } = {}) {
+function page(title, body, { back, file = 'twostar', links = [] } = {}) {
   return `<!doctype html><html lang="ko"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(title)}</title>
@@ -47,6 +47,7 @@ function page(title, body, { back, file = 'twostar' } = {}) {
 <script src="/assets/doc.js" defer></script></head>
 <body><div class="toolbar noprint">
 ${back ? `<a class="tbtn" href="${esc(back)}">← 관리자</a>` : ''}
+${links.map((l) => `<a class="tbtn ${l.on ? 'on' : ''}" href="${esc(l.href)}">${esc(l.label)}</a>`).join('')}
 <button class="tbtn primary" type="button" data-pdf="${esc(file.replace(/[^\w.-]+/g, '_'))}">PDF 저장</button></div>
 <div id="pdfout" class="pdfout noprint" hidden></div>
 ${body}
@@ -70,7 +71,7 @@ const parties = (settings, store, a = '공급자', b = '공급받는자') => `
 
 /** 발주 확인서: order = orderWithStore(...) */
 /** 발주 확인서: 종이 거래명세표 양식 (파란 선 칸) — order = orderWithStore(...) */
-function orderDoc(order, settings, { back } = {}) {
+function orderDoc(order, settings, { back, links } = {}) {
   const store = order.store;
   const base = order.status === 'received' ? order.created_at : order.updated_at;
   const e = O.eta(base, settings);
@@ -123,7 +124,18 @@ function orderDoc(order, settings, { back } = {}) {
 <p class="fconfirm">위와 같이 발주를 확인합니다. &nbsp; ${day(Date.now())} &nbsp; <b>${esc(settings.company)}</b>${settings.tel ? ` · ${esc(settings.tel)}` : ''}</p>
 </article></div>`;
   // 파일 이름은 영문·숫자로 (휴대폰마다 한글 파일 이름이 깨지는 경우가 있음)
-  return page(`발주 확인서 ${order.no} · ${store.name}`, body, { back, file: `twostar_order_${order.no}` });
+  return page(`발주 확인서 ${order.no} · ${store.name}`, body, { back, links, file: `twostar_order_${order.no}` });
+}
+
+/** 실물 명세서 보기: srcs = 사진 주소들, links = 위쪽 이동 버튼 */
+function statementView(stmt, store, srcs, { back, links } = {}) {
+  const t = stmt.title || '거래명세서';
+  const body = `<article class="doc stview">
+<header class="dh"><div><h1>${esc(t)}</h1><div class="sub">${esc(store.name)} · ${day(stmt.created_at)} 올림</div></div></header>
+${srcs.map((src, i) => `<img src="${esc(src)}" alt="명세서 ${i + 1}쪽">`).join('')}
+<p class="fine">사진을 길게 누르면 휴대폰에 저장할 수 있어요.</p>
+</article>`;
+  return page(`${t} · ${store.name}`, body, { back, links, file: `twostar_statement_${stmt.id}` });
 }
 
 /**
@@ -159,4 +171,4 @@ ${settings.account ? `<p class="memo"><b>입금 계좌</b> ${esc(settings.accoun
   return page(`거래명세서 ${store.name} ${period}`, body, { back, file: `twostar_statement_${store.id}_${String(period).replace(/[^\d]+/g, '-').replace(/^-|-$/g, '')}` });
 }
 
-module.exports = { orderDoc, statementDoc, korean, vatSplit, esc };
+module.exports = { orderDoc, statementDoc, statementView, korean, vatSplit, esc };

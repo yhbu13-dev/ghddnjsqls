@@ -8,6 +8,7 @@
 // 오픈빌더 제한: 캐러셀 10장 · 카드 버튼 3개 · 버튼 글자 14자 · 바로가기 10개 · 5초 안에 응답
 
 const O = require('./order');
+const ST = require('./statements');
 
 const PAGE = 9; // 캐러셀 10장 = 품목 9장 + [다음]
 const cut = (s, n) => (String(s).length > n ? `${String(s).slice(0, n - 1)}…` : String(s));
@@ -323,12 +324,18 @@ async function step(ctx, U, store, x, now) {
     case 'history': {
       const list = await O.ordersOf(db, store, 5);
       if (!list.length) return U.res([U.text('아직 발주 내역이 없어요.')], [home]);
-      // 주문마다 카드 한 장: 상태 · 합계 · [발주 확인서]
+      // 주문마다 카드 한 장: 상태 · 합계 · [발주 확인서] · [실물 명세서]
+      const firstSt = {};
+      if (ctx.stLink && list.length) {
+        const rows = await db.all(`SELECT order_id, MIN(id) AS id FROM statements WHERE order_id IN (${list.map(() => '?').join(',')}) GROUP BY order_id`, list.map((o) => o.id));
+        for (const r of rows) firstSt[r.order_id] = r.id;
+      }
       return U.res([
         U.text(`📦 ${store.name} 최근 발주`),
         U.carousel(list.map((o) => U.card(`${o.no} · ${O.STATUS[o.status]}`,
           `${O.kstText(o.created_at).replace(/^\d+년 /, '')}\n합계 ${O.won(o.total)}`,
-          ctx.docLink ? [U.link('📄 발주 확인서', ctx.docLink(o.id))] : []))),
+          [...(ctx.docLink ? [U.link('📄 발주 확인서', ctx.docLink(o.id))] : []),
+            ...(firstSt[o.id] ? [U.link('🧾 실물 명세서', ctx.stLink(firstSt[o.id]))] : [])]))),
       ], [U.btn('지난 발주 그대로', { s: 'reorder' }), home]);
     }
 

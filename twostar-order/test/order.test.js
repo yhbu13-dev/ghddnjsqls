@@ -701,3 +701,65 @@ test('주문 마감 시각 · 부가세 별도 고정 · 발주서 규칙', asyn
   const d = await (await call('/api/admin/data', { headers: H })).json();
   assert.equal(d.settings.vat, 'excluded', '부가세는 항상 별도');
 });
+
+test('실물 명세서: 관리자 업로드 → 점주 확인서·발주서·카톡에서 보기, 사진은 명세서 링크로만', async () => {
+  const db = open(':memory:');
+  const handle = createHandler({ db, cfg: { adminPassword: 'pw', skillKey: 'k', blockId: 'B', minAmount: 0, guest: {}, secret: 's' }, log: () => {}, assets: async () => null });
+  const call = (path, init) => handle(new Request(`https://x.com${path}`, init), { ip: '1' });
+  let r = await call('/admin/login', { method: 'POST', body: JSON.stringify({ password: 'pw' }) });
+  const H = { cookie: r.headers.get('set-cookie').split(';')[0], 'x-ts': '1' };
+  const post = async (sub, body) => call(`/api/admin/${sub}`, { method: 'POST', headers: H, body: JSON.stringify(body) });
+  await post('items', { category: 'cafe', grp: '시럽', name: '바닐라', price: 10000 });
+  const st = await (await post('stores', { name: '카페', biz: 'cafe' })).json();
+  const other = await (await post('stores', { name: '다른 매장', biz: 'cafe' })).json();
+  const talk = async (extra, u = '버튼') => (await call('/kakao/skill?key=k', { method: 'POST', body: JSON.stringify({ userRequest: { user: { id: 'u1' }, utterance: u }, action: { clientExtra: extra } }) })).json();
+  await talk({}, st.code);
+  const item = (await (await call('/api/admin/data', { headers: H })).json()).items[0];
+  await talk({ s: 'add', i: item.id, n: 2 });
+  let t = await talk({ s: 'confirm' });
+  await talk(t.template.outputs[0].textCard.buttons[0].extra);
+  const order = (await (await call('/api/admin/data', { headers: H })).json()).orders[0];
+  const png = `data:image/png;base64,${Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]).toString('base64')}`;
+
+  assert.equal((await post('statement', { store_id: other.id, order_id: order.id, images: [png] })).status, 400, '다른 매장 주문에는 못 붙임');
+  assert.equal((await post('statement', { store_id: st.id, images: [] })).status, 400);
+  r = await post('statement', { store_id: st.id, order_id: order.id, title: '9월 거래명세서', images: [png, png] });
+  const up = await r.json();
+  assert.equal(up.pages, 2);
+  assert.equal(up.data.orders[0].stmts, 1);
+
+  // 점주 카톡: 알림 카드 → 발주 내역에 [실물 명세서] 버튼
+  t = await talk({}, '안녕');
+  assert.equal(t.template.outputs[0].textCard.title, '🧾 명세서가 올라왔어요');
+  t = await talk({ s: 'history' });
+  const btns = t.template.outputs[1].carousel.items[0].buttons;
+  assert.equal(btns[1].label, '🧾 실물 명세서');
+  const stUrl = new URL(btns[1].webLinkUrl);
+  r = await call(stUrl.pathname);
+  const page = await r.text();
+  assert.match(page, /9월 거래명세서/);
+  assert.match(page, /발주 확인서/);
+  r = await call(`${stUrl.pathname}/1`);
+  assert.equal(r.status, 200);
+  assert.equal(r.headers.get('content-type'), 'image/png');
+  assert.equal((await call(`${stUrl.pathname}/5`)).status, 404);
+  assert.equal((await call('/st/st.1.xxxxxx.forgedforgedforged')).status, 404);
+  // 사진 이름을 알아도 /img/ 로는 안 열림
+  const name = (await db.get('SELECT images FROM statements')).images.split(',')[0];
+  assert.equal((await call(`/img/${name}`)).status, 404);
+  // 발주 확인서 위쪽에 [실물 명세서] 버튼
+  const docUrl = new URL(btns[0].webLinkUrl);
+  assert.match(await (await call(docUrl.pathname)).text(), /실물 명세서/);
+  // 발주서 목록에도
+  const tk = new URL(st.link).pathname.split('/').pop();
+  const v = await (await call(`/api/o/${tk}`)).json();
+  assert.equal(v.statements.length, 1);
+  assert.equal(v.statements[0].pages, 2);
+  // 매장 상세 · 삭제
+  const sd = await (await call(`/api/admin/store?id=${st.id}`, { headers: H })).json();
+  assert.equal(sd.statements.length, 1);
+  assert.equal((await call(`/admin/doc/st/${up.id}/0`, { headers: H })).status, 200);
+  await post('statement-delete', { id: up.id });
+  assert.equal((await call(stUrl.pathname)).status, 404);
+  assert.equal((await db.get("SELECT COUNT(*) AS n FROM images WHERE name LIKE 's%'")).n, 0);
+});

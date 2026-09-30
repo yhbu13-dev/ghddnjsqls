@@ -92,6 +92,16 @@ CREATE TABLE IF NOT EXISTS attempts (     -- 연결 코드·로그인 시도 횟
   at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS attempts_key ON attempts (key, at);
+CREATE TABLE IF NOT EXISTS statements (   -- 실물 거래명세서 사진 (관리자가 올리고 점주가 봄)
+  id INTEGER PRIMARY KEY,
+  store_id INTEGER NOT NULL,
+  order_id INTEGER,                       -- 연결된 주문 (없으면 매장 전체용)
+  title TEXT NOT NULL DEFAULT '',
+  images TEXT NOT NULL DEFAULT '',        -- 사진 이름들 (쉼표로 구분). /img/ 로는 열리지 않고 명세서 링크로만
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS statements_store ON statements (store_id, created_at);
+CREATE INDEX IF NOT EXISTS statements_order ON statements (order_id);
 CREATE TABLE IF NOT EXISTS notices (      -- 점주 카톡 알림 (주문 확인·출고 등). 카톡을 열면 보여 주고 seen=1
   id INTEGER PRIMARY KEY,
   user_key TEXT NOT NULL,

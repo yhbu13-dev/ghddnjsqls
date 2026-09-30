@@ -101,3 +101,6 @@ table.lines tr.first td { border-top: 1px solid #9ca3af; }
 .pdfout img { display: block; width: 100%; max-width: 800px; margin: 0 auto 12px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
 .tbtn:disabled { opacity: .6; }
 .toolbar .tbtn.primary { margin-left: auto; }
+.toolbar .tbtn.on { background: #e8f3ff; color: #3182f6; border-color: #3182f6; font-weight: 600; }
+.stview .dh h1 { letter-spacing: 0; font-size: 22px; }
+.stview img { display: block; width: 100%; height: auto; margin: 0 0 12px; border: 1px solid #e5e7eb; border-radius: 4px; }
