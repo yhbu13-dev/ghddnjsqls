@@ -281,3 +281,11 @@ td .acts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; 
 .sheet .vats { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--g200); }
 .sheet .vats div { display: flex; justify-content: space-between; font-size: 15px; color: var(--g600); padding: 3px 0; }
 .sheet .vats + .total { border-top: 0; padding-top: 6px; margin-top: 4px; }
+/* 품목 검색 */
+.search { position: relative; margin: 0 20px 6px; }
+.search .sinput { padding: 12px 40px 12px 40px; font-size: 16px; border-radius: 14px; -webkit-appearance: none; appearance: none; }
+.search .sinput::-webkit-search-cancel-button { display: none; }
+.search .sicon { position: absolute; left: 15px; top: 50%; width: 15px; height: 15px; margin-top: -9px; border: 2px solid var(--g500); border-radius: 50%; pointer-events: none; }
+.search .sicon::after { content: ''; position: absolute; width: 2px; height: 7px; background: var(--g500); border-radius: 2px; right: -4px; bottom: -6px; transform: rotate(-45deg); }
+.search .sclear { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); width: 30px; height: 30px; border-radius: 50%; background: var(--g300); color: #fff; font-size: 18px; line-height: 1; display: grid; place-items: center; }
+.nores { padding: 24px 20px; color: var(--g500); text-align: center; margin: 0; }

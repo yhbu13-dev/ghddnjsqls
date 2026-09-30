@@ -173,9 +173,27 @@
         h('button', { class: 'plus', 'aria-label': `${it.name} 수량 늘리기`, onclick: () => setQ(it.id, (qty[it.id] || 0) + 1) }, '+')));
   }
 
-  function render() {
-    const D = deadline();
+  // ── 검색: 품목 이름·규격·진열대, 초성(ㅅㅇㄲ → 새우깡)도 된다 ──
+  let query = '';
+  const CHO = 'ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ';
+  const norm = (t) => String(t || '').toLowerCase().replace(/\s+/g, '');
+  const chosung = (t) => [...t].map((c) => { const k = c.charCodeAt(0) - 0xac00; return k >= 0 && k < 11172 ? CHO[Math.floor(k / 588)] : c; }).join('');
+  function matches(it, q) {
+    const hay = norm(`${it.name} ${it.spec} ${it.grp}`);
+    if (hay.includes(q)) return true;
+    return /^[ㄱ-ㅎ]+$/.test(q) && chosung(hay).includes(q);
+  }
+
+  // 목록 부분만 (검색어를 칠 때 검색창은 그대로 두고 이 부분만 다시 그린다)
+  function listBody() {
     const vat = h('span', { class: 'vat' }, '*부가세 별도');
+    const q = norm(query);
+    if (q) {
+      const found = V.items.filter((i) => matches(i, q));
+      return [h('section', { class: 'group' },
+        h('h2', null, '검색 결과', h('span', { class: 'muted' }, found.length), vat),
+        found.length ? found.map(row) : h('p', { class: 'nores' }, `'${query.trim()}'에 맞는 품목이 없어요`))];
+    }
     const body = [];
     if (tab === 'usual') {
       body.push(h('section', { class: 'group' }, h('h2', null, '자주 시키는 품목', h('span', { class: 'muted' }, usual().length), vat), usual().map(row)));
@@ -190,7 +208,7 @@
       const gid = (i) => `g${i}`;
       if (V.categories.length > 1) {
         body.push(h('div', { class: 'tabs' }, V.categories.map((c) => h('button', {
-          class: c.id === cat ? 'on' : null, onclick: () => { cat = c.id; render(); },
+          class: c.id === cat ? 'on' : null, onclick: () => { cat = c.id; renderList(); },
         }, c.label))));
       }
       if (groups.length > 1) {
@@ -201,6 +219,24 @@
       groups.forEach((g, i) => body.push(h('section', { class: 'group', id: gid(i) },
         h('h2', null, g.name, h('span', { class: 'muted' }, g.items.length), vat.cloneNode(true)), g.items.map(row))));
     }
+    return body;
+  }
+  function renderList() {
+    const el = document.getElementById('list');
+    if (el) el.replaceChildren(...listBody().flat().filter(Boolean));
+  }
+
+  function searchBox() {
+    const input = h('input', { type: 'search', class: 'sinput', placeholder: '품목 검색 (예: 콜라, ㅅㅇㄲ)', value: query, enterkeyhint: 'search', 'aria-label': '품목 검색' });
+    const clear = h('button', { class: `sclear${query ? '' : ' hidden'}`, 'aria-label': '검색어 지우기' }, '×');
+    input.addEventListener('input', () => { query = input.value; clear.classList.toggle('hidden', !query); renderList(); });
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') input.blur(); }); // 엔터 = 키보드 내리기
+    clear.addEventListener('click', () => { query = ''; input.value = ''; clear.classList.add('hidden'); renderList(); input.focus(); });
+    return h('div', { class: 'search' }, h('span', { class: 'sicon', 'aria-hidden': 'true' }), input, clear);
+  }
+
+  function render() {
+    const D = deadline();
     app.replaceChildren(...[
       h('div', { class: 'hero' },
         h('div', { class: 'cap' }, V.store.name),
@@ -208,9 +244,11 @@
         h('p', { id: 'dl-sub', class: 'sub' }, D.sub)),
       homeTip(),
       usual().length ? h('div', { class: 'seg2' }, [['all', '전체 상품'], ['usual', '자주 시키는 품목']].map(([k, l]) => h('button', {
-        class: tab === k ? 'on' : null, 'aria-pressed': tab === k ? 'true' : 'false', onclick: () => { tab = k; render(); window.scrollTo(0, 0); },
+        class: tab === k && !query ? 'on' : null, 'aria-pressed': tab === k ? 'true' : 'false',
+        onclick: () => { tab = k; query = ''; render(); window.scrollTo(0, 0); },
       }, l))) : null,
-      body,
+      searchBox(),
+      h('div', { id: 'list' }, ...listBody().flat().filter(Boolean)),
       extras(),
       h('div', { class: 'pad' }),
       h('div', { class: 'bar', id: 'bar' }),
