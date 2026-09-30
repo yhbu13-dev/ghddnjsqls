@@ -66,6 +66,9 @@
     return run;
   }
 
+  // 부가세 10%: 품목 줄마다 계산해 더함 (확인서·명세서와 같은 방식). items 는 { price, q|qty[id] }
+  const vatOf = (items) => items.reduce((a, i) => a + Math.round(i.price * (i.q ?? qty[i.id]) * 0.1), 0);
+
   const totals = () => {
     let count = 0; let total = 0;
     for (const it of V.items) {
@@ -289,7 +292,10 @@
         h('span', null, it.name, h('b', null, `${qty[it.id]}${it.unit}`), diff(it)),
         h('span', { class: 'amt' }, won(qty[it.id] * it.price))))),
       dropped.length ? h('p', { class: 'dropped' }, `지난번엔 있었는데 빠진 품목: ${dropped.map((i) => i.name).join(', ')}`) : null,
-      h('div', { class: 'total' }, h('span', null, '합계'), h('b', null, won(t.total))),
+      h('div', { class: 'vats' },
+        h('div', null, h('span', null, '공급가액'), h('span', null, won(t.total))),
+        h('div', null, h('span', null, '부가세 (10%)'), h('span', null, won(vatOf(chosen))))),
+      h('div', { class: 'total' }, h('span', null, '합계 (부가세 포함)'), h('b', null, won(t.total + vatOf(chosen)))),
       h('div', { class: 'acts' },
         h('button', { class: 'btn', onclick: () => sheet.remove() }, '더 고치기'),
         h('button', { class: 'btn cta', onclick: (e) => submit(e.currentTarget) }, '주문 확정')));
@@ -321,7 +327,7 @@
           h('b', { class: 'amt' }, won(i.q * i.price))))),
         h('div', { class: 'pad' }),
         h('div', { class: 'bar' },
-          h('div', { class: 'acc' }, h('div', { class: 'sumline' }, h('span', null, '합계'), h('b', null, won(r.total)))),
+          h('div', { class: 'acc' }, h('div', { class: 'sumline' }, h('span', null, '합계 (부가세 포함)'), h('b', null, won(r.total + vatOf(chosen))))),
           // 카카오톡 인앱 브라우저 닫기 (카톡 밖에서 열었으면 아무 일 없음)
           h('a', { class: 'btn cta', href: 'kakaotalk://inappbrowser/close' }, '확인'))));
       window.scrollTo(0, 0);

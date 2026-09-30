@@ -278,3 +278,6 @@ td .acts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; 
   body, body.admin { background: #fff; }
   .panel { padding: 0; }
 }
+.sheet .vats { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--g200); }
+.sheet .vats div { display: flex; justify-content: space-between; font-size: 15px; color: var(--g600); padding: 3px 0; }
+.sheet .vats + .total { border-top: 0; padding-top: 6px; margin-top: 4px; }

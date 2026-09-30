@@ -29,6 +29,8 @@ table.lines td { padding: 7px 8px; border-bottom: 1px solid #e5e7eb; vertical-al
 table.lines tr.first td { border-top: 1px solid #9ca3af; }
 .n { text-align: right !important; white-space: nowrap; }
 .c { text-align: center !important; }
+.show-m { display: none; }
+@media (max-width: 640px) { .show-m { display: block; } }
 .muted { color: #6b7280; font-size: 12px; font-weight: 400; }
 .sum { margin: 14px 0 0 auto; width: 300px; }
 .sum div { display: flex; justify-content: space-between; padding: 5px 0; }
@@ -43,6 +45,8 @@ table.lines tr.first td { border-top: 1px solid #9ca3af; }
   .parties { grid-template-columns: 1fr; }
   .facts { grid-template-columns: 1fr 1fr; }
   table.lines { font-size: 12px; }
+  table.lines th, table.lines td { padding: 7px 4px; }
+  .hide-m { display: none; }
   .sum { width: 100%; }
 }
 @page { size: A4; margin: 12mm; }
