@@ -438,6 +438,14 @@
       input);
   }
   let bulkText = '';
+  let pasteOpen = false;
+  let sheetPreview = null; // 올린 엑셀 파일 미리보기 { name, rows, count, sample }
+  const loadScript = (src) => new Promise((ok, bad) => {
+    if (document.querySelector(`script[src="${src}"]`)) return ok();
+    const el = document.createElement('script');
+    el.src = src; el.onload = ok; el.onerror = () => bad(new Error('엑셀 읽기 도구를 불러오지 못했어요'));
+    document.head.append(el);
+  });
   let itemCat = null;
   function items() {
     const L = D.labels;
@@ -461,24 +469,88 @@
     const cats = Object.keys(L.categories);
     if (!itemCat || !cats.includes(itemCat)) itemCat = cats[0];
     const list = D.items.filter((i) => i.category === itemCat);
-    // 엑셀에서 복사해 붙여넣기
-    const bulkBox = h('textarea', { placeholder: '분류\t묶음\t품목명\t규격\t단위\t단가\n스낵\t과자\t새우깡\t\t개\t1200\n카페\t시럽\t바닐라 시럽 1L\t1L\t병\t11000' });
-    bulkBox.value = bulkText;
-    bulkBox.addEventListener('input', () => { bulkText = bulkBox.value; });
+    // ── 엑셀 파일로 한꺼번에 넣기 ──
     const bulkErr = h('div', { class: 'errs' });
-    const runBulk = async () => {
+    const sendBulk = async (text, done) => {
+      bulkErr.textContent = '';
       try {
-        const r = await call('/api/admin/items-bulk', { text: bulkBox.value });
-        if (r.errors.length) { bulkErr.textContent = r.errors.slice(0, 20).join('\n'); return; }
+        const r = await call('/api/admin/items-bulk', { text });
+        if (r.errors.length) {
+          bulkErr.textContent = `저장하지 않았어요. 아래 줄을 고쳐서 다시 올려 주세요.\n${r.errors.slice(0, 20).join('\n')}${r.errors.length > 20 ? `\n… 외 ${r.errors.length - 20}개` : ''}`;
+          return;
+        }
         D = r.data;
-        bulkText = '';
-        toast(`새 품목 ${r.added}개 추가 · ${r.updated}개 수정`);
+        if (done) done();
+        toast(`새 품목 ${r.added}개 추가 · ${r.updated}개 수정했어요`);
         render();
       } catch (e) { toast(e.message); }
     };
+    const pickFile = () => {
+      const input = h('input', { type: 'file', accept: '.xlsx,.csv', class: 'hidden' });
+      input.addEventListener('change', async () => {
+        const f = input.files[0];
+        input.remove();
+        if (!f) return;
+        try {
+          await loadScript('/assets/xlsx.js');
+          const rows = await window.readSheet(f);
+          const isHead = (r) => r.length && !/^(카페|스낵|음료|사우나|식당|cafe|snack|beverage)/i.test((r[0] || '').replace(/\s/g, '')) && !/^\d/.test(r[5] || '');
+          const body = rows.filter((r, i) => r.some(Boolean) && !(i === 0 && isHead(r)));
+          if (!body.length) throw new Error('파일에 품목이 없어요. [품목] 시트의 노란 칸에 적었는지 확인해 주세요');
+          sheetPreview = { name: f.name, rows, count: body.length, sample: body.slice(0, 8) };
+          render();
+        } catch (e) { toast(e.message); }
+      });
+      document.body.append(input);
+      input.click();
+    };
+    const exportCsv = () => {
+      const label = { cafe: '카페', snack: '스낵', beverage: '음료' };
+      const q = (x) => (/[",\n]/.test(String(x)) ? `"${String(x).replace(/"/g, '""')}"` : String(x));
+      const lines = [['분류', '묶음(진열대)', '품목명', '규격', '단위', '단가(원, 부가세 별도)', '판매 중지']]
+        .concat(D.items.map((i) => [label[i.category], i.grp, i.name, i.spec, i.unit, i.price, i.active ? '' : '중지']));
+      const blob = new Blob([`﻿${lines.map((l) => l.map(q).join(',')).join('\r\n')}`], { type: 'text/csv;charset=utf-8' });
+      const a = h('a', { href: URL.createObjectURL(blob), download: `투스타_품목목록_${new Date().toISOString().slice(0, 10)}.csv` });
+      document.body.append(a); a.click(); a.remove();
+    };
+    // 예전 방식: 복사해서 붙여넣기 (Tab 키도 칸 나누기로 입력됨)
+    const bulkBox = h('textarea', { placeholder: '분류\t묶음\t품목명\t규격\t단위\t단가\n스낵\t과자\t새우깡\t\t개\t1200\n카페\t시럽\t바닐라 시럽 1L\t1L\t병\t11000' });
+    bulkBox.value = bulkText;
+    bulkBox.addEventListener('input', () => { bulkText = bulkBox.value; });
+    bulkBox.addEventListener('keydown', (e) => {
+      if (e.key !== 'Tab') return;
+      e.preventDefault();
+      const { selectionStart: a, selectionEnd: z, value } = bulkBox;
+      bulkBox.value = `${value.slice(0, a)}\t${value.slice(z)}`;
+      bulkBox.selectionStart = bulkBox.selectionEnd = a + 1;
+      bulkText = bulkBox.value;
+    });
+    const sp = sheetPreview;
+    const excelPanel = h('div', { class: 'panel bulk' },
+      h('h2', null, '엑셀로 한꺼번에 넣기'),
+      h('ol', { class: 'steps' },
+        h('li', null, h('b', null, '양식 받기'), h('a', { class: 'btn small', href: '/assets/item-template.xlsx', download: true }, '엑셀 양식 받기')),
+        h('li', null, h('b', null, '[품목] 시트 노란 칸에 입력'), h('span', { class: 'small muted' }, '분류(카페/스낵/음료) · 묶음 · 품목명 · 규격 · 단위 · 단가')),
+        h('li', null, h('b', null, '저장한 파일 올리기'), h('button', { class: 'btn small primary', onclick: pickFile }, '엑셀 파일 올리기'))),
+      h('p', { class: 'small muted' }, '같은 분류에 같은 품목명이 있으면 새로 만들지 않고 가격·규격을 고쳐요. 가격만 바꿀 때는 ',
+        h('a', { href: '#', onclick: (e) => { e.preventDefault(); exportCsv(); } }, '지금 품목을 엑셀(CSV)로 받기'), ' → 단가 고치기 → 다시 올리기.'),
+      sp ? h('div', { class: 'preview' },
+        h('div', { class: 'pv-hd' }, h('b', null, `📄 ${sp.name}`), h('span', null, ` · 품목 ${sp.count}줄을 읽었어요`)),
+        h('div', { class: 'tbl' }, h('table', null,
+          h('tr', null, ['분류', '묶음', '품목명', '규격', '단위', '단가'].map((t) => h('th', null, t))),
+          sp.sample.map((r) => h('tr', null, [0, 1, 2, 3, 4, 5].map((k) => h('td', { class: k === 5 ? 'num' : null }, r[k] || ''))))),
+        sp.count > sp.sample.length ? h('p', { class: 'small muted' }, `… 외 ${sp.count - sp.sample.length}줄`) : null),
+        h('div', { class: 'acts' },
+          h('button', { class: 'btn primary', onclick: () => sendBulk(sp.rows.map((r) => r.slice(0, 6).join('\t')).join('\n'), () => { sheetPreview = null; }) }, `${sp.count}개 품목 저장`),
+          h('button', { class: 'btn', onclick: () => { sheetPreview = null; render(); } }, '취소'))) : null,
+      bulkErr,
+      h('details', { class: 'paste', open: pasteOpen, ontoggle: (e) => { pasteOpen = e.target.open; } }, h('summary', null, '또는 엑셀에서 복사해서 붙여넣기'),
+        bulkBox,
+        h('button', { class: 'btn', onclick: () => sendBulk(bulkBox.value, () => { bulkText = ''; }) }, '붙여넣은 품목 저장')));
     const inactive = D.items.filter((i) => !i.active).length;
     return [
       title('품목', `전체 ${D.items.length}개 · 판매 중 ${D.items.length - inactive}개`),
+      excelPanel,
       h('div', { class: `panel${editing ? ' hl' : ''}` }, h('h2', null, editing ? `품목 수정 — ${editing.name}` : '품목 하나 추가'),
         h('div', { class: 'form' },
           h('label', null, '분류', F.category), h('label', null, '진열대·묶음', F.grp), h('label', null, '품목 이름', F.name),
@@ -503,10 +575,6 @@
         h('h2', null, `판매 중지한 품목 ${inactive}개`),
         h('p', { class: 'small muted' }, '샘플 품목 등을 한꺼번에 정리할 때: 먼저 [판매 중지] 한 뒤 이 버튼을 누르세요. 지난 주문 내역은 그대로 남아요.'),
         h('button', { class: 'btn bad', onclick: () => removeItems(null) }, '판매 중지한 품목 모두 삭제')) : null,
-      h('div', { class: 'panel bulk' }, h('h2', null, '엑셀에서 한꺼번에 넣기'),
-        h('p', { class: 'small muted' }, '엑셀에서 [분류 · 묶음 · 품목명 · 규격 · 단위 · 단가] 6칸을 순서대로 선택해 복사한 뒤 아래에 붙여넣으세요. 분류는 카페 / 스낵 / 음료. 같은 분류에 같은 이름이 있으면 가격 등을 고쳐요.'),
-        bulkBox, bulkErr,
-        h('button', { class: 'btn primary', onclick: runBulk }, '붙여넣은 품목 저장')),
     ];
   }
 

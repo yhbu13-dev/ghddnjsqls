@@ -37,6 +37,10 @@ const FILES = {
   // 확인서·명세서를 휴대폰에서 바로 PDF 파일로 (MIT 라이선스, [PDF 저장]을 누를 때만 불러옴)
   '/assets/html2canvas.min.js': ['html2canvas.min.js', 'text/javascript; charset=utf-8'],
   '/assets/jspdf.umd.min.js': ['jspdf.umd.min.js', 'text/javascript; charset=utf-8'],
+  // 관리자 품목 엑셀 올리기: 엑셀 읽기 · 품목 등록 양식
+  '/assets/xlsx.js': ['xlsx.js', 'text/javascript; charset=utf-8'],
+  '/assets/item-template.xlsx': ['item-template.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    { 'content-disposition': `attachment; filename="item-template.xlsx"; filename*=UTF-8''${encodeURIComponent('투스타_품목등록_양식.xlsx')}` }],
   '/assets/icon-192.png': ['icon-192.png', 'image/png'],
   '/assets/icon-512.png': ['icon-512.png', 'image/png'],
 };
@@ -127,9 +131,9 @@ function createHandler({ db, cfg, assets, log = console.log, fetch: fetchImpl = 
     const page = async (name) => html(200, await file(PAGES[name]));
 
     if (m === 'GET' && FILES[p]) {
-      const [name, type] = FILES[p];
+      const [name, type, extra] = FILES[p];
       const body = await file(name);
-      return body == null ? json(404, { error: 'not found' }) : reply(200, body, type);
+      return body == null ? json(404, { error: 'not found' }) : reply(200, body, type, extra);
     }
     if (m === 'GET' && p === '/') return redirect('/admin');
     if (m === 'GET' && p === '/health') return json(200, { ok: true });

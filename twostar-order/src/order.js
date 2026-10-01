@@ -222,8 +222,8 @@ function parseItems(text) {
   const errors = [];
   String(text || '').split(/\r?\n/).forEach((line, i) => {
     if (!line.trim()) return;
-    const cols = (line.includes('\t') ? line.split('\t') : line.split(',')).map((c) => c.trim().replace(/^"|"$/g, ''));
-    const [catRaw = '', grp = '', name = '', spec = '', unit = '', priceRaw = ''] = cols;
+    const cols = (line.includes('\t') ? line.split('\t') : line.split(',')).map((c) => c.trim().replace(/^"(.*)"$/, '$1'));
+    const [catRaw = '', grp = '', name = '', spec = '', unit = '', priceRaw = '', stop = ''] = cols;
     const category = CAT_ALIAS[catRaw.replace(/\s/g, '').toLowerCase()];
     const price = Number(String(priceRaw).replace(/[,원\s]/g, ''));
     if (!category && i === 0 && !Number.isFinite(price)) return; // 제목 줄
@@ -231,7 +231,8 @@ function parseItems(text) {
     if (!category) return errors.push(`${n}번째 줄: 분류는 카페·스낵·음료 중 하나로 적어 주세요 ("${catRaw}")`);
     if (!name || name.length > 40) return errors.push(`${n}번째 줄: 품목명을 1~40자로 적어 주세요`);
     if (priceRaw === '' || !Number.isInteger(price) || price < 0 || price > 10_000_000) return errors.push(`${n}번째 줄: 단가가 숫자가 아닙니다 ("${priceRaw}")`);
-    rows.push({ category, grp: grp.slice(0, 20) || '기타', name, spec: spec.slice(0, 40), unit: unit.slice(0, 4) || '개', price });
+    // 7번째 칸에 '중지'라고 적힌 줄은 판매 중지로 (관리자 [지금 품목 받기] 파일을 고쳐서 다시 올릴 때)
+    rows.push({ category, grp: grp.slice(0, 20) || '기타', name, spec: spec.slice(0, 40), unit: unit.slice(0, 4) || '개', price, active: /중지/.test(stop) ? 0 : 1 });
   });
   if (rows.length > 2000) errors.push('한 번에 2000줄까지 넣을 수 있어요');
   return { rows, errors };
@@ -250,11 +251,11 @@ async function importItems(db, text) {
     const key = `${r.category}\u0000${r.name}`;
     const id = existing.get(key);
     if (id) {
-      list.push(['UPDATE items SET grp = ?, spec = ?, unit = ?, price = ?, active = 1 WHERE id = ?', [r.grp, r.spec, r.unit, r.price, id]]);
+      list.push(['UPDATE items SET grp = ?, spec = ?, unit = ?, price = ?, active = ? WHERE id = ?', [r.grp, r.spec, r.unit, r.price, r.active, id]]);
       updated++;
     } else {
-      list.push(['INSERT INTO items (category, grp, name, spec, unit, price, sort) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [r.category, r.grp, r.name, r.spec, r.unit, r.price, sort += 10]]);
+      list.push(['INSERT INTO items (category, grp, name, spec, unit, price, sort, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [r.category, r.grp, r.name, r.spec, r.unit, r.price, sort += 10, r.active]]);
       existing.set(key, -1); // 같은 붙여넣기 안에 같은 이름이 두 번 있으면 한 번만 추가
       added++;
     }

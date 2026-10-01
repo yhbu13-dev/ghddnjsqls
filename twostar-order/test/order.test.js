@@ -763,3 +763,13 @@ test('실물 명세서: 관리자 업로드 → 점주 확인서·발주서·카
   assert.equal((await call(stUrl.pathname)).status, 404);
   assert.equal((await db.get("SELECT COUNT(*) AS n FROM images WHERE name LIKE 's%'")).n, 0);
 });
+
+test('엑셀 올리기: 따옴표가 든 이름 · 7번째 칸 "중지" · 틀린 줄 번호', async () => {
+  const { db } = await setup();
+  const r = O.parseItems('분류\t묶음\t품목명\t규격\t단위\t단가\n스낵\t과자\t포카칩 & "오리지널"\t66g\t봉\t1500\n\n음료\t탄산\t"펩시"\t\t캔\t850\t중지\n스낵\t과자\t오류\t\t개\tabc');
+  assert.deepEqual(r.errors, ['5번째 줄: 단가가 숫자가 아닙니다 ("abc")']);
+  const ok = await O.importItems(db, '스낵\t과자\t포카칩 & "오리지널"\t66g\t봉\t1500\n음료\t탄산\t"펩시"\t\t캔\t850\t중지');
+  assert.equal(ok.added, 2);
+  const rows = await db.all("SELECT name, active FROM items WHERE name IN ('포카칩 & \"오리지널\"', '펩시') ORDER BY name");
+  assert.deepEqual(rows.map((x) => [x.name, x.active]), [['펩시', 0], ['포카칩 & "오리지널"', 1]]);
+});
