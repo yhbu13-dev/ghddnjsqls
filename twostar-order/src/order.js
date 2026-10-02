@@ -512,7 +512,8 @@ async function saveSettings(db, patch) {
   }
   if (patch.kakaoBotId !== undefined) {
     const id = String(patch.kakaoBotId).trim();
-    if (id && !/^[\w-]{4,64}$/.test(id)) throw new UserError('봇 ID 는 영문·숫자로 된 값이에요 (오픈빌더 주소창의 bots/ 뒤)');
+    // 개발 채널로 시험할 때는 봇 ID 뒤에 ! 를 붙인다 (카카오 안내)
+    if (id && !/^[\w-]{4,64}!?$/.test(id)) throw new UserError('봇 ID 는 영문·숫자로 된 값이에요 (오픈빌더 주소창의 bots/ 뒤)');
     next.kakaoBotId = id;
   }
   if (patch.kakaoEvent !== undefined) {
