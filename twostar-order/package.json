@@ -1,0 +1,13 @@
+{
+  "name": "twostar-order",
+  "version": "0.1.0",
+  "private": true,
+  "description": "투스타 발주 — 카카오톡 버튼 발주 (카페·사우나 스낵·식당 음료) · 품목 이용 승인 · 관리자 화면",
+  "license": "UNLICENSED",
+  "engines": { "node": ">=22.13" },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning src/server.js",
+    "seed": "node --disable-warning=ExperimentalWarning scripts/seed.js",
+    "test": "node --disable-warning=ExperimentalWarning --test test/*.test.js"
+  }
+}

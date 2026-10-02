@@ -16,9 +16,10 @@ function safetyOf(item, R) {
 /** 밴드를 포함한 소진 속도 (박스/일) */
 const burnRate = (item, store, R) => Math.max(1e-6, rateOf(item, R) * (1 + store.alpha) * (1 + betaOf(store, R)));
 
+/** 재고 추정·자동 제안 대상 품목 (POS 판매로 추정하는 식당 음료만) */
 function carriedItems(db, storeId) {
   return db.all(`SELECT ss.*, k.name, k.pack, k.unit, k.price FROM store_skus ss JOIN skus k ON k.id = ss.sku_id
-                 WHERE ss.store_id = ? AND ss.carried = 1 AND k.active = 1 ORDER BY k.sort, k.id`, [storeId]);
+                 WHERE ss.store_id = ? AND ss.carried = 1 AND k.active = 1 AND k.category = 'beverage' ORDER BY k.sort, k.id`, [storeId]);
 }
 
 /** POS 메뉴명 → SKU 매핑 (매장별 매핑이 있으면 우선, 없으면 공통 매핑) */

@@ -22,7 +22,7 @@ function pilot(ctx, now) {
   const weeks = Array.from({ length: n }, (_, i) => ({ week: i + 1, start: ps + i * WK, decided: 0, approved: 0, counts: 0, errSum: 0, hits: 0, stops: 0, stopSum: 0 }));
   const at = (w) => weeks[Math.max(0, Math.min(n - 1, w))];
   for (const r of db.all(`SELECT CAST((created_at - ?) / ? AS INTEGER) AS w, SUM(response = 'approve') AS a, SUM(response IN ('approve','hold','none')) AS d
-                          FROM proposals WHERE created_at >= ? AND status != 'cancelled' GROUP BY w`, [ps, WK, ps])) { at(r.w).approved += r.a; at(r.w).decided += r.d; }
+                          FROM proposals WHERE created_at >= ? AND status != 'cancelled' AND source = 'auto' GROUP BY w`, [ps, WK, ps])) { at(r.w).approved += r.a; at(r.w).decided += r.d; }
   for (const r of db.all(`SELECT CAST((t - ?) / ? AS INTEGER) AS w, COUNT(*) AS c, SUM(ABS(estimate - actual) / MAX(actual, 0.5)) AS e, SUM(ABS(estimate - actual) <= band) AS h
                           FROM counts WHERE source != 'onboarding' AND t >= ? GROUP BY w`, [ps, WK, ps])) { at(r.w).counts += r.c; at(r.w).errSum += r.e; at(r.w).hits += r.h; }
   for (const r of db.all(`SELECT CAST((departed_at - ?) / ? AS INTEGER) AS w, COUNT(*) AS c, SUM((departed_at - arrived_at) / 60000.0) AS s
@@ -30,7 +30,7 @@ function pilot(ctx, now) {
   const hist = db.all(`SELECT MIN(12, MAX(3, CAST((departed_at - arrived_at) / 60000.0 AS INTEGER))) AS b, COUNT(*) AS c FROM stops
                        WHERE status = 'done' AND arrived_at IS NOT NULL AND departed_at >= ? GROUP BY b`, [ps]);
   const perf = new Map();
-  for (const r of db.all(`SELECT store_id, response, sent_at, responded_at FROM proposals WHERE created_at >= ? AND response IN ('approve','hold','none') AND status != 'cancelled'`, [ps])) {
+  for (const r of db.all(`SELECT store_id, response, sent_at, responded_at FROM proposals WHERE created_at >= ? AND response IN ('approve','hold','none') AND status != 'cancelled' AND source = 'auto'`, [ps])) {
     if (!perf.has(r.store_id)) perf.set(r.store_id, { store: r.store_id, decided: 0, approved: 0, holds: 0, nones: 0, resp: [] });
     const x = perf.get(r.store_id);
     x.decided++;
@@ -60,7 +60,7 @@ function mapProposal(p, lines) {
     openAt: p.opened_at, remindedAt: p.reminded_at, respondAt: p.responded_at, response: p.response, responder: p.responder,
     closeAt: p.closed_at, paidAt: p.paid_at, payFailAt: p.pay_failed_at, payFailReason: p.pay_fail_reason, payMethod: p.pay_method, payRef: p.pay_ref,
     deliverDate: p.deliver_date, deliveredAt: p.delivered_at, amount: p.amount, reproposal: !!p.reproposal, manual: !!p.manual,
-    review: !!p.review, sendRule: p.send_rule, modify: !!p.modified, createdBy: p.created_by,
+    review: !!p.review, sendRule: p.send_rule, modify: !!p.modified, createdBy: p.created_by, source: p.source,
     lines: (lines || []).sort((a, b) => (b.trig - a.trig) || (b.qty * b.price - a.qty * a.price)),
   };
 }
@@ -100,7 +100,7 @@ function build(ctx, user, now) {
     prof.get(r.store_id)[r.h] = r.b;
   }
   const itemsBy = new Map();
-  for (const it of db.all(`SELECT ss.*, k.pack, k.price FROM store_skus ss JOIN skus k ON k.id = ss.sku_id WHERE ss.carried = 1 AND k.active = 1 ORDER BY k.sort, k.id`)) {
+  for (const it of db.all(`SELECT ss.*, k.pack, k.price FROM store_skus ss JOIN skus k ON k.id = ss.sku_id WHERE ss.carried = 1 AND k.active = 1 AND k.category = 'beverage' ORDER BY k.sort, k.id`)) {
     if (!itemsBy.has(it.store_id)) itemsBy.set(it.store_id, []);
     itemsBy.get(it.store_id).push({
       sku: it.sku_id, E: r4(it.est), w: r4(it.band), S: inv.safetyOf(it, R), r: r4(inv.rateOf(it, R)), rateSource: it.rate != null ? 'pos' : it.rate_manual != null ? 'manual' : 'default',
@@ -114,7 +114,7 @@ function build(ctx, user, now) {
     const tot = p ? p.reduce((a, b) => a + b, 0) : 0;
     p = tot > 1 ? p.map((x) => r4(x / tot)) : DEFAULT_PROFILE[s.type];
     return {
-      idx: s.id, id: s.code, name: s.name, region: s.region_id, type: s.type, alpha: s.alpha, beta: s.beta != null ? s.beta : R.band_beta,
+      idx: s.id, id: s.code, name: s.name, region: s.region_id, type: s.type, biz: s.biz, alpha: s.alpha, beta: s.beta != null ? s.beta : R.band_beta,
       breakPref: s.send_pref === 'break', exception: !!s.review_required, active: !!s.active,
       lat: s.lat, lng: s.lng, address: s.address, owner: s.owner_name, phone: viewer ? maskPhone(s.owner_phone) : s.owner_phone,
       lastPosAt: s.last_pos_at, cooldownUntil: s.cooldown_until, profile: p, items: itemsBy.get(s.id) || [],
@@ -143,7 +143,7 @@ function build(ctx, user, now) {
     settings: {
       cutoff: R.cutoffH, dispatch: R.dispatchH, deliveryDays: [...R.days], expireHours: R.expire_hours, pilotStart: R.pilotStart,
       feeRate: R.fee_rate, driverCapacity: R.driver_capacity, targets: { approval: R.target_approval, stop: R.target_stop, error: R.target_error },
-      payMethod: R.pay_method, notifier: R.notifier, sampleData: !!R.sample_data, coverDays: R.cover_days, bandW0: R.band_w0, retryAt: R.retryH,
+      payMethod: R.pay_method, notifier: R.notifier, sampleData: !!R.sample_data, orderLinkHours: R.order_link_hours, coverDays: R.cover_days, bandW0: R.band_w0, retryAt: R.retryH,
     },
     regions: db.all('SELECT * FROM regions ORDER BY sort, id'),
     drivers: db.all('SELECT id, name, phone, region_id, vehicle, capacity, active FROM drivers ORDER BY id').map((d) => ({ ...d, phone: viewer ? maskPhone(d.phone) : d.phone })),
@@ -154,6 +154,7 @@ function build(ctx, user, now) {
     pilot: pilot(ctx, now),
     unmapped: db.get('SELECT COUNT(*) AS c FROM unmapped_menu').c,
     outboxFailed: db.get("SELECT COUNT(*) AS c FROM messages WHERE status = 'failed'").c,
+    accessPending: db.get("SELECT COUNT(*) AS c FROM store_categories WHERE status = 'pending'").c,
   };
 }
 
