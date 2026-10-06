@@ -798,3 +798,44 @@ test('발주 후 발주서를 다시 열면 수량은 0에서 시작 (사우나�
   v = await (await call(`/api/o/${tk}/reorder`, { method: 'POST', headers: W })).json();
   assert.equal(v.cart[id], 3, '[지난 발주 그대로 불러오기]는 그대로 동작');
 });
+
+test('휴대폰 알림(웹 푸시): 발주서에서 켜기 → 관리자가 확인하면 즉시 발송, 없어진 휴대폰은 정리', async () => {
+  const crypto = require('node:crypto');
+  const db = open(':memory:');
+  const sent = [];
+  let status = 201;
+  const fetchImpl = async (u, init) => { sent.push({ u, init }); return new Response('', { status }); };
+  const handle = createHandler({ db, cfg: { adminPassword: 'pw', skillKey: 'k', blockId: 'B', minAmount: 0, guest: {}, secret: 's' }, log: () => {}, assets: async () => null, fetch: fetchImpl });
+  const call = (path, init) => handle(new Request(`https://x.com${path}`, init), { ip: '1' });
+  const r = await call('/admin/login', { method: 'POST', body: JSON.stringify({ password: 'pw' }) });
+  const H = { cookie: r.headers.get('set-cookie').split(';')[0], 'x-ts': '1' };
+  const post = async (sub, body) => call(`/api/admin/${sub}`, { method: 'POST', headers: H, body: JSON.stringify(body) });
+  await post('items', { category: 'cafe', grp: '시럽', name: '바닐라', price: 10000 });
+  const st = await (await post('stores', { name: '카페', biz: 'cafe' })).json();
+  const tk = new URL(st.link).pathname.split('/').pop();
+  const W = { 'x-ts': '1' };
+  let v = await (await call(`/api/o/${tk}`)).json();
+  assert.match(v.pushKey, /^[\w-]{87}$/, '서버 공개키 (65바이트)');
+  const ua = crypto.createECDH('prime256v1'); ua.generateKeys();
+  const sub = { endpoint: 'https://fcm.googleapis.com/fcm/send/abc', keys: { p256dh: ua.getPublicKey().toString('base64url'), auth: crypto.randomBytes(16).toString('base64url') } };
+  assert.equal((await call(`/api/o/${tk}/push`, { method: 'POST', headers: W, body: JSON.stringify({ sub: { ...sub, endpoint: 'https://evil.example/x' } }) })).status, 400, '알림 서버가 아닌 주소는 거절');
+  assert.equal((await call(`/api/o/${tk}/push`, { method: 'POST', headers: W, body: JSON.stringify({ sub }) })).status, 200);
+  assert.equal((await (await call(`/api/admin/store?id=${st.id}`, { headers: H })).json()).store.phones, 1);
+
+  v = await (await call(`/api/o/${tk}/cart`, { method: 'PUT', headers: W, body: JSON.stringify({ cart: { [v.items[0].id]: 1 } }) })).json();
+  const done = await (await call(`/api/o/${tk}/submit`, { method: 'POST', headers: W, body: JSON.stringify({ rev: v.rev }) })).json();
+  assert.equal(sent.length, 1, '접수 알림');
+  const id = (await (await call('/api/admin/data', { headers: H })).json()).orders[0].id;
+  const res = await (await post('status', { id, status: 'confirmed' })).json();
+  assert.deepEqual(res.notify.push, { phones: 1, sent: 1, error: '' });
+  assert.equal(sent.length, 2);
+  assert.equal(sent[1].u, sub.endpoint);
+  assert.match(sent[1].init.headers.authorization, /^vapid t=.+, k=/);
+  assert.equal(sent[1].init.headers['content-encoding'], 'aes128gcm');
+  assert.ok(done.no);
+
+  status = 410; // 휴대폰에서 알림을 지웠거나 앱을 지움
+  await post('status', { id, status: 'shipped' });
+  assert.equal((await (await call(`/api/admin/store?id=${st.id}`, { headers: H })).json()).store.phones, 0, '없어진 휴대폰은 목록에서 지움');
+  assert.equal((await post('notify-test', { id: st.id })).status, 400, '받을 곳이 없으면 안내');
+});

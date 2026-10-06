@@ -107,9 +107,17 @@
   }
 
   // 상태를 바꾸면 점주 카톡으로 알림이 간다 → 결과를 알려 줌
-  const notifyMsg = (n) => (!n ? '' : !n.users ? ' · 카톡 연결된 사람이 없어 알림은 없어요'
-    : n.error ? ` · 카톡 자동 알림 실패 (${n.error}). 점주가 채팅방을 열면 보여요`
-      : !n.configured ? ' · 알림은 점주가 채팅방을 열면 보여요 (자동 발송은 [설정])' : ` · 카톡 알림 ${n.sent}명에게 보냈어요`);
+  //   휴대폰 알림(무료·즉시)을 먼저, 카톡은 다음에 채팅방을 열면 보임
+  const notifyMsg = (n) => {
+    if (!n) return '';
+    const p = n.push || {};
+    const parts = [];
+    if (p.sent) parts.push(`휴대폰 알림 ${p.sent}대에 바로 보냈어요`);
+    else if (p.phones) parts.push(`휴대폰 알림 실패${p.error ? ` (${p.error})` : ''}`);
+    if (n.users) parts.push(n.configured && !n.error && n.sent ? `카톡 ${n.sent}명에게 보냈어요` : '카톡은 점주가 채팅방을 열면 보여요');
+    if (!parts.length) parts.push('알림 받을 휴대폰·카톡이 없어요');
+    return ` · ${parts.join(' · ')}`;
+  };
   async function changeStatus(o, s) {
     if (s === 'canceled' && !confirm(`${o.store_name || ''} ${o.no} 주문을 취소할까요?\n점주에게 취소 알림이 갑니다.`)) return;
     try {
@@ -211,7 +219,7 @@
     const test = async () => {
       try {
         const r = await call('/api/admin/notify-test', { id: s.id });
-        toast(r.error ? `자동 발송 실패: ${r.error}` : r.configured ? `테스트 알림을 ${r.sent}명에게 보냈어요` : '자동 발송 설정 전이에요. 점주가 채팅방을 열면 테스트 알림이 보여요');
+        toast(`테스트 알림${notifyMsg(r)}`);
       } catch (e) { toast(e.message); }
     };
     const unlink = async () => {
@@ -226,7 +234,8 @@
           h('div', null, h('h1', null, s.name), h('p', null, [L.biz[s.biz], s.owner, s.phone].filter(Boolean).join(' · '))),
           h('div', { class: 'acts' },
             h('span', { class: 'stat' }, h('span', { class: `dot${s.kakao ? ' on' : ''}` }), s.kakao ? `카톡 연결 ${s.kakao}명` : '카톡 미연결'),
-            s.kakao ? h('button', { class: 'btn small', onclick: test }, '알림 테스트') : null,
+            h('span', { class: 'stat' }, h('span', { class: `dot${s.phones ? ' on' : ''}` }), s.phones ? `휴대폰 알림 ${s.phones}대` : '휴대폰 알림 꺼짐'),
+            s.kakao || s.phones ? h('button', { class: 'btn small', onclick: test }, '알림 테스트') : null,
             s.kakao ? h('button', { class: 'btn small bad', onclick: unlink }, '연결 해제') : null))),
       h('div', { class: 'kpis' },
         kpi(`${ym(month)} 발주`, won(sum), `${live.length}건`),
@@ -611,7 +620,14 @@
           h('label', null, '배송 최소 (일)', F.deliveryMin), h('label', null, '배송 최대 (일)', F.deliveryMax),
           h('label', { class: 'check' }, week, '주말 빼고 계산'),
           h('button', { class: 'btn primary', onclick: () => save(['cutoffHour', 'deliveryMin', 'deliveryMax', 'skipWeekend']) }, '저장'))),
-      h('div', { class: 'panel' }, h('h2', null, '카톡 자동 알림', h('span', { class: 'stat' }, h('span', { class: `dot${on ? ' on' : ''}` }), on ? '켜짐' : '설정 전')),
+      h('div', { class: 'panel' }, h('h2', null, '휴대폰 알림 (무료)', h('span', { class: 'stat' }, h('span', { class: 'dot on' }), '사용 중')),
+        h('p', { class: 'small muted' }, '주문을 확인·출고·취소하면, 발주서에서 [알림 켜기]를 누른 점주 휴대폰에 바로 알림이 떠요. 비용은 없어요.'),
+        h('ol', { class: 'small guide' },
+          h('li', null, '안드로이드: 카톡 발주서 → [크롬으로 열기] → [알림 켜기] → 허용'),
+          h('li', null, '아이폰: 카톡 발주서 → [Safari로 열기] → 공유(□↑) → [홈 화면에 추가] → 홈 화면 아이콘으로 열고 [알림 켜기] → 허용 (iOS 16.4 이상)'),
+          h('li', null, '켜진 휴대폰 수는 매장 상세에서 보이고, [알림 테스트]로 확인할 수 있어요'),
+          h('li', null, '카톡 알림도 그대로 쌓여서, 점주가 채팅방에서 버튼을 누르면 맨 위에 보여요'))),
+      h('div', { class: 'panel' }, h('h2', null, '카톡 자동 알림 (유료 · 선택)', h('span', { class: 'stat' }, h('span', { class: `dot${on ? ' on' : ''}` }), on ? '켜짐' : '설정 전')),
         h('p', { class: 'small muted' }, on ? '주문을 확인·출고·취소하면 점주 카톡으로 바로 알림이 가요.'
           : '지금은 점주가 채팅방에서 버튼을 누를 때 알림이 맨 위에 보여요. 아래를 설정하면 바로 보내져요.'),
         h('ol', { class: 'small guide' },

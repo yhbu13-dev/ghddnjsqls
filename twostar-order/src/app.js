@@ -13,6 +13,7 @@ const images = require('./images');
 const ST = require('./statements');
 const docs = require('./docs');
 const { sendEvent, orderMessage } = require('./notify');
+const P = require('./push');
 const { migrate, metaValue } = require('./schema');
 const { seed } = require('./sample');
 
@@ -42,6 +43,8 @@ const FILES = {
   '/assets/item-template.xlsx': ['item-template.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     { 'content-disposition': `attachment; filename="item-template.xlsx"; filename*=UTF-8''${encodeURIComponent('투스타_품목등록_양식.xlsx')}` }],
   '/assets/icon-192.png': ['icon-192.png', 'image/png'],
+  // 휴대폰 알림을 받는 서비스 워커 (사이트 전체에서 쓰도록 맨 앞 주소에 둔다)
+  '/sw.js': ['sw.js', 'text/javascript; charset=utf-8'],
   '/assets/icon-512.png': ['icon-512.png', 'image/png'],
 };
 const PAGES = { order: 'order.html', admin: 'admin.html', login: 'login.html' };
@@ -108,16 +111,24 @@ function createHandler({ db, cfg, assets, log = console.log, fetch: fetchImpl = 
     // 실물 명세서 링크 (점주용, 1년). 사진은 이 링크 아래에서만 열린다
     const stLink = (stId) => `${base}/st/${tk.sign('st', String(stId), LINK_TTL)}`;
     const stLinks = (list, on) => list.map((x, i) => ({ label: `실물 명세서${list.length > 1 ? ` ${i + 1}` : ''}`, href: stLink(x.id), on: on === x.id }));
-    // 주문 상태가 바뀌면 점주 카톡으로 알림 (Event API 설정이 없으면 다음에 채팅방을 열 때 보여 줌)
+    // 휴대폰 알림(웹 푸시)을 보낸 곳 표시 (애플은 https 주소나 메일 주소를 요구)
+    const pushOpts = { contact: base.startsWith('https:') ? base : 'mailto:admin@twostarorder.com', fetchImpl };
+    // 주문 상태가 바뀌면 점주에게 알림
+    //   ① 휴대폰 알림(무료, 즉시) — 발주서에서 [알림 켜기]를 누른 휴대폰
+    //   ② 카톡 — 다음에 채팅방에서 버튼을 누르면 보임 (Event API 설정이 있으면 즉시, 유료)
     const notifyOrder = async (orderId, kind) => {
       const o = await O.orderWithStore(db, orderId);
       const s = await O.getSettings(db);
       const msg = o && orderMessage(o, kind, s);
       if (!msg) return null;
       const users = await O.addNotices(db, o.store_id, o.id, msg.title, msg.text);
-      const r = await sendEvent(s, users, `${msg.title}\n${msg.text}`, fetchImpl);
+      const [r, push] = await Promise.all([
+        sendEvent(s, users, `${msg.title}\n${msg.text}`, fetchImpl),
+        P.sendToStore(db, o.store_id, { title: msg.title, body: msg.text, url: docLink(o.id), tag: `order-${o.id}` }, pushOpts),
+      ]);
       if (r.error) await O.note(db, 'notify', `카톡 알림 실패 · ${o.store.name} ${o.no} · ${r.error}`);
-      return { users: users.length, ...r };
+      if (push.error && !push.sent) await O.note(db, 'notify', `휴대폰 알림 실패 · ${o.store.name} ${o.no} · ${push.error}`);
+      return { users: users.length, ...r, push };
     };
     const hooks = {
       async onOrder(order, dup) {
@@ -219,7 +230,7 @@ function createHandler({ db, cfg, assets, log = console.log, fetch: fetchImpl = 
         icons: [{ src: '/assets/icon-192.png', sizes: '192x192', type: 'image/png' }, { src: '/assets/icon-512.png', sizes: '512x512', type: 'image/png' }],
       }), 'application/manifest+json; charset=utf-8');
     }
-    mm = p.match(/^\/api\/o\/([\w.-]{10,200})(?:\/(cart|submit|reorder|request))?$/);
+    mm = p.match(/^\/api\/o\/([\w.-]{10,200})(?:\/(cart|submit|reorder|request|push))?$/);
     if (mm) {
       const store = await storeFromToken(mm[1]);
       if (!store) return json(404, { error: '링크가 만료되었어요. 카카오톡에서 다시 열어 주세요' });
@@ -232,6 +243,12 @@ function createHandler({ db, cfg, assets, log = console.log, fetch: fetchImpl = 
         await O.replaceCart(db, store, b.cart);
         const c = await O.cartOf(db, store);
         return json(200, { rev: c.rev, cart: Object.fromEntries(c.lines.map((l) => [l.item_id, l.qty])) });
+      }
+      if (act === 'push' && m === 'POST') {
+        // 휴대폰 알림 켜기 (b.sub = 브라우저가 준 구독 정보) · 끄기 (b.off = endpoint)
+        if (b.off) { await P.unsubscribe(db, b.off); return json(200, { ok: true }); }
+        if (!(await P.subscribe(db, store.id, b.sub))) throw new O.UserError('이 휴대폰에서는 알림을 켤 수 없어요');
+        return json(200, { ok: true });
       }
       if (act === 'reorder' && m === 'POST') { await O.reorder(db, store); return json(200, await sheetView(store, docLink, stLink)); }
       if (act === 'request' && m === 'POST') {
@@ -348,8 +365,9 @@ function createHandler({ db, cfg, assets, log = console.log, fetch: fetchImpl = 
         const s = await O.getSettings(db);
         const msg = orderMessage({ store, lines: [] }, 'test', s);
         const users = await O.addNotices(db, store.id, null, msg.title, msg.text);
-        if (!users.length) throw new O.UserError('이 매장에 연결된 카톡이 없어요. 먼저 연결 코드로 연결해 주세요');
-        return json(200, { users: users.length, ...(await sendEvent(s, users, `${msg.title}\n${msg.text}`, fetchImpl)) });
+        const push = await P.sendToStore(db, store.id, { title: msg.title, body: msg.text, url: orderLink(store), tag: 'test' }, pushOpts);
+        if (!users.length && !push.phones) throw new O.UserError('이 매장에 연결된 카톡도, 알림을 켠 휴대폰도 없어요');
+        return json(200, { users: users.length, ...(await sendEvent(s, users, `${msg.title}\n${msg.text}`, fetchImpl)), push });
       }
       else if (sub === 'access' && m === 'POST') await O.decideAccess(db, Number(b.store_id), String(b.category), String(b.decision));
       else if (sub === 'stores' && m === 'POST') {
@@ -402,8 +420,9 @@ function createHandler({ db, cfg, assets, log = console.log, fetch: fetchImpl = 
   // 발주가 끝나면 장바구니가 비워지므로 다음에 열면 늘 0개에서 시작 (지난 발주는 [지난 발주 그대로 불러오기]로만)
   async function sheetView(store, docLink = null, stLink = null) {
     // 서로 관계없는 조회는 한꺼번에 (클라우드 DB 왕복 시간을 줄임)
-    const [cart, last, cats, access, s, recent] = await Promise.all([
+    const [cart, last, cats, access, s, recent, vapid] = await Promise.all([
       O.cartOf(db, store), O.lastOrder(db, store), O.categoriesOf(db, store), O.accessStates(db, store), O.getSettings(db), O.ordersOf(db, store, 5),
+      P.vapidKeys(db),
     ]);
     const lastQty = {};
     if (last) for (const l of last.lines) lastQty[l.item_id] = l.qty;
@@ -417,6 +436,7 @@ function createHandler({ db, cfg, assets, log = console.log, fetch: fetchImpl = 
       items,
       cart: Object.fromEntries(cart.lines.map((l) => [l.item_id, l.qty])),
       rev: cart.rev,
+      pushKey: vapid.publicKey, // 휴대폰 알림 켜기에 쓰는 서버 공개키
       minAmount: cfg.minAmount,
       // 발주서 상단 '마감까지 ○시간' · 도착 예정일 계산용
       rules: { cutoffHour: s.cutoffHour, deliveryMin: s.deliveryMin, deliveryMax: s.deliveryMax, skipWeekend: s.skipWeekend },
@@ -459,7 +479,8 @@ function createHandler({ db, cfg, assets, log = console.log, fetch: fetchImpl = 
 
   /** 매장 상세: 월별 합계 + 고른 달(없으면 최근 달)의 주문 */
   async function storeDetail(id, month) {
-    const store = await db.get(`SELECT s.*, (SELECT COUNT(*) FROM user_stores l WHERE l.store_id = s.id) AS kakao
+    const store = await db.get(`SELECT s.*, (SELECT COUNT(*) FROM user_stores l WHERE l.store_id = s.id) AS kakao,
+                                (SELECT COUNT(*) FROM push_subs p WHERE p.store_id = s.id) AS phones
                                 FROM stores s WHERE s.id = ?`, [id]);
     if (!store) throw new O.UserError('매장을 찾을 수 없습니다');
     const months = await O.storeMonths(db, id);
