@@ -773,3 +773,28 @@ test('엑셀 올리기: 따옴표가 든 이름 · 7번째 칸 "중지" · 틀�
   const rows = await db.all("SELECT name, active FROM items WHERE name IN ('포카칩 & \"오리지널\"', '펩시') ORDER BY name");
   assert.deepEqual(rows.map((x) => [x.name, x.active]), [['펩시', 0], ['포카칩 & "오리지널"', 1]]);
 });
+
+test('발주 후 발주서를 다시 열면 수량은 0에서 시작 (사우나도 자동으로 채우지 않음)', async () => {
+  const db = open(':memory:');
+  const handle = createHandler({ db, cfg: { adminPassword: 'pw', skillKey: 'k', blockId: 'B', minAmount: 0, guest: {}, secret: 's' }, log: () => {}, assets: async () => null });
+  const call = (path, init) => handle(new Request(`https://x.com${path}`, init), { ip: '1' });
+  const r = await call('/admin/login', { method: 'POST', body: JSON.stringify({ password: 'pw' }) });
+  const H = { cookie: r.headers.get('set-cookie').split(';')[0], 'x-ts': '1' };
+  const post = async (sub, body) => call(`/api/admin/${sub}`, { method: 'POST', headers: H, body: JSON.stringify(body) });
+  await post('items', { category: 'snack', grp: '음료', name: '식혜', price: 20000 });
+  const st = await (await post('stores', { name: '사우나', biz: 'sauna' })).json();
+  const tk = new URL(st.link).pathname.split('/').pop();
+  const W = { 'x-ts': '1' };
+  let v = await (await call(`/api/o/${tk}?fresh=1`)).json();
+  const id = v.items[0].id;
+  v = await (await call(`/api/o/${tk}/cart`, { method: 'PUT', headers: W, body: JSON.stringify({ cart: { [id]: 3 } }) })).json();
+  const done = await (await call(`/api/o/${tk}/submit`, { method: 'POST', headers: W, body: JSON.stringify({ rev: v.rev }) })).json();
+  assert.ok(done.no);
+  assert.deepEqual(done.view.cart, {}, '발주 직후 장바구니 비움');
+  v = await (await call(`/api/o/${tk}?fresh=1`)).json();
+  assert.deepEqual(v.cart, {}, '다시 열어도 0개');
+  assert.equal(v.items[0].last, 3, '지난번 수량은 참고용으로만');
+  assert.ok(v.orders[0].doc, '최근 발주 확인서 링크 유지');
+  v = await (await call(`/api/o/${tk}/reorder`, { method: 'POST', headers: W })).json();
+  assert.equal(v.cart[id], 3, '[지난 발주 그대로 불러오기]는 그대로 동작');
+});

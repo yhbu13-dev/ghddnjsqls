@@ -225,7 +225,7 @@ function createHandler({ db, cfg, assets, log = console.log, fetch: fetchImpl = 
       if (!store) return json(404, { error: '링크가 만료되었어요. 카카오톡에서 다시 열어 주세요' });
       if (m !== 'GET' && request.headers.get('x-ts') !== '1') return json(403, { error: 'forbidden' });
       const act = mm[2];
-      if (!act && m === 'GET') return json(200, await sheetView(store, url.searchParams.get('fresh') === '1', docLink, stLink));
+      if (!act && m === 'GET') return json(200, await sheetView(store, docLink, stLink));
       const b = await readJson(request);
       if (act === 'cart' && m === 'PUT') {
         // 수량을 바꿀 때마다 불리므로 가볍게: 장바구니 버전과 수량만 돌려준다
@@ -233,18 +233,18 @@ function createHandler({ db, cfg, assets, log = console.log, fetch: fetchImpl = 
         const c = await O.cartOf(db, store);
         return json(200, { rev: c.rev, cart: Object.fromEntries(c.lines.map((l) => [l.item_id, l.qty])) });
       }
-      if (act === 'reorder' && m === 'POST') { await O.reorder(db, store); return json(200, await sheetView(store)); }
+      if (act === 'reorder' && m === 'POST') { await O.reorder(db, store); return json(200, await sheetView(store, docLink, stLink)); }
       if (act === 'request' && m === 'POST') {
         const r = await O.requestAccess(db, store, String(b.category || ''));
         if (r === 'requested') await hooks.onAccess(store, b.category);
-        return json(200, await sheetView(store));
+        return json(200, await sheetView(store, docLink, stLink));
       }
       if (act === 'submit' && m === 'POST') {
         const s = await O.getSettings(db);
         const { order, duplicate } = await O.submit(db, store, b.rev, { via: 'web', memo: b.memo, minAmount: cfg.minAmount });
         await hooks.onOrder(order, duplicate);
         if (!duplicate) await notifyOrder(order.id, 'received');
-        return json(200, { no: order.no, total: order.total, duplicate, doc: docLink(order.id), eta: O.eta(Date.now(), s), view: await sheetView(store) });
+        return json(200, { no: order.no, total: order.total, duplicate, doc: docLink(order.id), eta: O.eta(Date.now(), s), view: await sheetView(store, docLink, stLink) });
       }
       return json(404, { error: 'not found' });
     }
@@ -399,18 +399,11 @@ function createHandler({ db, cfg, assets, log = console.log, fetch: fetchImpl = 
     return json(404, { error: 'not found' });
   }
 
-  async function sheetView(store, prefill = false, docLink = null, stLink = null) {
-    let cart = await O.cartOf(db, store);
-    let prefilled = false;
-    // 사우나: 품목이 많아 매번 지난 발주를 채운 발주서로 시작 (빈 장바구니일 때만)
-    if (prefill && store.biz === 'sauna' && !cart.count && (await O.lastOrder(db, store))) {
-      await O.reorder(db, store);
-      cart = await O.cartOf(db, store);
-      prefilled = cart.count > 0;
-    }
+  // 발주가 끝나면 장바구니가 비워지므로 다음에 열면 늘 0개에서 시작 (지난 발주는 [지난 발주 그대로 불러오기]로만)
+  async function sheetView(store, docLink = null, stLink = null) {
     // 서로 관계없는 조회는 한꺼번에 (클라우드 DB 왕복 시간을 줄임)
-    const [last, cats, access, s, recent] = await Promise.all([
-      O.lastOrder(db, store), O.categoriesOf(db, store), O.accessStates(db, store), O.getSettings(db), O.ordersOf(db, store, 5),
+    const [cart, last, cats, access, s, recent] = await Promise.all([
+      O.cartOf(db, store), O.lastOrder(db, store), O.categoriesOf(db, store), O.accessStates(db, store), O.getSettings(db), O.ordersOf(db, store, 5),
     ]);
     const lastQty = {};
     if (last) for (const l of last.lines) lastQty[l.item_id] = l.qty;
@@ -424,7 +417,6 @@ function createHandler({ db, cfg, assets, log = console.log, fetch: fetchImpl = 
       items,
       cart: Object.fromEntries(cart.lines.map((l) => [l.item_id, l.qty])),
       rev: cart.rev,
-      prefilled,
       minAmount: cfg.minAmount,
       // 발주서 상단 '마감까지 ○시간' · 도착 예정일 계산용
       rules: { cutoffHour: s.cutoffHour, deliveryMin: s.deliveryMin, deliveryMax: s.deliveryMax, skipWeekend: s.skipWeekend },
