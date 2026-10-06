@@ -155,4 +155,4 @@ function sweepPending(ctx, now) {
   }
 }
 
-module.exports = { OPEN, openProposal, buildLines, computeSend, createProposal, evaluateTriggers, proposeNow, sendDue, sendNow, remind, sweepPending };
+module.exports = { OPEN, openProposal, buildLines, computeSend, nextCode, createProposal, evaluateTriggers, proposeNow, sendDue, sendNow, remind, sweepPending };
