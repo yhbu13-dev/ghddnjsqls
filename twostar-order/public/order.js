@@ -365,6 +365,7 @@
             r.doc ? h('a', { class: 'btn soft small', href: r.doc }, '발주 확인서 보기') : null,
             h('button', { class: 'btn small', onclick: render }, '발주서 다시 보기'))),
         h('div', { class: 'meta-l' }, `주문번호 ${r.no} · 담당자가 확인하면 카카오톡으로 알려 드려요`),
+        h('div', { class: 'meta-l warn' }, '* 재고 품절로 미납될 수 있습니다.'),
         h('section', { class: 'group' }, chosen.map((i) => h('div', { class: 'row' },
           h('div', { class: 'info' }, h('div', { class: 'name' }, i.name), h('div', { class: 'desc' }, `${i.q}${i.unit}`)),
           h('b', { class: 'amt' }, won(i.q * i.price))))),

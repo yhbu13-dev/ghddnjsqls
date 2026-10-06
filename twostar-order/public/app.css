@@ -129,6 +129,7 @@ a.btn.cta { width: 100%; min-height: 58px; font-size: 17px; border-radius: 16px;
 .done2 .check { width: 48px; height: 48px; border-radius: 50%; background: var(--blue); color: #fff; font-size: 26px; font-weight: 700; display: grid; place-items: center; margin-bottom: 16px; animation: pop .35s cubic-bezier(.2,1.6,.4,1); }
 .done2 .lower { display: flex; gap: 8px; margin-top: 16px; }
 .done2 .meta-l { padding: 0 20px 4px; font-size: 13px; color: var(--g500); }
+.done2 .meta-l.warn { color: var(--red); font-weight: 600; padding-top: 2px; }
 .done2 .group { border-top: 12px solid var(--g100); margin-top: 12px; }
 .sheet { position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 20; display: flex; align-items: flex-end; justify-content: center; animation: fade .15s; }
 @keyframes fade { from { opacity: 0; } }
