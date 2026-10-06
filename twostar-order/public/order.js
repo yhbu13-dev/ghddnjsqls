@@ -242,7 +242,7 @@
         h('div', { class: 'cap' }, V.store.name),
         h('h1', { id: 'dl-title', class: D.soon ? 'soon' : null }, D.title),
         h('p', { id: 'dl-sub', class: 'sub' }, D.sub)),
-      pushCard('top') || homeTip(),
+      homeTip(),
       usual().length ? h('div', { class: 'seg2' }, [['all', '전체 상품'], ['usual', '자주 시키는 품목']].map(([k, l]) => h('button', {
         class: tab === k && !query ? 'on' : null, 'aria-pressed': tab === k ? 'true' : 'false',
         onclick: () => { tab = k; query = ''; render(); window.scrollTo(0, 0); },
@@ -255,88 +255,6 @@
     ].flat().filter(Boolean));
     renderBar();
     startTick();
-  }
-
-  // ── 휴대폰 알림 (무료 · 즉시): 발주 확인·취소를 카톡을 열지 않아도 휴대폰 알림으로 ──
-  const UA = navigator.userAgent;
-  const inKakao = /KAKAOTALK/i.test(UA);
-  const isIOS = /iPhone|iPad|iPod/i.test(UA);
-  // 카톡 안 브라우저는 알림을 받을 수 없어 크롬·사파리로 안내
-  const canPush = !inKakao && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
-  let pushOn = false;
-  const keyBytes = (s) => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (s.length % 4)) % 4)), (c) => c.charCodeAt(0));
-  const sameKey = (buf, s) => { const a = new Uint8Array(buf || []); const b = keyBytes(s); return a.length === b.length && a.every((x, i) => x === b[i]); };
-
-  // 이미 켜 둔 휴대폰인지 확인 (서버 목록도 최신으로)
-  async function pushCheck() {
-    if (!canPush || Notification.permission !== 'granted') return;
-    try {
-      const reg = await navigator.serviceWorker.getRegistration('/');
-      const sub = reg && await reg.pushManager.getSubscription();
-      if (!sub || !sameKey(sub.options.applicationServerKey, V.pushKey)) return;
-      pushOn = true;
-      api('/push', 'POST', { sub: sub.toJSON() }).catch(() => {});
-    } catch { /* 다음에 다시 */ }
-  }
-
-  async function pushEnable() {
-    const perm = await Notification.requestPermission();
-    if (perm !== 'granted') throw new Error(perm === 'denied' ? '알림이 차단되어 있어요. 브라우저 설정 → 사이트 설정 → 알림에서 허용해 주세요' : '알림을 허용해 주세요');
-    const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
-    await navigator.serviceWorker.ready;
-    let sub = await reg.pushManager.getSubscription();
-    if (sub && !sameKey(sub.options.applicationServerKey, V.pushKey)) { await sub.unsubscribe(); sub = null; }
-    if (!sub) {
-      // 알림 서버(구글·애플)가 답이 없으면 버튼이 멈춰 있지 않게 20초에서 끊는다
-      sub = await Promise.race([
-        reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(V.pushKey) }),
-        new Promise((_, no) => setTimeout(() => no(new Error('알림 서버에 연결하지 못했어요. 잠시 후 다시 눌러 주세요')), 20000)),
-      ]);
-    }
-    await api('/push', 'POST', { sub: sub.toJSON() });
-    pushOn = true;
-  }
-
-  async function pushDisable() {
-    try {
-      const reg = await navigator.serviceWorker.getRegistration('/');
-      const sub = reg && await reg.pushManager.getSubscription();
-      if (sub) { await api('/push', 'POST', { off: sub.endpoint }); await sub.unsubscribe(); }
-    } catch (e) { toast(e.message); }
-    pushOn = false;
-  }
-
-  // 알림 켜기 안내 카드. where: 'top'(발주서 위 · [닫기] 가능) | 'done'(주문 완료 화면)
-  function pushCard(where) {
-    if (pushOn || !V.pushKey) return null;
-    if (where === 'top') {
-      try { if (Date.now() - Number(localStorage.getItem('ts_push_hide') || 0) < 3 * 86400e3) return null; } catch { /* 무시 */ }
-    }
-    const standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
-    let how; let action = null;
-    if (canPush && Notification.permission !== 'denied') {
-      how = '확인·취소되면 이 휴대폰으로 바로 알려 드려요 (무료)';
-      action = h('button', { class: 'btn small', onclick: async (e) => {
-        e.target.disabled = true;
-        try {
-          await pushEnable();
-          box.replaceWith(h('div', { class: 'note blue' }, h('span', null, '🔔'), h('span', null, h('b', null, '알림을 켰어요'), h('br'), '발주가 확인·취소되면 바로 알려 드려요')));
-        } catch (err) { e.target.disabled = false; toast(err.message || '알림을 켜지 못했어요'); }
-      } }, '알림 켜기');
-    } else if (canPush) {
-      how = '알림이 차단되어 있어요. 브라우저 설정 → 사이트 설정 → 알림에서 허용해 주세요';
-    } else if (inKakao) {
-      how = isIOS
-        ? '카톡 안에서는 켤 수 없어요. 아래 버튼으로 Safari에서 열고 공유(□↑) → [홈 화면에 추가] → 홈 화면 아이콘으로 열어 [알림 켜기]를 눌러 주세요'
-        : '카톡 안에서는 켤 수 없어요. 아래 버튼으로 크롬에서 열고 [알림 켜기]를 눌러 주세요';
-      action = h('a', { class: 'btn small', href: `kakaotalk://web/openExternal?url=${encodeURIComponent(location.href)}` }, isIOS ? 'Safari로 열기' : '크롬으로 열기');
-    } else if (isIOS && !standalone) {
-      how = '아이폰은 공유(□↑) → [홈 화면에 추가] → 홈 화면 아이콘으로 열고 [알림 켜기]를 눌러 주세요';
-    } else return null;
-    const box = h('div', { class: 'note blue push' }, h('span', null, '🔔'),
-      h('span', { class: 'grow' }, h('b', null, '발주 확인 알림 받기'), h('br'), how, action ? h('div', { class: 'act' }, action) : null),
-      where === 'top' ? h('button', { class: 'x', onclick: () => { try { localStorage.setItem('ts_push_hide', String(Date.now())); } catch { /* 무시 */ } box.remove(); } }, '닫기') : null);
-    return box;
   }
 
   // 홈 화면에 붙여 두기 안내 (이미 홈 화면 아이콘으로 열었거나 [닫기]를 눌렀으면 숨김)
@@ -368,12 +286,6 @@
         h('h3', null, '빠르게 채우기'),
         cell('지난 발주 그대로 불러오기', V.last ? `${V.last.no} · ${won(V.last.total)}` : '지난 발주가 없어요', null, V.last ? loadLast : null),
         cell('모두 0으로 비우기', null, null, () => { for (const k of Object.keys(qty)) delete qty[k]; render(); scheduleSave(); })),
-      canPush && V.pushKey ? h('section', { class: 'block' },
-        h('h3', null, '알림'),
-        cell('휴대폰 알림', '발주 확인·취소를 바로 알려 드려요', pushOn ? '켜짐' : '꺼짐', async () => {
-          if (pushOn) { if (confirm('이 휴대폰의 발주 알림을 끌까요?')) { await pushDisable(); render(); toast('알림을 껐어요'); } return; }
-          try { await pushEnable(); render(); toast('알림을 켰어요'); } catch (e) { toast(e.message || '알림을 켜지 못했어요'); }
-        })) : null,
       V.orders.length ? h('section', { class: 'block' },
         h('h3', null, '최근 발주'),
         V.orders.map((o) => h(o.doc ? 'a' : 'div', { class: 'cell', href: o.doc },
@@ -454,7 +366,6 @@
             h('button', { class: 'btn small', onclick: render }, '발주서 다시 보기'))),
         h('div', { class: 'meta-l' }, `주문번호 ${r.no} · 담당자가 확인하면 카카오톡으로 알려 드려요`),
         h('div', { class: 'meta-l warn' }, '* 재고 품절로 미납될 수 있습니다.'),
-        pushCard('done'),
         h('section', { class: 'group' }, chosen.map((i) => h('div', { class: 'row' },
           h('div', { class: 'info' }, h('div', { class: 'name' }, i.name), h('div', { class: 'desc' }, `${i.q}${i.unit}`)),
           h('b', { class: 'amt' }, won(i.q * i.price))))),
@@ -471,6 +382,6 @@
     }
   }
 
-  api('?fresh=1').then(async (v) => { take(v); await pushCheck(); render(); })
+  api('?fresh=1').then((v) => { take(v); render(); })
     .catch((e) => app.replaceChildren(h('p', { class: 'pad24' }, e.message)));
 })();

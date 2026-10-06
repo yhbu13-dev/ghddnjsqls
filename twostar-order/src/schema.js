@@ -113,14 +113,6 @@ CREATE TABLE IF NOT EXISTS notices (      -- 점주 카톡 알림 (주문 확인
   seen INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS notices_user ON notices (user_key, seen);
-CREATE TABLE IF NOT EXISTS push_subs (    -- 휴대폰 알림을 켠 점주 휴대폰 (웹 푸시, 무료)
-  endpoint TEXT PRIMARY KEY,
-  store_id INTEGER NOT NULL,
-  p256dh TEXT NOT NULL,
-  auth TEXT NOT NULL,
-  created_at INTEGER NOT NULL
-);
-CREATE INDEX IF NOT EXISTS push_store ON push_subs (store_id);
 CREATE TABLE IF NOT EXISTS meta (         -- 서버가 스스로 만든 값 (서명 비밀키·스킬 키·관리자 설정)
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
