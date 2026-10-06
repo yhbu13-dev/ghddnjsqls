@@ -572,6 +572,21 @@ function eta(fromMs, s) {
 }
 
 // ── 점주 알림 (카톡) ─────────────────────────────────
+/** 매장의 카카오 비즈니스 1:1 채팅방 주소 저장 (비우면 지움). 카카오 주소만 허용 */
+async function setChatUrl(db, storeId, url) {
+  const v = String(url || '').trim();
+  if (v) {
+    let u;
+    try { u = new URL(v); } catch { throw new UserError('채팅방 주소를 확인해 주세요 (https://로 시작)'); }
+    if (u.protocol !== 'https:' || !/(^|\.)kakao\.com$/.test(u.hostname) || v.length > 300) {
+      throw new UserError('카카오 비즈니스 채팅방 주소(…kakao.com/…)만 넣을 수 있어요');
+    }
+  }
+  const r = await db.run('UPDATE stores SET chat_url = ? WHERE id = ?', [v, storeId]);
+  if (!r.changes) throw new UserError('매장을 찾을 수 없습니다');
+  return v;
+}
+
 /** 매장에 연결된 카톡 사용자마다 알림을 쌓는다. 받을 사용자 키들을 돌려준다 */
 async function addNotices(db, storeId, orderId, title, text, now = Date.now()) {
   const users = (await db.all('SELECT user_key FROM user_stores WHERE store_id = ?', [storeId])).map((r) => r.user_key);
@@ -594,7 +609,7 @@ async function takeNotices(db, userKey, limit = 2, now = Date.now()) {
 module.exports = {
   CATEGORIES, BIZ, STATUS, FLOW, MAX_QTY, UserError, won,
   withLines, orderWithStore, kstDate, kstYmd, kstText, storeOrders, storeMonths,
-  SETTINGS, getSettings, saveSettings, publicSettings, eta, addNotices, takeNotices,
+  SETTINGS, getSettings, saveSettings, publicSettings, eta, addNotices, takeNotices, setChatUrl,
   limited, clearAttempts, note,
   createStore, reissueCode, storeOf, storeByUser, storesOfUser, useStore, linkUser, unlinkUser, unlinkStore,
   categoriesOf, accessStates, requestAccess, decideAccess,

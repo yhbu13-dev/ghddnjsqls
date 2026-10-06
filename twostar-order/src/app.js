@@ -117,8 +117,13 @@ function createHandler({ db, cfg, assets, log = console.log, fetch: fetchImpl = 
       const users = await O.addNotices(db, o.store_id, o.id, msg.title, msg.text);
       const r = await sendEvent(s, users, `${msg.title}\n${msg.text}`, fetchImpl);
       if (r.error) await O.note(db, 'notify', `카톡 알림 실패 · ${o.store.name} ${o.no} · ${r.error}`);
-      return { users: users.length, ...r };
+      return { users: users.length, ...r, reply: chatReply(o, msg) };
     };
+    // 관리자가 카카오 비즈니스 1:1 채팅으로 직접 보낼 답장 (무료). 문구 + 확인서 링크 + 그 매장 채팅방 주소
+    const chatReply = (o, msg) => ({
+      store: o.store.name, owner: o.store.owner || '', chatUrl: o.store.chat_url || '',
+      text: `${msg.title}\n${msg.text}\n\n📄 발주 확인서\n${docLink(o.id)}`,
+    });
     const hooks = {
       async onOrder(order, dup) {
         if (dup) return;
@@ -324,6 +329,13 @@ function createHandler({ db, cfg, assets, log = console.log, fetch: fetchImpl = 
       const data = async () => adminData(skillUrl);
       if (sub === 'data' && m === 'GET') return json(200, await data());
       if (sub === 'store' && m === 'GET') return json(200, await storeDetail(Number(url.searchParams.get('id')), url.searchParams.get('month')));
+      if (sub === 'reply' && m === 'GET') {
+        // 주문 카드의 [카톡 답장]: 지금 상태에 맞는 문구
+        const o = await O.orderWithStore(db, Number(url.searchParams.get('id')));
+        if (!o) return json(404, { error: '주문을 찾을 수 없습니다' });
+        const msg = orderMessage(o, o.status === 'done' ? 'shipped' : o.status, await O.getSettings(db));
+        return json(200, chatReply(o, msg));
+      }
       const limit = { 'item-image': 3 * 1024 * 1024, statement: 12 * 1024 * 1024 }[sub];
       const b = m === 'GET' ? {} : await readJson(request, limit);
       if (sub === 'status' && m === 'POST') {
@@ -351,6 +363,7 @@ function createHandler({ db, cfg, assets, log = console.log, fetch: fetchImpl = 
         if (!users.length) throw new O.UserError('이 매장에 연결된 카톡이 없어요. 먼저 연결 코드로 연결해 주세요');
         return json(200, { users: users.length, ...(await sendEvent(s, users, `${msg.title}\n${msg.text}`, fetchImpl)) });
       }
+      else if (sub === 'store-chat' && m === 'POST') return json(200, { chatUrl: await O.setChatUrl(db, Number(b.id), b.url) });
       else if (sub === 'access' && m === 'POST') await O.decideAccess(db, Number(b.store_id), String(b.category), String(b.decision));
       else if (sub === 'stores' && m === 'POST') {
         const r = await O.createStore(db, b);

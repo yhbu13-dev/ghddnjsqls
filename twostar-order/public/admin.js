@@ -110,14 +110,40 @@
   const notifyMsg = (n) => (!n ? '' : !n.users ? ' · 카톡 연결된 사람이 없어 알림은 없어요'
     : n.error ? ` · 카톡 자동 알림 실패 (${n.error}). 점주가 채팅방을 열면 보여요`
       : !n.configured ? ' · 알림은 점주가 채팅방을 열면 보여요 (자동 발송은 [설정])' : ` · 카톡 알림 ${n.sent}명에게 보냈어요`);
+  // ── 카톡 답장 (카카오 비즈니스 1:1 채팅 · 무료): 문구를 복사해 그 매장 채팅방에 붙여넣어 보낸다 ──
+  const BIZ_CHAT = 'https://business.kakao.com/';
+  function replySheet(r, head) {
+    const ta = h('textarea', { class: 'replytext', rows: 11, readonly: true }, r.text);
+    const close = () => sheet.remove();
+    const copyOpen = async () => {
+      try { await navigator.clipboard.writeText(r.text); toast('문구를 복사했어요. 채팅방 입력창에 붙여넣기 → 전송'); } catch { ta.select(); toast('복사가 안 되면 문구를 길게 눌러 복사해 주세요'); }
+      window.open(r.chatUrl || BIZ_CHAT, '_blank', 'noopener');
+    };
+    const box = h('div', { class: 'box reply' }, h('div', { class: 'grab' }),
+      h('h2', null, '💬 카톡으로 알리기'),
+      h('p', { class: 'small muted' }, head ? `${head} · ` : '', `${r.store}${r.owner ? `(${r.owner})` : ''} 채팅방에 아래 문구를 보내세요. 비용은 없어요.`),
+      ta,
+      r.chatUrl ? null : h('p', { class: 'small muted' }, '💡 매장 상세 → [카톡 채팅방 주소]를 저장해 두면 다음부터 이 매장 채팅방이 바로 열려요'),
+      h('div', { class: 'acts' },
+        h('button', { class: 'btn', onclick: close }, '닫기'),
+        h('button', { class: 'btn primary cta', onclick: copyOpen }, r.chatUrl ? '복사하고 채팅방 열기' : '복사하고 카카오 비즈니스 열기')));
+    const sheet = h('div', { class: 'sheet', onclick: (e) => { if (e.target === sheet) close(); } }, box);
+    document.body.append(sheet);
+  }
+  async function openReply(o) {
+    try { replySheet(await call(`/api/admin/reply?id=${o.id}`)); } catch (e) { toast(e.message); }
+  }
+
   async function changeStatus(o, s) {
     if (s === 'canceled' && !confirm(`${o.store_name || ''} ${o.no} 주문을 취소할까요?\n점주에게 취소 알림이 갑니다.`)) return;
     try {
       const r = await call('/api/admin/status', { id: o.id, status: s });
       D = r;
-      toast(`${o.no} ${D.labels.status[s]} 처리${notifyMsg(r.notify)}`);
       if (storeView) await openStore(storeView.id, storeView.data.month);
       render();
+      // 처리 후 바로 카톡 답장 문구를 띄운다 (붙여넣기만 하면 점주에게 즉시 도착)
+      if (r.notify && r.notify.reply) replySheet(r.notify.reply, `${o.no} ${D.labels.status[s]} 처리했어요`);
+      else toast(`${o.no} ${D.labels.status[s]} 처리${notifyMsg(r.notify)}`);
     } catch (e) { toast(e.message); }
   }
   // ── 실물 명세서 사진 올리기: 휴대폰 사진·스캔 파일을 긴 변 2000px JPEG 로 줄여서 (한 장 2MB 이하) ──
@@ -185,6 +211,7 @@
       h('div', { class: 'acts noprint' },
         o.next.filter((s) => s !== 'canceled').map((s) => h('button', { class: 'btn primary small', onclick: () => changeStatus(o, s) },
           s === 'confirmed' ? '확인하고 카톡 알림' : s === 'shipped' ? '출고 처리' : `${L.status[s]} 처리`)),
+        h('button', { class: 'btn small', onclick: () => openReply(o) }, '💬 카톡 답장'),
         docBtns(o),
         h('span', { class: 'sp' }),
         o.next.includes('canceled') ? h('button', { class: 'btn bad small', onclick: () => changeStatus(o, 'canceled') }, '주문 취소') : null));
@@ -198,6 +225,18 @@
       render();
       window.scrollTo(0, 0);
     } catch (e) { toast(e.message); }
+  }
+  // 매장 상세: 이 매장 점주와의 카카오 비즈니스 1:1 채팅방 주소 (한 번 저장하면 [카톡 답장]에서 바로 열림)
+  function chatPanel(s) {
+    const inp = h('input', { value: s.chat_url || '', placeholder: 'https://business.kakao.com/…/chats/…', inputmode: 'url' });
+    const save = async () => {
+      try { const r = await call('/api/admin/store-chat', { id: s.id, url: inp.value }); s.chat_url = r.chatUrl; toast(r.chatUrl ? '채팅방 주소를 저장했어요' : '채팅방 주소를 지웠어요'); render(); } catch (e) { toast(e.message); }
+    };
+    return h('div', { class: 'panel' },
+      h('h2', null, '카톡 채팅방 주소', h('span', { class: 'small muted' }, '카카오 비즈니스 → 채팅 → 이 매장 점주 채팅방을 연 뒤, 주소창 주소를 복사해 붙여넣기')),
+      h('div', { class: 'form' }, h('label', { class: 'wide' }, '채팅방 주소', inp),
+        h('button', { class: 'btn primary', onclick: save }, '저장'),
+        s.chat_url ? h('a', { class: 'btn', href: s.chat_url, target: '_blank', rel: 'noopener' }, '채팅방 열기') : null));
   }
   function storeDetail() {
     const { store: s, months, month, from, to, orders: list } = storeView.data;
@@ -228,6 +267,7 @@
             h('span', { class: 'stat' }, h('span', { class: `dot${s.kakao ? ' on' : ''}` }), s.kakao ? `카톡 연결 ${s.kakao}명` : '카톡 미연결'),
             s.kakao ? h('button', { class: 'btn small', onclick: test }, '알림 테스트') : null,
             s.kakao ? h('button', { class: 'btn small bad', onclick: unlink }, '연결 해제') : null))),
+      chatPanel(s),
       h('div', { class: 'kpis' },
         kpi(`${ym(month)} 발주`, won(sum), `${live.length}건`),
         kpi('누적 발주', won(all), `${months.reduce((a, m) => a + m.count, 0)}건 · ${months.length}개월`),

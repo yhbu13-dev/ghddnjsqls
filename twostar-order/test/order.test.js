@@ -798,3 +798,35 @@ test('발주 후 발주서를 다시 열면 수량은 0에서 시작 (사우나�
   v = await (await call(`/api/o/${tk}/reorder`, { method: 'POST', headers: W })).json();
   assert.equal(v.cart[id], 3, '[지난 발주 그대로 불러오기]는 그대로 동작');
 });
+
+test('카톡 답장(1:1 채팅): 처리하면 보낼 문구·확인서 링크·매장 채팅방 주소를 돌려줌', async () => {
+  const db = open(':memory:');
+  const handle = createHandler({ db, cfg: { adminPassword: 'pw', skillKey: 'k', blockId: 'B', minAmount: 0, guest: {}, secret: 's' }, log: () => {}, assets: async () => null });
+  const call = (path, init) => handle(new Request(`https://x.com${path}`, init), { ip: '1' });
+  const r = await call('/admin/login', { method: 'POST', body: JSON.stringify({ password: 'pw' }) });
+  const H = { cookie: r.headers.get('set-cookie').split(';')[0], 'x-ts': '1' };
+  const post = async (sub, body) => call(`/api/admin/${sub}`, { method: 'POST', headers: H, body: JSON.stringify(body) });
+  await post('items', { category: 'cafe', grp: '시럽', name: '바닐라', price: 10000 });
+  const st = await (await post('stores', { name: '카페', biz: 'cafe', owner: '김사장' })).json();
+  const tk = new URL(st.link).pathname.split('/').pop();
+  const W = { 'x-ts': '1' };
+  let v = await (await call(`/api/o/${tk}`)).json();
+  v = await (await call(`/api/o/${tk}/cart`, { method: 'PUT', headers: W, body: JSON.stringify({ cart: { [v.items[0].id]: 2 } }) })).json();
+  await call(`/api/o/${tk}/submit`, { method: 'POST', headers: W, body: JSON.stringify({ rev: v.rev }) });
+  const id = (await (await call('/api/admin/data', { headers: H })).json()).orders[0].id;
+
+  assert.equal((await post('store-chat', { id: st.id, url: 'https://evil.example/chat' })).status, 400, '카카오 주소만');
+  const chat = 'https://business.kakao.com/_abc/chats/123';
+  assert.equal((await (await post('store-chat', { id: st.id, url: chat })).json()).chatUrl, chat);
+
+  const res = await (await post('status', { id, status: 'confirmed' })).json();
+  const rep = res.notify.reply;
+  assert.equal(rep.chatUrl, chat);
+  assert.equal(rep.owner, '김사장');
+  assert.match(rep.text, /^✅ 발주가 확인되었어요\n카페 · 주문번호 .+\n바닐라 2개/);
+  assert.match(rep.text, /📄 발주 확인서\nhttps:\/\/x\.com\/d\//);
+  await post('status', { id, status: 'canceled' });
+  const again = await (await call(`/api/admin/reply?id=${id}`, { headers: H })).json();
+  assert.match(again.text, /^❌ 발주가 취소되었어요/, '[카톡 답장]은 지금 상태 문구');
+  assert.equal((await (await post('store-chat', { id: st.id, url: '' })).json()).chatUrl, '', '비우면 지움');
+});

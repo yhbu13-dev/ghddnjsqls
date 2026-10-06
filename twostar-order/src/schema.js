@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS stores (
   code TEXT UNIQUE,                       -- 카톡 연결 코드 (6자리, 한 번 쓰면 사라짐)
   cart_rev INTEGER NOT NULL DEFAULT 0,    -- 장바구니가 바뀔 때마다 +1 (중복 주문 방지)
   link_ver INTEGER NOT NULL DEFAULT 0,    -- 발주서 링크 버전. 올리면 예전 링크는 모두 무효
+  chat_url TEXT NOT NULL DEFAULT '',      -- 카카오 비즈니스 1:1 채팅방 주소 (관리자가 바로 답장하러 가는 곳)
   active INTEGER NOT NULL DEFAULT 1,
   created_at INTEGER NOT NULL
 );
@@ -138,6 +139,7 @@ async function migrate(db) {
   if (!cols.some((c) => c.name === 'image')) await db.run("ALTER TABLE items ADD COLUMN image TEXT NOT NULL DEFAULT ''");
   const scols = await db.all('PRAGMA table_info(stores)');
   if (!scols.some((c) => c.name === 'link_ver')) await db.run('ALTER TABLE stores ADD COLUMN link_ver INTEGER NOT NULL DEFAULT 0');
+  if (!scols.some((c) => c.name === 'chat_url')) await db.run("ALTER TABLE stores ADD COLUMN chat_url TEXT NOT NULL DEFAULT ''");
   await db.run('INSERT OR IGNORE INTO user_stores (user_key, store_id, linked_at) SELECT user_key, store_id, linked_at FROM links');
   await db.run("INSERT INTO meta (key, value) VALUES ('schema', ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value", [VERSION]);
 }
