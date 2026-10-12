@@ -830,3 +830,94 @@ test('카톡 답장(1:1 채팅): 처리하면 보낼 문구·확인서 링크·�
   assert.match(again.text, /^❌ 발주가 취소되었어요/, '[카톡 답장]은 지금 상태 문구');
   assert.equal((await (await post('store-chat', { id: st.id, url: '' })).json()).chatUrl, '', '비우면 지움');
 });
+
+test('낱개: 켠 품목만 · 단가 직접/자동 · 박스와 낱개를 따로 주문 줄로 · 다시 불러오기 · 카톡은 박스만', async () => {
+  const db = open(':memory:');
+  const handle = createHandler({ db, cfg: { adminPassword: 'pw', skillKey: 'k', blockId: 'B', minAmount: 0, guest: {}, secret: 's' }, log: () => {}, assets: async () => null });
+  const call = (path, init) => handle(new Request(`https://x.com${path}`, init), { ip: '1' });
+  const r = await call('/admin/login', { method: 'POST', body: JSON.stringify({ password: 'pw' }) });
+  const H = { cookie: r.headers.get('set-cookie').split(';')[0], 'x-ts': '1' };
+  const post = async (sub, body) => call(`/api/admin/${sub}`, { method: 'POST', headers: H, body: JSON.stringify(body) });
+  assert.equal((await post('items', { category: 'cafe', grp: '탄산', name: '콜라', unit: '박스', price: 21280, loose_on: true, pack: '' })).status, 400, '입수 없이 낱개 못 켬');
+  await post('items', { category: 'cafe', grp: '탄산', name: '콜라', unit: '박스', price: 21280, loose_on: true, pack: 24, loose_unit: '캔', loose_price: '' });
+  await post('items', { category: 'cafe', grp: '탄산', name: '사이다', unit: '박스', price: 20400, loose_on: true, pack: 24, loose_unit: '캔', loose_price: '950' });
+  await post('items', { category: 'cafe', grp: '물', name: '삼다수', unit: '박스', price: 8080 });
+  const st = await (await post('stores', { name: '카페', biz: 'cafe' })).json();
+  const tk = new URL(st.link).pathname.split('/').pop();
+  const W = { 'x-ts': '1' };
+  let v = await (await call(`/api/o/${tk}`)).json();
+  const [cola, cider, water] = ['콜라', '사이다', '삼다수'].map((n) => v.items.find((i) => i.name === n));
+  assert.deepEqual(cola.loose, { pack: 24, unit: '캔', price: 980, last: 0 }, '자동: 21280÷24+10% → 10원 올림');
+  assert.equal(cider.loose.price, 950, '직접 넣은 단가');
+  assert.equal(water.loose, null, '안 켠 품목은 낱개 없음');
+
+  v = await (await call(`/api/o/${tk}/cart`, { method: 'PUT', headers: W, body: JSON.stringify({ cart: { [cola.id]: 2, [`${cola.id}L`]: 5, [`${cider.id}L`]: 3, [`${water.id}L`]: 4 } }) })).json();
+  assert.deepEqual(v.cart, { [cola.id]: 2, [`${cola.id}L`]: 5, [`${cider.id}L`]: 3 }, '낱개 안 되는 품목의 낱개는 빠짐');
+  const done = await (await call(`/api/o/${tk}/submit`, { method: 'POST', headers: W, body: JSON.stringify({ rev: v.rev }) })).json();
+  assert.equal(done.total, 2 * 21280 + 5 * 980 + 3 * 950);
+  const o = (await (await call('/api/admin/data', { headers: H })).json()).orders[0];
+  assert.deepEqual(o.lines.map((l) => [l.name, l.spec, l.qty, l.unit, l.price, l.loose]), [
+    ['콜라', '', 2, '박스', 21280, 0],
+    ['콜라', '낱개 (1박스 24캔)', 5, '캔', 980, 1],
+    ['사이다', '낱개 (1박스 24캔)', 3, '캔', 950, 1],
+  ]);
+  const pick = (await (await call('/api/admin/data', { headers: H })).json()).pick;
+  assert.equal(pick.length, 3, '출고 집계도 박스·낱개 따로');
+  const doc = await (await call(`/admin/doc/order/${o.id}`, { headers: H })).text();
+  assert.match(doc, /낱개 \(1박스 24캔\)/);
+
+  v = await (await call(`/api/o/${tk}`)).json();
+  assert.equal(v.items.find((i) => i.id === cola.id).loose.last, 5, '지난번 낱개 수량');
+  v = await (await call(`/api/o/${tk}/reorder`, { method: 'POST', headers: W })).json();
+  assert.deepEqual(v.cart, { [cola.id]: 2, [`${cola.id}L`]: 5, [`${cider.id}L`]: 3 }, '지난 발주 그대로 (낱개 포함)');
+
+  // 카톡 담기는 박스만 바꾸고 낱개는 그대로
+  const store = await O.storeOf(db, st.id);
+  await O.setQty(db, store, cola.id, 0);
+  await O.addQty(db, store, cider.id, 1);
+  assert.deepEqual(O.cartMap(await O.cartOf(db, store)), { [`${cola.id}L`]: 5, [cider.id]: 1, [`${cider.id}L`]: 3 });
+
+  // 관리자가 낱개를 끄면 담아 둔 낱개는 빠짐 · 예전 화면처럼 낱개 칸 없이 저장하면 설정 유지
+  await post('items', { id: cider.id, category: 'cafe', grp: '탄산', name: '사이다', unit: '박스', price: 20400 });
+  assert.equal((await db.get('SELECT loose_on FROM items WHERE id = ?', [cider.id])).loose_on, 1);
+  await post('items', { id: cola.id, category: 'cafe', grp: '탄산', name: '콜라', unit: '박스', price: 21280, loose_on: false, pack: 24, loose_unit: '캔', loose_price: '' });
+  assert.deepEqual(O.cartMap(await O.cartOf(db, store)), { [cider.id]: 1, [`${cider.id}L`]: 3 });
+
+  // 설정: 자동 계산 비율
+  assert.equal((await post('settings', { loosePremium: 101 })).status, 400);
+  await post('settings', { loosePremium: 0 });
+  await post('items', { id: cola.id, category: 'cafe', grp: '탄산', name: '콜라', unit: '박스', price: 21280, loose_on: true, pack: 24, loose_unit: '캔', loose_price: '' });
+  v = await (await call(`/api/o/${tk}`)).json();
+  assert.equal(v.items.find((i) => i.id === cola.id).loose.price, 890, '0% → 21280÷24=886.7 → 890');
+});
+
+test('낱개: 엑셀 8~11번째 칸 · 예전 6칸 양식은 낱개 설정 유지', async () => {
+  const db = open(':memory:');
+  await migrate(db);
+  let r = await O.importItems(db, '분류\t묶음\t품목명\t규격\t단위\t단가\t판매 중지\t낱개\t입수\t낱개 단위\t낱개 단가\n음료\t탄산\t콜라\t355ml x 24\t박스\t21280\t\tO\t24\t캔\t\n음료\t탄산\t사이다\t\t박스\t20400\t\tO\t24\t캔\t950\n음료\t물\t삼다수\t\t박스\t8080\t\t\t\t\t');
+  assert.deepEqual(r, { added: 3, updated: 0, errors: [] });
+  const get = (n) => db.get('SELECT loose_on, pack, loose_unit, loose_price FROM items WHERE name = ?', [n]);
+  assert.deepEqual({ ...(await get('콜라')) }, { loose_on: 1, pack: 24, loose_unit: '캔', loose_price: 0 });
+  assert.deepEqual({ ...(await get('사이다')) }, { loose_on: 1, pack: 24, loose_unit: '캔', loose_price: 950 });
+  r = await O.importItems(db, '음료\t탄산\t콜라\t\t박스\t22000');
+  assert.equal((await get('콜라')).loose_on, 1, '예전 양식(6칸)은 낱개 설정 그대로');
+  r = await O.importItems(db, '음료\t탄산\t콜라\t\t박스\t22000\t\tX\t24\t캔\t');
+  assert.equal((await get('콜라')).loose_on, 0, 'X = 끄기');
+  r = await O.importItems(db, '음료\t탄산\t환타\t\t박스\t20000\t\tO\t\t캔\t');
+  assert.match(r.errors[0], /1번째 줄: 낱개를 켜려면 입수/);
+});
+
+test('낱개: 예전 DB(장바구니 수량 > 0 규칙) 를 옮겨도 담아 둔 수량 유지', async () => {
+  const db = open(':memory:');
+  await db.run('CREATE TABLE stores (id INTEGER PRIMARY KEY, name TEXT NOT NULL, biz TEXT NOT NULL, owner TEXT NOT NULL DEFAULT \'\', phone TEXT NOT NULL DEFAULT \'\', code TEXT UNIQUE, cart_rev INTEGER NOT NULL DEFAULT 0, active INTEGER NOT NULL DEFAULT 1, created_at INTEGER NOT NULL)');
+  await db.run('CREATE TABLE items (id INTEGER PRIMARY KEY, category TEXT NOT NULL, grp TEXT NOT NULL DEFAULT \'기타\', name TEXT NOT NULL, spec TEXT NOT NULL DEFAULT \'\', unit TEXT NOT NULL DEFAULT \'개\', price INTEGER NOT NULL, sort INTEGER NOT NULL DEFAULT 0, active INTEGER NOT NULL DEFAULT 1)');
+  await db.run('CREATE TABLE cart (store_id INTEGER NOT NULL REFERENCES stores(id), item_id INTEGER NOT NULL REFERENCES items(id), qty INTEGER NOT NULL CHECK (qty > 0), PRIMARY KEY (store_id, item_id))');
+  await db.run('CREATE TABLE order_lines (order_id INTEGER NOT NULL, item_id INTEGER NOT NULL, name TEXT NOT NULL, spec TEXT NOT NULL, unit TEXT NOT NULL, price INTEGER NOT NULL, qty INTEGER NOT NULL)');
+  await db.run("INSERT INTO stores (id, name, biz, created_at) VALUES (1, '카페', 'cafe', 0)");
+  await db.run("INSERT INTO items (id, category, name, price) VALUES (7, 'cafe', '시럽', 1000)");
+  await db.run('INSERT INTO cart (store_id, item_id, qty) VALUES (1, 7, 3)');
+  await migrate(db);
+  assert.deepEqual({ ...(await db.get('SELECT * FROM cart')) }, { store_id: 1, item_id: 7, qty: 3, loose: 0 });
+  await db.run('UPDATE cart SET qty = 0, loose = 2'); // 박스 0 + 낱개만 가능
+  assert.ok((await db.all('PRAGMA table_info(order_lines)')).some((c) => c.name === 'loose'));
+});

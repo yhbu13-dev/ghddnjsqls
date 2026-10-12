@@ -487,9 +487,14 @@
     document.head.append(el);
   });
   let itemCat = null;
+  // 낱개 단가 자동 계산 (서버와 같은 식): 박스 단가 ÷ 입수 × (1 + %) → 10원 단위 올림
+  const autoLoose = (price, pack) => Math.ceil((price / pack) * (1 + (D.settings.loosePremium ?? 10) / 100) / 10) * 10;
+  const looseTag = (i) => (i.loose_on && i.pack >= 2
+    ? h('span', { class: 'ltag' }, `낱개 ${won(i.loose_price > 0 ? i.loose_price : autoLoose(i.price, i.pack))}/${i.loose_unit || '개'}${i.loose_price > 0 ? '' : ' · 자동'}`)
+    : null);
   function items() {
     const L = D.labels;
-    const e = editing || { category: itemCat || 'snack', grp: '', name: '', spec: '', unit: '개', price: '', sort: 0 };
+    const e = editing || { category: itemCat || 'snack', grp: '', name: '', spec: '', unit: '개', price: '', sort: 0, pack: '', loose_on: 0, loose_unit: '', loose_price: 0 };
     const F = {
       category: h('select', null, Object.entries(L.categories).map(([k, v]) => h('option', { value: k, selected: k === e.category }, v))),
       grp: h('input', { value: e.grp, placeholder: '예: 과자' }),
@@ -498,9 +503,21 @@
       unit: h('input', { value: e.unit }),
       price: h('input', { value: e.price, inputmode: 'numeric' }),
       sort: h('input', { value: e.sort, inputmode: 'numeric' }),
+      // 낱개: 켠 품목만 발주서에 [낱개 가능]이 붙고 이름을 누르면 낱개 줄이 펼쳐진다
+      pack: h('input', { value: e.pack || '', inputmode: 'numeric', placeholder: '예: 24' }),
+      loose_unit: h('input', { value: e.loose_unit || '', placeholder: '예: 캔' }),
+      loose_price: h('input', { value: e.loose_price || '', inputmode: 'numeric' }),
     };
+    const looseOn = h('input', { type: 'checkbox', checked: !!e.loose_on });
+    // 낱개 단가를 비우면 자동 계산: 박스 단가 ÷ 입수 + 설정의 %
+    const autoHint = () => {
+      const price = Number(F.price.value); const pack = Number(F.pack.value);
+      F.loose_price.placeholder = price > 0 && pack >= 2 ? `비우면 자동 ${won(autoLoose(price, pack))}` : '비우면 자동 계산';
+    };
+    F.price.addEventListener('input', autoHint); F.pack.addEventListener('input', autoHint); autoHint();
     const saveItem = async () => {
       const body = Object.fromEntries(Object.entries(F).map(([k, el]) => [k, el.value]));
+      body.loose_on = looseOn.checked;
       if (editing) body.id = editing.id;
       const was = editing;
       editing = null;
@@ -547,8 +564,9 @@
     const exportCsv = () => {
       const label = { cafe: '카페', snack: '스낵', beverage: '음료' };
       const q = (x) => (/[",\n]/.test(String(x)) ? `"${String(x).replace(/"/g, '""')}"` : String(x));
-      const lines = [['분류', '묶음(진열대)', '품목명', '규격', '단위', '단가(원, 부가세 별도)', '판매 중지']]
-        .concat(D.items.map((i) => [label[i.category], i.grp, i.name, i.spec, i.unit, i.price, i.active ? '' : '중지']));
+      const lines = [['분류', '묶음(진열대)', '품목명', '규격', '단위', '단가(원, 부가세 별도)', '판매 중지', '낱개(O)', '입수', '낱개 단위', '낱개 단가(비우면 자동)']]
+        .concat(D.items.map((i) => [label[i.category], i.grp, i.name, i.spec, i.unit, i.price, i.active ? '' : '중지',
+          i.loose_on ? 'O' : '', i.pack || '', i.loose_unit || '', i.loose_price || '']));
       const blob = new Blob([`﻿${lines.map((l) => l.map(q).join(',')).join('\r\n')}`], { type: 'text/csv;charset=utf-8' });
       const a = h('a', { href: URL.createObjectURL(blob), download: `투스타_품목목록_${new Date().toISOString().slice(0, 10)}.csv` });
       document.body.append(a); a.click(); a.remove();
@@ -570,18 +588,18 @@
       h('h2', null, '엑셀로 한꺼번에 넣기'),
       h('ol', { class: 'steps' },
         h('li', null, h('b', null, '양식 받기'), h('a', { class: 'btn small', href: '/assets/item-template.xlsx', download: true }, '엑셀 양식 받기')),
-        h('li', null, h('b', null, '[품목] 시트 노란 칸에 입력'), h('span', { class: 'small muted' }, '분류(카페/스낵/음료) · 묶음 · 품목명 · 규격 · 단위 · 단가')),
+        h('li', null, h('b', null, '[품목] 시트 노란 칸에 입력'), h('span', { class: 'small muted' }, '분류(카페/스낵/음료) · 묶음 · 품목명 · 규격 · 단위 · 단가 · (낱개 받을 품목만) 낱개 O · 입수 · 낱개 단위 · 낱개 단가')),
         h('li', null, h('b', null, '저장한 파일 올리기'), h('button', { class: 'btn small primary', onclick: pickFile }, '엑셀 파일 올리기'))),
       h('p', { class: 'small muted' }, '같은 분류에 같은 품목명이 있으면 새로 만들지 않고 가격·규격을 고쳐요. 가격만 바꿀 때는 ',
         h('a', { href: '#', onclick: (e) => { e.preventDefault(); exportCsv(); } }, '지금 품목을 엑셀(CSV)로 받기'), ' → 단가 고치기 → 다시 올리기.'),
       sp ? h('div', { class: 'preview' },
         h('div', { class: 'pv-hd' }, h('b', null, `📄 ${sp.name}`), h('span', null, ` · 품목 ${sp.count}줄을 읽었어요`)),
         h('div', { class: 'tbl' }, h('table', null,
-          h('tr', null, ['분류', '묶음', '품목명', '규격', '단위', '단가'].map((t) => h('th', null, t))),
-          sp.sample.map((r) => h('tr', null, [0, 1, 2, 3, 4, 5].map((k) => h('td', { class: k === 5 ? 'num' : null }, r[k] || ''))))),
+          h('tr', null, ['분류', '묶음', '품목명', '규격', '단위', '단가', '낱개', '입수', '낱개 단위', '낱개 단가'].map((t) => h('th', null, t))),
+          sp.sample.map((r) => h('tr', null, [0, 1, 2, 3, 4, 5, 7, 8, 9, 10].map((k) => h('td', { class: k === 5 || k === 10 ? 'num' : null }, r[k] || ''))))),
         sp.count > sp.sample.length ? h('p', { class: 'small muted' }, `… 외 ${sp.count - sp.sample.length}줄`) : null),
         h('div', { class: 'acts' },
-          h('button', { class: 'btn primary', onclick: () => sendBulk(sp.rows.map((r) => r.slice(0, 6).join('\t')).join('\n'), () => { sheetPreview = null; }) }, `${sp.count}개 품목 저장`),
+          h('button', { class: 'btn primary', onclick: () => sendBulk(sp.rows.map((r) => r.slice(0, 11).join('\t')).join('\n'), () => { sheetPreview = null; }) }, `${sp.count}개 품목 저장`),
           h('button', { class: 'btn', onclick: () => { sheetPreview = null; render(); } }, '취소'))) : null,
       bulkErr,
       h('details', { class: 'paste', open: pasteOpen, ontoggle: (e) => { pasteOpen = e.target.open; } }, h('summary', null, '또는 엑셀에서 복사해서 붙여넣기'),
@@ -595,6 +613,8 @@
         h('div', { class: 'form' },
           h('label', null, '분류', F.category), h('label', null, '진열대·묶음', F.grp), h('label', null, '품목 이름', F.name),
           h('label', null, '규격', F.spec), h('label', null, '단위', F.unit), h('label', null, '단가(원)', F.price), h('label', null, '순서', F.sort),
+          h('label', { class: 'check' }, looseOn, '낱개 주문 받기'),
+          h('label', null, '입수 (1박스에 몇 개)', F.pack), h('label', null, '낱개 단위', F.loose_unit), h('label', null, '낱개 단가(원)', F.loose_price),
           h('button', { class: 'btn primary', onclick: saveItem }, editing ? '저장' : '추가'),
           editing ? h('button', { class: 'btn', onclick: () => { editing = null; render(); } }, '취소') : null)),
       h('div', { class: 'panel' },
@@ -604,7 +624,7 @@
           h('tr', null, h('th', null, '사진'), h('th', null, '품목'), h('th', { class: 'num' }, '단가'), h('th', null, '')),
           list.map((i) => h('tr', { style: i.active ? null : 'opacity:.45' },
             h('td', null, photoCell(i)),
-            h('td', null, h('b', null, i.name), h('div', { class: 'small muted' }, [i.grp, i.spec, i.active ? null : '판매 중지'].filter(Boolean).join(' · '))),
+            h('td', null, h('b', null, i.name), looseTag(i), h('div', { class: 'small muted' }, [i.grp, i.spec, i.active ? null : '판매 중지'].filter(Boolean).join(' · '))),
             h('td', { class: 'num' }, won(i.price)),
             h('td', null, h('div', { class: 'acts' },
               h('button', { class: 'btn small', onclick: () => { editing = i; render(); window.scrollTo(0, 0); } }, '수정'),
@@ -627,6 +647,7 @@
       address: inp('address'), bizType: inp('bizType', '도소매'), bizItem: inp('bizItem', '식품'), account: inp('account', '은행 계좌번호 예금주'),
       cutoffHour: h('input', { value: S.cutoffHour, inputmode: 'numeric' }),
       deliveryMin: h('input', { value: S.deliveryMin, inputmode: 'numeric' }), deliveryMax: h('input', { value: S.deliveryMax, inputmode: 'numeric' }),
+      loosePremium: h('input', { value: S.loosePremium, inputmode: 'numeric' }),
       kakaoBotId: inp('kakaoBotId', '예: 64f0…'), kakaoEvent: inp('kakaoEvent', 'order_notice'),
       kakaoRestKey: h('input', { type: 'password', placeholder: S.kakaoKeySet ? '저장됨 (바꿀 때만 입력)' : '카카오 디벨로퍼스 REST API 키', autocomplete: 'off' }),
     };
@@ -651,6 +672,11 @@
           h('label', null, '배송 최소 (일)', F.deliveryMin), h('label', null, '배송 최대 (일)', F.deliveryMax),
           h('label', { class: 'check' }, week, '주말 빼고 계산'),
           h('button', { class: 'btn primary', onclick: () => save(['cutoffHour', 'deliveryMin', 'deliveryMax', 'skipWeekend']) }, '저장'))),
+      h('div', { class: 'panel' }, h('h2', null, '낱개 단가 자동 계산'),
+        h('p', { class: 'small muted' }, `낱개 단가를 비워 둔 품목은 "박스 단가 ÷ 입수"에 아래 비율을 더해 10원 단위로 올려요. 예: 21,280원 ÷ 24캔 + ${S.loosePremium}% → ${won(Math.ceil((21280 / 24) * (1 + S.loosePremium / 100) / 10) * 10)}. 박스를 뜯어 나누는 작업비이고, 박스 주문을 자연스럽게 유도해요.`),
+        h('div', { class: 'form' },
+          h('label', null, '더할 비율 (%, 0~100)', F.loosePremium),
+          h('button', { class: 'btn primary', onclick: () => save(['loosePremium']) }, '저장'))),
       h('div', { class: 'panel' }, h('h2', null, '카톡 자동 알림', h('span', { class: 'stat' }, h('span', { class: `dot${on ? ' on' : ''}` }), on ? '켜짐' : '설정 전')),
         h('p', { class: 'small muted' }, on ? '주문을 확인·출고·취소하면 점주 카톡으로 바로 알림이 가요.'
           : '지금은 점주가 채팅방에서 버튼을 누를 때 알림이 맨 위에 보여요. 아래를 설정하면 바로 보내져요.'),

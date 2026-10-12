@@ -35,6 +35,10 @@ CREATE TABLE IF NOT EXISTS items (
   unit TEXT NOT NULL DEFAULT '개',
   price INTEGER NOT NULL CHECK (price >= 0),
   image TEXT NOT NULL DEFAULT '',          -- 품목 사진 파일 이름 (data/images/)
+  pack INTEGER NOT NULL DEFAULT 0,        -- 입수 (1박스에 몇 개). 낱개 주문에 필요
+  loose_on INTEGER NOT NULL DEFAULT 0,    -- 1 = 낱개 주문 가능 (관리자가 켠 품목만)
+  loose_unit TEXT NOT NULL DEFAULT '',    -- 낱개 단위 (캔·병·개)
+  loose_price INTEGER NOT NULL DEFAULT 0, -- 낱개 단가. 0 = 자동 (박스 단가 ÷ 입수 + 설정의 %)
   sort INTEGER NOT NULL DEFAULT 0,
   active INTEGER NOT NULL DEFAULT 1
 );
@@ -46,10 +50,11 @@ CREATE TABLE IF NOT EXISTS access (       -- 기본 품목 외 추가 품목 이
   decided_at INTEGER,
   PRIMARY KEY (store_id, category)
 );
-CREATE TABLE IF NOT EXISTS cart (
+CREATE TABLE IF NOT EXISTS cart (       -- 품목마다 한 줄: 박스 수량 + 낱개 수량
   store_id INTEGER NOT NULL REFERENCES stores(id),
   item_id INTEGER NOT NULL REFERENCES items(id),
-  qty INTEGER NOT NULL CHECK (qty > 0),
+  qty INTEGER NOT NULL DEFAULT 0 CHECK (qty >= 0),
+  loose INTEGER NOT NULL DEFAULT 0 CHECK (loose >= 0),
   PRIMARY KEY (store_id, item_id)
 );
 CREATE TABLE IF NOT EXISTS orders (
@@ -71,7 +76,8 @@ CREATE TABLE IF NOT EXISTS order_lines (
   spec TEXT NOT NULL,
   unit TEXT NOT NULL,
   price INTEGER NOT NULL,
-  qty INTEGER NOT NULL
+  qty INTEGER NOT NULL,
+  loose INTEGER NOT NULL DEFAULT 0        -- 1 = 낱개 줄 (같은 품목의 박스 줄과 따로 적힘)
 );
 CREATE INDEX IF NOT EXISTS orders_store ON orders (store_id, created_at);
 CREATE INDEX IF NOT EXISTS orders_created ON orders (created_at);
@@ -137,6 +143,23 @@ async function migrate(db) {
   await db.batch(STATEMENTS.map((s) => [s, []]));
   const cols = await db.all('PRAGMA table_info(items)');
   if (!cols.some((c) => c.name === 'image')) await db.run("ALTER TABLE items ADD COLUMN image TEXT NOT NULL DEFAULT ''");
+  for (const [name, def] of [['pack', 'INTEGER NOT NULL DEFAULT 0'], ['loose_on', 'INTEGER NOT NULL DEFAULT 0'],
+    ['loose_unit', "TEXT NOT NULL DEFAULT ''"], ['loose_price', 'INTEGER NOT NULL DEFAULT 0']]) {
+    if (!cols.some((c) => c.name === name)) await db.run(`ALTER TABLE items ADD COLUMN ${name} ${def}`);
+  }
+  const lcols = await db.all('PRAGMA table_info(order_lines)');
+  if (!lcols.some((c) => c.name === 'loose')) await db.run('ALTER TABLE order_lines ADD COLUMN loose INTEGER NOT NULL DEFAULT 0');
+  // 장바구니에 낱개 칸 추가: 예전 표는 수량 > 0 규칙이 있어 새 표로 옮긴다 (담아 둔 수량은 그대로)
+  const ccols = await db.all('PRAGMA table_info(cart)');
+  if (!ccols.some((c) => c.name === 'loose')) {
+    await db.batch([
+      [`CREATE TABLE cart_v2 (store_id INTEGER NOT NULL REFERENCES stores(id), item_id INTEGER NOT NULL REFERENCES items(id),
+        qty INTEGER NOT NULL DEFAULT 0 CHECK (qty >= 0), loose INTEGER NOT NULL DEFAULT 0 CHECK (loose >= 0), PRIMARY KEY (store_id, item_id))`, []],
+      ['INSERT INTO cart_v2 (store_id, item_id, qty) SELECT store_id, item_id, qty FROM cart', []],
+      ['DROP TABLE cart', []],
+      ['ALTER TABLE cart_v2 RENAME TO cart', []],
+    ]);
+  }
   const scols = await db.all('PRAGMA table_info(stores)');
   if (!scols.some((c) => c.name === 'link_ver')) await db.run('ALTER TABLE stores ADD COLUMN link_ver INTEGER NOT NULL DEFAULT 0');
   if (!scols.some((c) => c.name === 'chat_url')) await db.run("ALTER TABLE stores ADD COLUMN chat_url TEXT NOT NULL DEFAULT ''");

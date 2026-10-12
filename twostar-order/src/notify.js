@@ -11,7 +11,7 @@ const API = 'https://bot-api.kakao.com/v2/bots';
 
 /** 주문 알림 문구. o = orderWithStore(...), kind = 바뀐 상태. 보낼 게 없으면 null */
 function orderMessage(o, kind, s, now = Date.now()) {
-  const names = o.lines.slice(0, 3).map((l) => `${l.name} ${l.qty}${l.unit}`).join(', ');
+  const names = o.lines.slice(0, 3).map((l) => `${l.name}${l.loose ? '(낱개)' : ''} ${l.qty}${l.unit}`).join(', ');
   const more = o.lines.length > 3 ? ` 외 ${o.lines.length - 3}품목` : '';
   const head = `${o.store.name} · 주문번호 ${o.no}\n${names}${more}\n합계 ${O.won(o.total)}`;
   const e = O.eta(now, s);

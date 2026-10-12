@@ -33,7 +33,7 @@ function ui(blockId) {
 }
 
 function lineText(l) {
-  return `· ${l.name} ${l.qty}${l.unit}  ${O.won(l.price * l.qty)}`;
+  return `· ${l.name}${l.loose ? ' (낱개)' : ''} ${l.qty}${l.unit}  ${O.won(l.price * l.qty)}`;
 }
 
 /**
@@ -217,7 +217,7 @@ async function step(ctx, U, store, x, now) {
       if (!all.length) return U.res([U.text('품목이 없어요.')], [home]);
       const o = Math.min(Math.max(0, Math.trunc(Number(x.o ?? (Number(x.p) || 0) * PAGE) || 0)), all.length - 1);
       const cart = await O.cartOf(db, store, cats);
-      const inCart = new Map(cart.lines.map((l) => [l.item_id, l.qty]));
+      const inCart = new Map(cart.lines.filter((l) => !l.loose).map((l) => [l.item_id, l.qty])); // 카톡은 박스 수량만
       const page = all.slice(o, o + PAGE);
       const cards = page.map((i, k) => {
         const at = o + k;

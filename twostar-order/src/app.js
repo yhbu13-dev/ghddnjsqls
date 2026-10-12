@@ -236,7 +236,7 @@ function createHandler({ db, cfg, assets, log = console.log, fetch: fetchImpl = 
         // 수량을 바꿀 때마다 불리므로 가볍게: 장바구니 버전과 수량만 돌려준다
         await O.replaceCart(db, store, b.cart);
         const c = await O.cartOf(db, store);
-        return json(200, { rev: c.rev, cart: Object.fromEntries(c.lines.map((l) => [l.item_id, l.qty])) });
+        return json(200, { rev: c.rev, cart: O.cartMap(c) });
       }
       if (act === 'reorder' && m === 'POST') { await O.reorder(db, store); return json(200, await sheetView(store, docLink, stLink)); }
       if (act === 'request' && m === 'POST') {
@@ -419,16 +419,21 @@ function createHandler({ db, cfg, assets, log = console.log, fetch: fetchImpl = 
       O.cartOf(db, store), O.lastOrder(db, store), O.categoriesOf(db, store), O.accessStates(db, store), O.getSettings(db), O.ordersOf(db, store, 5),
     ]);
     const lastQty = {};
-    if (last) for (const l of last.lines) lastQty[l.item_id] = l.qty;
-    const items = (await O.itemsFor(db, store, null, cats)).map((i) => ({
-      id: i.id, category: i.category, grp: i.grp, name: i.name, spec: i.spec, unit: i.unit, price: i.price, image: i.image, last: lastQty[i.id] || 0,
-    }));
+    if (last) for (const l of last.lines) lastQty[l.loose ? `${l.item_id}L` : l.item_id] = l.qty;
+    const items = (await O.itemsFor(db, store, null, cats)).map((i) => {
+      const L = O.looseOf(i, s.loosePremium);
+      return {
+        id: i.id, category: i.category, grp: i.grp, name: i.name, spec: i.spec, unit: i.unit, price: i.price, image: i.image, last: lastQty[i.id] || 0,
+        // 관리자가 [낱개 가능]을 켠 품목만: { pack 입수, unit 낱개 단위, price 낱개 단가, last 지난번 낱개 수량 }
+        loose: L ? { pack: L.pack, unit: L.unit, price: L.price, last: lastQty[`${i.id}L`] || 0 } : null,
+      };
+    });
     return {
       store: { name: store.name, biz: O.BIZ[store.biz].label },
       categories: cats.map((c) => ({ id: c, label: O.CATEGORIES[c] })),
       access,
       items,
-      cart: Object.fromEntries(cart.lines.map((l) => [l.item_id, l.qty])),
+      cart: O.cartMap(cart),
       rev: cart.rev,
       minAmount: cfg.minAmount,
       // 발주서 상단 '마감까지 ○시간' · 도착 예정일 계산용
@@ -496,13 +501,17 @@ function createHandler({ db, cfg, assets, log = console.log, fetch: fetchImpl = 
     if (!name || name.length > 40) throw new O.UserError('품목 이름을 1~40자로 입력해 주세요');
     const price = Math.trunc(Number(b.price));
     if (!Number.isFinite(price) || price < 0 || price > 10_000_000) throw new O.UserError('가격을 확인해 주세요');
+    // 낱개 설정이 안 넘어오면(예전 화면) 저장된 값을 그대로 둔다
+    const keep = ['loose_on', 'pack', 'loose_unit', 'loose_price'].every((k) => b[k] === undefined);
+    const cur = keep && b.id ? await db.get('SELECT pack, loose_on, loose_unit, loose_price FROM items WHERE id = ?', [Number(b.id)]) : null;
+    const L = cur || O.looseFields({ on: !!b.loose_on, pack: b.pack, unit: b.loose_unit, price: b.loose_price });
     const vals = [cat, String(b.grp || '기타').trim().slice(0, 20) || '기타', name, String(b.spec || '').trim().slice(0, 40),
-      String(b.unit || '개').trim().slice(0, 4) || '개', price, Math.trunc(Number(b.sort) || 0)];
+      String(b.unit || '개').trim().slice(0, 4) || '개', price, Math.trunc(Number(b.sort) || 0), L.pack, L.loose_on, L.loose_unit, L.loose_price];
     if (b.id) {
-      const r = await db.run('UPDATE items SET category=?, grp=?, name=?, spec=?, unit=?, price=?, sort=? WHERE id=?', [...vals, Number(b.id)]);
+      const r = await db.run('UPDATE items SET category=?, grp=?, name=?, spec=?, unit=?, price=?, sort=?, pack=?, loose_on=?, loose_unit=?, loose_price=? WHERE id=?', [...vals, Number(b.id)]);
       if (!r.changes) throw new O.UserError('품목을 찾을 수 없습니다');
     } else {
-      await db.run('INSERT INTO items (category, grp, name, spec, unit, price, sort) VALUES (?, ?, ?, ?, ?, ?, ?)', vals);
+      await db.run('INSERT INTO items (category, grp, name, spec, unit, price, sort, pack, loose_on, loose_unit, loose_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', vals);
     }
   }
 

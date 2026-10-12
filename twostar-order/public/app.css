@@ -94,6 +94,25 @@ h1, h2, h3 { letter-spacing: -0.03em; }
 .step .q { min-width: 28px; text-align: center; font-weight: 700; font-size: 17px; color: var(--blue); }
 .step .minus:disabled { color: var(--g300); background: none; }
 .row:not(.on) .step .q { color: var(--g400); font-weight: 500; }
+/* 낱개: 관리자가 켠 품목만. 이름 쪽을 누르면 바로 아래에 낱개 줄 */
+.lwrap { padding-bottom: 2px; }
+.row .info.tap { cursor: pointer; -webkit-tap-highlight-color: transparent; border-radius: 10px; }
+.row .info.tap:active { background: var(--g50); }
+.lbadge { display: inline-block; margin-left: 6px; font-size: 11px; font-weight: 700; color: var(--blue); background: var(--blue50); border-radius: 6px; padding: 2px 6px; vertical-align: 2px; white-space: nowrap; }
+.row .lhint { font-size: 12px; color: var(--g500); margin-top: 3px; }
+.row .lsum { font-size: 13px; color: var(--blue); font-weight: 600; margin-top: 3px; }
+.uname { font-size: 13px; color: var(--g500); flex: 0 0 auto; }
+.lsub { display: flex; align-items: center; gap: 14px; margin: 0 20px 4px; padding: 10px 0 10px 14px; background: var(--g50); border-radius: 14px; }
+.lsub .info { flex: 1; min-width: 0; }
+.lsub .name { font-size: 15px; font-weight: 600; }
+.lsub .desc { font-size: 13px; color: var(--g500); margin-top: 2px; }
+.lsub .was { font-size: 12px; color: var(--blue); margin-top: 2px; }
+.lsub .step { background: #fff; margin-right: 10px; }
+.lsub:not(.on) .step .q { color: var(--g400); font-weight: 500; }
+.lmix { margin: 4px 20px 6px; font-size: 14px; font-weight: 600; color: var(--blue); }
+.ltip { display: flex; align-items: center; gap: 10px; margin: 4px 20px 8px; padding: 10px 12px; border-radius: 12px; background: var(--orange50); color: #b45309; font-size: 13px; font-weight: 600; }
+.ltip span { flex: 1; }
+.ltip .btn { flex: 0 0 auto; }
 .group h2 .vat { margin-left: auto; font-size: 13px; font-weight: 500; color: var(--g500); letter-spacing: 0; }
 .row .amt { font-weight: 600; font-variant-numeric: tabular-nums; }
 .block { padding: 20px 20px 8px; }
@@ -243,6 +262,7 @@ td .acts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; 
 .form { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; align-items: end; }
 .form label { font-size: 13px; font-weight: 600; color: var(--g600); display: grid; gap: 6px; }
 .form label.wide { grid-column: span 2; }
+.ltag { display: inline-block; margin-left: 6px; font-size: 11px; font-weight: 700; color: var(--blue); background: var(--blue50); border-radius: 6px; padding: 2px 6px; vertical-align: 2px; }
 @media (max-width: 560px) { .form label.wide { grid-column: auto; } }
 .form label.check { display: flex; align-items: center; gap: 8px; min-height: 48px; font-size: 15px; color: var(--g800); }
 .form label.check input { width: 20px; height: 20px; min-height: 0; padding: 0; accent-color: var(--blue); }

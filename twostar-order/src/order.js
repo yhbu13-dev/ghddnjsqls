@@ -209,7 +209,9 @@ async function orderableItem(db, store, itemId, cats) {
 }
 
 // ── 품목 한꺼번에 넣기 (엑셀에서 복사해 붙여넣기) ────────────
-// 한 줄에 한 품목: 분류 | 묶음 | 품목명 | 규격 | 단위 | 단가  (엑셀 복사 = 탭 구분, 쉼표도 가능)
+// 한 줄에 한 품목: 분류 | 묶음 | 품목명 | 규격 | 단위 | 단가 | 판매 중지 | 낱개(O) | 입수 | 낱개 단위 | 낱개 단가
+//   (엑셀 복사 = 탭 구분, 쉼표도 가능). 낱개 칸이 비어 있거나 X 면 낱개 안 받음.
+//   낱개 칸(8~11번째)이 아예 없는 예전 양식이면 저장된 낱개 설정은 그대로 둔다.
 // 같은 분류에 같은 이름이 있으면 고치고, 없으면 새로 넣는다. 한 줄이라도 틀리면 아무것도 넣지 않는다.
 const CAT_ALIAS = {
   cafe: 'cafe', '카페': 'cafe', '카페품목': 'cafe',
@@ -223,7 +225,7 @@ function parseItems(text) {
   String(text || '').split(/\r?\n/).forEach((line, i) => {
     if (!line.trim()) return;
     const cols = (line.includes('\t') ? line.split('\t') : line.split(',')).map((c) => c.trim().replace(/^"(.*)"$/, '$1'));
-    const [catRaw = '', grp = '', name = '', spec = '', unit = '', priceRaw = '', stop = ''] = cols;
+    const [catRaw = '', grp = '', name = '', spec = '', unit = '', priceRaw = '', stop = '', looseRaw = '', pack = '', looseUnit = '', loosePrice = ''] = cols;
     const category = CAT_ALIAS[catRaw.replace(/\s/g, '').toLowerCase()];
     const price = Number(String(priceRaw).replace(/[,원\s]/g, ''));
     if (!category && i === 0 && !Number.isFinite(price)) return; // 제목 줄
@@ -232,7 +234,13 @@ function parseItems(text) {
     if (!name || name.length > 40) return errors.push(`${n}번째 줄: 품목명을 1~40자로 적어 주세요`);
     if (priceRaw === '' || !Number.isInteger(price) || price < 0 || price > 10_000_000) return errors.push(`${n}번째 줄: 단가가 숫자가 아닙니다 ("${priceRaw}")`);
     // 7번째 칸에 '중지'라고 적힌 줄은 판매 중지로 (관리자 [지금 품목 받기] 파일을 고쳐서 다시 올릴 때)
-    rows.push({ category, grp: grp.slice(0, 20) || '기타', name, spec: spec.slice(0, 40), unit: unit.slice(0, 4) || '개', price, active: /중지/.test(stop) ? 0 : 1 });
+    let loose = null;
+    if (cols.length >= 8) {
+      try {
+        loose = looseFields({ on: /^(o|ㅇ|y|yes|1|true|가능|예)$/i.test(looseRaw.trim()), pack, unit: looseUnit, price: loosePrice });
+      } catch (e) { return errors.push(`${n}번째 줄: ${e.message}`); }
+    }
+    rows.push({ category, grp: grp.slice(0, 20) || '기타', name, spec: spec.slice(0, 40), unit: unit.slice(0, 4) || '개', price, active: /중지/.test(stop) ? 0 : 1, loose });
   });
   if (rows.length > 2000) errors.push('한 번에 2000줄까지 넣을 수 있어요');
   return { rows, errors };
@@ -250,12 +258,14 @@ async function importItems(db, text) {
   for (const r of rows) {
     const key = `${r.category}\u0000${r.name}`;
     const id = existing.get(key);
+    const L = r.loose;
     if (id) {
       list.push(['UPDATE items SET grp = ?, spec = ?, unit = ?, price = ?, active = ? WHERE id = ?', [r.grp, r.spec, r.unit, r.price, r.active, id]]);
+      if (L) list.push(['UPDATE items SET loose_on = ?, pack = ?, loose_unit = ?, loose_price = ? WHERE id = ?', [L.loose_on, L.pack, L.loose_unit, L.loose_price, id]]);
       updated++;
     } else {
-      list.push(['INSERT INTO items (category, grp, name, spec, unit, price, sort, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        [r.category, r.grp, r.name, r.spec, r.unit, r.price, sort += 10, r.active]]);
+      list.push(['INSERT INTO items (category, grp, name, spec, unit, price, sort, active, loose_on, pack, loose_unit, loose_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [r.category, r.grp, r.name, r.spec, r.unit, r.price, sort += 10, r.active, L ? L.loose_on : 0, L ? L.pack : 0, L ? L.loose_unit : '', L ? L.loose_price : 0]]);
       existing.set(key, -1); // 같은 붙여넣기 안에 같은 이름이 두 번 있으면 한 번만 추가
       added++;
     }
@@ -287,20 +297,67 @@ async function deleteItems(db, ids) {
 // ── 장바구니 ─────────────────────────────────────────
 const bumpSql = (storeId) => ['UPDATE stores SET cart_rev = cart_rev + 1 WHERE id = ?', [storeId]];
 
+// ── 낱개 ─────────────────────────────────────────────
+/** 낱개 단가: 직접 넣은 값, 비어 있으면 박스 단가 ÷ 입수 + premium% (10원 단위 올림) */
+function autoLoosePrice(price, pack, premium) {
+  return Math.ceil((price / pack) * (1 + premium / 100) / 10) * 10;
+}
+/** 품목의 낱개 정보 { pack, unit, price, auto } — 낱개를 켜지 않았거나 입수가 없으면 null */
+function looseOf(item, premium = SETTINGS.loosePremium) {
+  if (!item.loose_on || !(item.pack >= 2)) return null;
+  const auto = !(item.loose_price > 0);
+  return { pack: item.pack, unit: item.loose_unit || '개', price: auto ? autoLoosePrice(item.price, item.pack, premium) : item.loose_price, auto };
+}
+/**
+ * 관리자·엑셀에서 받은 낱개 설정 확인. 돌려주는 값: { loose_on, pack, loose_unit, loose_price }
+ * 낱개를 켜려면 입수(2 이상)가 있어야 한다. 낱개 단가를 비우면 0(자동).
+ */
+function looseFields({ on, pack, unit, price }) {
+  const p = String(pack ?? '').replace(/[,\s]/g, '');
+  const lp = String(price ?? '').replace(/[,원\s]/g, '');
+  const n = p === '' ? 0 : Number(p);
+  const v = lp === '' ? 0 : Number(lp);
+  if (!Number.isInteger(n) || n < 0 || n > 10000) throw new UserError('입수는 숫자로 적어 주세요 (1박스에 몇 개인지)');
+  if (!Number.isInteger(v) || v < 0 || v > 10_000_000) throw new UserError('낱개 단가는 숫자로 적어 주세요 (비우면 자동 계산)');
+  if (on && n < 2) throw new UserError('낱개를 켜려면 입수(1박스에 몇 개인지, 2 이상)를 적어 주세요');
+  return { loose_on: on ? 1 : 0, pack: n, loose_unit: String(unit || '').trim().slice(0, 4), loose_price: v };
+}
+
+/** 낱개 줄의 규격 (확인서·명세서·출고 집계에 그대로 찍힌다). 예: 낱개 (1박스 24캔) */
+const looseSpec = (item, L) => `낱개 (1${item.unit} ${L.pack}${L.unit})`;
+
+/**
+ * 장바구니. lines 는 주문서에 들어갈 줄 그대로: 박스 줄 { loose: 0 } 과 낱개 줄 { loose: 1 } 이 따로.
+ * 낱개를 끈 품목의 낱개 수량은 빠진다.
+ */
 async function cartOf(db, store, cats) {
-  const lines = await db.all(`SELECT c.item_id, c.qty, i.name, i.spec, i.unit, i.price, i.category, i.grp
-                              FROM cart c JOIN items i ON i.id = c.item_id
-                              WHERE c.store_id = ? AND i.active = 1 ORDER BY i.category, i.sort, i.id`, [store.id]);
+  const [rows, s, rev] = await Promise.all([
+    db.all(`SELECT c.item_id, c.qty AS box, c.loose AS lq, i.name, i.spec, i.unit, i.price, i.category, i.grp,
+                   i.pack, i.loose_on, i.loose_unit, i.loose_price
+            FROM cart c JOIN items i ON i.id = c.item_id
+            WHERE c.store_id = ? AND i.active = 1 ORDER BY i.category, i.sort, i.id`, [store.id]),
+    getSettings(db),
+    db.get('SELECT cart_rev FROM stores WHERE id = ?', [store.id]).then((r) => r.cart_rev),
+  ]);
   cats = cats || await categoriesOf(db, store);
-  const ok = lines.filter((l) => cats.includes(l.category));
-  const rev = (await db.get('SELECT cart_rev FROM stores WHERE id = ?', [store.id])).cart_rev;
+  const lines = [];
+  for (const r of rows) {
+    if (!cats.includes(r.category)) continue;
+    const base = { item_id: r.item_id, name: r.name, category: r.category, grp: r.grp };
+    if (r.box > 0) lines.push({ ...base, spec: r.spec, unit: r.unit, price: r.price, qty: r.box, loose: 0 });
+    const L = r.lq > 0 && looseOf(r, s.loosePremium);
+    if (L) lines.push({ ...base, spec: looseSpec(r, L), unit: L.unit, price: L.price, qty: r.lq, loose: 1 });
+  }
   return {
     rev,
-    lines: ok,
-    count: ok.length,
-    total: ok.reduce((s, l) => s + l.price * l.qty, 0),
+    lines,
+    count: lines.length,
+    total: lines.reduce((t, l) => t + l.price * l.qty, 0),
   };
 }
+
+/** 발주서 화면용 수량표: { 품목번호: 박스 수량, '품목번호L': 낱개 수량 } */
+const cartMap = (cart) => Object.fromEntries(cart.lines.map((l) => [l.loose ? `${l.item_id}L` : l.item_id, l.qty]));
 
 const MAX_QTY = 999;
 
@@ -308,11 +365,11 @@ async function setQty(db, store, itemId, qty) {
   qty = Math.trunc(Number(qty));
   if (!Number.isFinite(qty) || qty < 0 || qty > MAX_QTY) throw new UserError(`수량은 0~${MAX_QTY} 사이로 넣어 주세요`);
   if (!(await orderableItem(db, store, itemId))) throw new UserError('발주할 수 없는 품목입니다');
+  // 박스 수량만 바꾼다 (카톡 담기). 같은 품목의 낱개 수량은 그대로
   await db.batch([
-    qty === 0
-      ? ['DELETE FROM cart WHERE store_id = ? AND item_id = ?', [store.id, itemId]]
-      : [`INSERT INTO cart (store_id, item_id, qty) VALUES (?, ?, ?)
-          ON CONFLICT (store_id, item_id) DO UPDATE SET qty = excluded.qty`, [store.id, itemId, qty]],
+    [`INSERT INTO cart (store_id, item_id, qty) VALUES (?, ?, ?)
+      ON CONFLICT (store_id, item_id) DO UPDATE SET qty = excluded.qty`, [store.id, itemId, qty]],
+    ['DELETE FROM cart WHERE store_id = ? AND item_id = ? AND qty = 0 AND loose = 0', [store.id, itemId]],
     bumpSql(store.id),
   ]);
   return qty;
@@ -323,19 +380,28 @@ async function addQty(db, store, itemId, n) {
   return setQty(db, store, itemId, Math.min(MAX_QTY, Math.max(0, (cur ? cur.qty : 0) + n)));
 }
 
-/** 발주서 화면에서 한 번에 저장: { itemId: qty } 전체를 장바구니로 */
+/**
+ * 발주서 화면에서 한 번에 저장: { 품목번호: 박스 수량, '품목번호L': 낱개 수량 } 전체를 장바구니로.
+ * 낱개는 관리자가 [낱개 가능]을 켠 품목만 받는다.
+ */
 async function replaceCart(db, store, map) {
   const cats = await categoriesOf(db, store);
-  const ok = new Map((await db.all('SELECT id, category FROM items WHERE active = 1')).map((r) => [r.id, r.category]));
-  const list = [['DELETE FROM cart WHERE store_id = ?', [store.id]]];
-  for (const [id, q] of Object.entries(map || {}).slice(0, 500)) {
+  const ok = new Map((await db.all('SELECT id, category, pack, loose_on FROM items WHERE active = 1')).map((r) => [r.id, r]));
+  const per = new Map();
+  for (const [key, q] of Object.entries(map || {}).slice(0, 1000)) {
+    const m = /^(\d+)(L?)$/.exec(key);
     const qty = Math.trunc(Number(q));
-    if (!qty) continue;
+    if (!m || !qty) continue;
     if (!Number.isFinite(qty) || qty < 0 || qty > MAX_QTY) throw new UserError(`수량은 0~${MAX_QTY} 사이로 넣어 주세요`);
-    const cat = ok.get(Number(id));
-    if (!cat || !cats.includes(cat)) continue; // 판매 중지·미승인 품목은 조용히 제외
-    list.push(['INSERT INTO cart (store_id, item_id, qty) VALUES (?, ?, ?)', [store.id, Number(id), qty]]);
+    const it = ok.get(Number(m[1]));
+    if (!it || !cats.includes(it.category)) continue; // 판매 중지·미승인 품목은 조용히 제외
+    if (m[2] && !(it.loose_on && it.pack >= 2)) continue; // 낱개를 끈 품목
+    const cur = per.get(it.id) || { qty: 0, loose: 0 };
+    cur[m[2] ? 'loose' : 'qty'] = qty;
+    per.set(it.id, cur);
   }
+  const list = [['DELETE FROM cart WHERE store_id = ?', [store.id]]];
+  for (const [id, c] of per) list.push(['INSERT INTO cart (store_id, item_id, qty, loose) VALUES (?, ?, ?, ?)', [store.id, id, c.qty, c.loose]]);
   list.push(bumpSql(store.id));
   await db.batch(list);
 }
@@ -356,7 +422,7 @@ async function reorder(db, store) {
   const o = await lastOrder(db, store);
   if (!o) return 0;
   const map = {};
-  for (const l of o.lines) map[l.item_id] = l.qty;
+  for (const l of o.lines) map[l.loose ? `${l.item_id}L` : l.item_id] = l.qty;
   await replaceCart(db, store, map);
   return (await db.get('SELECT COUNT(*) AS n FROM cart WHERE store_id = ?', [store.id])).n;
 }
@@ -389,8 +455,8 @@ async function submit(db, store, rev, { via = 'chat', memo = '', minAmount = 0 }
       await db.batch([
         [`INSERT INTO orders (no, store_id, status, total, via, ref, memo, created_at, updated_at)
           VALUES (?, ?, 'received', ?, ?, ?, ?, ?, ?)`, [no, store.id, cart.total, via, ref, String(memo || '').slice(0, 200), now, now]],
-        ...cart.lines.map((l) => [`INSERT INTO order_lines (order_id, item_id, name, spec, unit, price, qty)
-          SELECT id, ?, ?, ?, ?, ?, ? FROM orders WHERE ref = ?`, [l.item_id, l.name, l.spec, l.unit, l.price, l.qty, ref]]),
+        ...cart.lines.map((l) => [`INSERT INTO order_lines (order_id, item_id, name, spec, unit, price, qty, loose)
+          SELECT id, ?, ?, ?, ?, ?, ?, ? FROM orders WHERE ref = ?`, [l.item_id, l.name, l.spec, l.unit, l.price, l.qty, l.loose, ref]]),
         ['DELETE FROM cart WHERE store_id = ?', [store.id]],
         bumpSql(store.id),
       ]);
@@ -483,6 +549,7 @@ const SETTINGS = {
   cutoffHour: 16, // 이 시각(한국 시간) 이후 주문은 다음 날 접수로 계산. 0 = 마감 없음
   vat: 'excluded', // 단가는 부가세 별도 (확인서·명세서에 10% 세액을 더해 표시)
   kakaoBotId: '', kakaoRestKey: '', kakaoEvent: 'order_notice',
+  loosePremium: 10, // 낱개 단가를 비워 둔 품목: 박스 단가 ÷ 입수에 이만큼(%) 더해서 받는다 (박스 뜯어 나누는 작업비)
 };
 
 async function getSettings(db) {
@@ -509,6 +576,11 @@ async function saveSettings(db, patch) {
     const h = Math.trunc(Number(patch.cutoffHour));
     if (!(h >= 0 && h <= 23)) throw new UserError('마감 시각은 0~23시로 적어 주세요 (0 = 마감 없음)');
     next.cutoffHour = h;
+  }
+  if (patch.loosePremium !== undefined) {
+    const p = Number(patch.loosePremium);
+    if (!(Number.isInteger(p) && p >= 0 && p <= 100)) throw new UserError('낱개 추가 비율은 0~100(%)으로 적어 주세요');
+    next.loosePremium = p;
   }
   if (patch.kakaoBotId !== undefined) {
     const id = String(patch.kakaoBotId).trim();
@@ -614,6 +686,6 @@ module.exports = {
   createStore, reissueCode, storeOf, storeByUser, storesOfUser, useStore, linkUser, unlinkUser, unlinkStore,
   categoriesOf, accessStates, requestAccess, decideAccess,
   itemsFor, groupsFor, orderableItem, parseItems, importItems, deleteItems,
-  cartOf, setQty, addQty, replaceCart, clearCart, lastOrder, reorder,
+  cartOf, cartMap, looseOf, looseFields, autoLoosePrice, setQty, addQty, replaceCart, clearCart, lastOrder, reorder,
   submit, ordersOf, setStatus, kstDay,
 };

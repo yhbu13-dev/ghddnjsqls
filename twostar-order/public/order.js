@@ -6,7 +6,9 @@
   const app = document.getElementById('app');
   const won = (n) => `${Number(n).toLocaleString('ko-KR')}원`;
   let V = null; // 서버에서 받은 발주서
-  let qty = {}; // 화면의 수량
+  let qty = {}; // 화면의 수량 { 품목번호: 박스 수량, '품목번호L': 낱개 수량 }
+  const openL = new Set(); // 낱개 줄을 펼친 품목
+  const lkey = (id) => `${id}L`;
   let cat = null; // 보고 있는 분류
   let saveTimer = null;
   let saving = null;
@@ -49,7 +51,20 @@
     if (!tab) tab = 'all'; // 처음엔 전체 상품부터
     if (tab === 'usual' && !usual().length) tab = 'all';
   }
-  const usual = () => V.items.filter((i) => i.last > 0);
+  const usual = () => V.items.filter((i) => i.last > 0 || (i.loose && i.loose.last > 0));
+  const byId = (id) => V.items.find((i) => i.id === Number(id));
+
+  // 담은 줄 (주문서에 적히는 그대로): 박스 줄과 낱개 줄이 따로
+  function picks() {
+    const out = [];
+    for (const it of V.items) {
+      const b = qty[it.id] || 0;
+      if (b > 0) out.push({ it, loose: false, name: it.name, q: b, unit: it.unit, price: it.price, last: it.last });
+      const l = it.loose ? qty[lkey(it.id)] || 0 : 0;
+      if (l > 0) out.push({ it, loose: true, name: `${it.name} (낱개)`, q: l, unit: it.loose.unit, price: it.loose.price, last: it.loose.last });
+    }
+    return out;
+  }
 
   // 수량을 바꾸면 0.6초 뒤 장바구니에 저장 (카톡 장바구니와 같은 것)
   function scheduleSave() {
@@ -66,16 +81,12 @@
     return run;
   }
 
-  // 부가세 10%: 품목 줄마다 계산해 더함 (확인서·명세서와 같은 방식). items 는 { price, q|qty[id] }
-  const vatOf = (items) => items.reduce((a, i) => a + Math.round(i.price * (i.q ?? qty[i.id]) * 0.1), 0);
+  // 부가세 10%: 줄마다 계산해 더함 (확인서·명세서와 같은 방식). lines = picks()
+  const vatOf = (lines) => lines.reduce((a, l) => a + Math.round(l.price * l.q * 0.1), 0);
 
   const totals = () => {
-    let count = 0; let total = 0;
-    for (const it of V.items) {
-      const q = qty[it.id] || 0;
-      if (q > 0) { count++; total += q * it.price; }
-    }
-    return { count, total };
+    const ls = picks();
+    return { count: ls.length, total: ls.reduce((a, l) => a + l.q * l.price, 0) };
   };
 
   // ── 마감 · 도착 예정 (한국 시간 기준, 서버 [설정]의 마감 시각·배송 기간) ──
@@ -133,13 +144,18 @@
     }, 30000);
   }
 
-  function setQ(id, q) {
-    q = Math.max(0, Math.min(999, q));
-    if (q) qty[id] = q; else delete qty[id];
-    for (const row of document.querySelectorAll(`[data-id="${id}"]`)) {
-      row.classList.toggle('on', q > 0);
-      row.querySelector('.q').textContent = q;
-      row.querySelector('.minus').disabled = !q;
+  // key = 품목번호(박스) 또는 '품목번호L'(낱개). 바뀐 품목 줄만 다시 그린다
+  function setQ(key, q) { setMany({ [key]: q }); }
+  function setMany(changes) {
+    const ids = new Set();
+    for (const [key, v] of Object.entries(changes)) {
+      const q = Math.max(0, Math.min(999, v));
+      if (q) qty[key] = q; else delete qty[key];
+      ids.add(parseInt(key, 10));
+    }
+    for (const id of ids) {
+      const it = byId(id);
+      for (const el of document.querySelectorAll(`[data-item="${id}"]`)) el.replaceWith(row(it));
     }
     renderBar();
     scheduleSave();
@@ -159,18 +175,57 @@
       h('button', { class: 'btn cta', disabled: !t.count, onclick: confirmSheet }, t.count ? D.cta : '품목을 담아 주세요'));
   }
 
+  const stepper = (key, label) => {
+    const q = qty[key] || 0;
+    return h('div', { class: `step${q ? ' on' : ''}` },
+      h('button', { class: 'minus', disabled: !q, 'aria-label': `${label} 수량 줄이기`, onclick: () => setQ(key, (qty[key] || 0) - 1) }, '−'),
+      h('span', { class: 'q', 'aria-live': 'polite' }, q),
+      h('button', { class: 'plus', 'aria-label': `${label} 수량 늘리기`, onclick: () => setQ(key, (qty[key] || 0) + 1) }, '+'));
+  };
+
+  // 품목 한 줄. 관리자가 [낱개 가능]을 켠 품목은 이름 쪽을 누르면 바로 아래에 낱개 줄이 펼쳐진다
   function row(it) {
     const q = qty[it.id] || 0;
-    return h('div', { class: `row${q ? ' on' : ''}`, 'data-id': it.id },
+    const L = it.loose;
+    const lq = L ? qty[lkey(it.id)] || 0 : 0;
+    const open = !!L && openL.has(it.id);
+    const toggle = () => { if (open) openL.delete(it.id); else openL.add(it.id); refresh(it.id); };
+    const main = h('div', { class: `row${q || lq ? ' on' : ''}`, 'data-item': L ? null : it.id },
       it.image ? h('img', { class: 'thumb', src: `/img/${it.image}`, alt: '', loading: 'lazy' }) : null,
-      h('div', { class: 'info' },
-        h('div', { class: 'name' }, it.name),
+      h('div', L ? { class: 'info tap', role: 'button', tabindex: '0', 'aria-expanded': String(open), onclick: toggle, onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } } } : { class: 'info' },
+        h('div', { class: 'name' }, it.name, L ? h('span', { class: 'lbadge' }, '낱개 가능') : null),
         h('div', { class: 'desc' }, [it.spec, won(it.price)].filter(Boolean).join(', ')),
-        tab === 'all' && it.last ? h('div', { class: 'was' }, `지난번 ${it.last}${it.unit}`) : null),
-      h('div', { class: 'step' },
-        h('button', { class: 'minus', disabled: !q, 'aria-label': `${it.name} 수량 줄이기`, onclick: () => setQ(it.id, (qty[it.id] || 0) - 1) }, '−'),
-        h('span', { class: 'q', 'aria-live': 'polite' }, q),
-        h('button', { class: 'plus', 'aria-label': `${it.name} 수량 늘리기`, onclick: () => setQ(it.id, (qty[it.id] || 0) + 1) }, '+')));
+        tab === 'all' && it.last ? h('div', { class: 'was' }, `지난번 ${it.last}${it.unit}`) : null,
+        L && !open && lq ? h('div', { class: 'lsum' }, `낱개 ${lq}${L.unit} 담김 · ${won(lq * L.price)}`) : null,
+        L ? h('div', { class: 'lhint' }, open ? '낱개 접기 ⌃' : '눌러서 낱개 주문 ⌄') : null),
+      open ? h('span', { class: 'uname' }, it.unit) : null,
+      stepper(String(it.id), it.name));
+    if (!L) return main;
+    const wrap = h('div', { class: 'lwrap', 'data-item': it.id }, main);
+    if (!open) return wrap;
+    wrap.append(h('div', { class: `lsub${lq ? ' on' : ''}` },
+      h('div', { class: 'info' },
+        h('div', { class: 'name' }, '낱개'),
+        h('div', { class: 'desc' }, `1${L.unit} ${won(L.price)} · 1${it.unit} = ${L.pack}${L.unit}`),
+        tab === 'all' && L.last ? h('div', { class: 'was' }, `지난번 낱개 ${L.last}${L.unit}`) : null),
+      h('span', { class: 'uname' }, L.unit),
+      stepper(lkey(it.id), `${it.name} 낱개`)));
+    if (q && lq) {
+      wrap.append(h('div', { class: 'lmix' }, `${q}${it.unit} + ${lq}${L.unit} (총 ${q * L.pack + lq}${L.unit}) · ${won(q * it.price + lq * L.price)}`));
+    }
+    if (lq >= L.pack) {
+      // 낱개가 한 박스 이상이면 박스로 바꾸라고 알려 줌 (박스가 더 싸고, 창고도 덜 뜯는다)
+      const nb = Math.floor(lq / L.pack);
+      const save = nb * L.pack * L.price - nb * it.price;
+      wrap.append(h('div', { class: 'ltip' },
+        h('span', null, `💡 낱개 ${nb * L.pack}${L.unit} = ${nb}${it.unit}예요.${save > 0 ? ` ${it.unit}로 바꾸면 ${won(save)} 아껴요` : ''}`),
+        h('button', { class: 'btn soft small', onclick: () => setMany({ [it.id]: q + nb, [lkey(it.id)]: lq - nb * L.pack }) }, '바꾸기')));
+    }
+    return wrap;
+  }
+  function refresh(id) {
+    const it = byId(id);
+    for (const el of document.querySelectorAll(`[data-item="${id}"]`)) el.replaceWith(row(it));
   }
 
   // ── 검색: 품목 이름·규격·진열대, 초성(ㅅㅇㄲ → 새우깡)도 된다 ──
@@ -306,7 +361,13 @@
   }
 
   async function loadLast() {
-    const same = usual().every((i) => (qty[i.id] || 0) === i.last) && Object.keys(qty).every((id) => V.items.find((i) => i.id === Number(id))?.last);
+    const lastMap = {};
+    for (const i of V.items) {
+      if (i.last) lastMap[i.id] = i.last;
+      if (i.loose && i.loose.last) lastMap[lkey(i.id)] = i.loose.last;
+    }
+    const keys = new Set([...Object.keys(qty), ...Object.keys(lastMap)]);
+    const same = [...keys].every((k) => (qty[k] || 0) === (lastMap[k] || 0));
     if (same) return toast('이미 지난번과 똑같아요');
     if (Object.keys(qty).length && !window.confirm('지금 고른 수량을 지우고 지난 발주로 바꿀까요?')) return;
     try { await saving; take(await api('/reorder', 'POST')); render(); toast('지난 발주를 불러왔어요'); } catch (e) { toast(e.message); }
@@ -319,22 +380,25 @@
   function confirmSheet() {
     const t = totals();
     if (V.minAmount && t.total < V.minAmount) return toast(`최소 발주 금액은 ${won(V.minAmount)}이에요`);
-    const chosen = V.items.filter((i) => qty[i.id] > 0);
-    const diff = (it) => {
+    const chosen = picks();
+    const diff = (l) => {
       if (!V.last) return null;
-      if (!it.last) return h('span', { class: 'diff new' }, '새로 추가');
-      const d = qty[it.id] - it.last;
+      if (!l.last) return h('span', { class: 'diff new' }, '새로 추가');
+      const d = l.q - l.last;
       return d ? h('span', { class: `diff ${d > 0 ? 'up' : 'down'}` }, `${d > 0 ? '▲' : '▼'}${Math.abs(d)}`) : null;
     };
-    const dropped = V.last ? V.items.filter((i) => i.last && !qty[i.id]) : [];
+    const dropped = V.last ? V.items.flatMap((i) => [
+      i.last && !qty[i.id] ? i.name : null,
+      i.loose && i.loose.last && !qty[lkey(i.id)] ? `${i.name} (낱개)` : null,
+    ]).filter(Boolean) : [];
     const box = h('div', { class: 'box' },
       h('div', { class: 'grab' }),
       h('h2', null, `${t.count}품목을 주문할까요?`),
       h('div', { class: 'muted small' }, V.store.name),
-      h('div', { class: 'lines' }, chosen.map((it) => h('div', null,
-        h('span', null, it.name, h('b', null, `${qty[it.id]}${it.unit}`), diff(it)),
-        h('span', { class: 'amt' }, won(qty[it.id] * it.price))))),
-      dropped.length ? h('p', { class: 'dropped' }, `지난번엔 있었는데 빠진 품목: ${dropped.map((i) => i.name).join(', ')}`) : null,
+      h('div', { class: 'lines' }, chosen.map((l) => h('div', null,
+        h('span', null, l.name, h('b', null, `${l.q}${l.unit}`), diff(l)),
+        h('span', { class: 'amt' }, won(l.q * l.price))))),
+      dropped.length ? h('p', { class: 'dropped' }, `지난번엔 있었는데 빠진 품목: ${dropped.join(', ')}`) : null,
       h('div', { class: 'vats' },
         h('div', null, h('span', null, '공급가액'), h('span', null, won(t.total))),
         h('div', null, h('span', null, '부가세 (10%)'), h('span', null, won(vatOf(chosen))))),
@@ -351,7 +415,7 @@
     try {
       if (saveTimer) save();
       await saving;
-      const chosen = V.items.filter((i) => qty[i.id] > 0).map((i) => ({ ...i, q: qty[i.id] }));
+      const chosen = picks();
       const r = await api('/submit', 'POST', { rev: V.rev });
       document.querySelector('.sheet')?.remove();
       take(r.view);
