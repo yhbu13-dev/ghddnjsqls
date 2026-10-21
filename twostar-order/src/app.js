@@ -159,7 +159,9 @@ function createHandler({ db, cfg, assets, log = console.log, fetch: fetchImpl = 
       log(`[카톡 ${new Date().toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul', hour12: false })}] 사용자 ${who} · ${what}`);
       let out;
       try {
-        out = await skill({ db, blockId: cfg.blockId, orderLink, docLink, stLink, minAmount: cfg.minAmount, guest: cfg.guest, ...hooks }, body);
+        // ev=1: 알림 전용 블록(카카오 Event API)에서 부른 것 → 알림 카드만 보여 준다
+        const event = url.searchParams.get('ev') === '1';
+        out = await skill({ db, blockId: cfg.blockId, orderLink, docLink, stLink, minAmount: cfg.minAmount, guest: cfg.guest, event, ...hooks }, body);
       } catch (e) {
         // 어떤 오류가 나도 카카오에는 규격에 맞는 답을 보낸다 (500을 보내면 '스킬 응답 오류'로 끝남)
         console.error(`[카톡 오류] ${what}:`, e);

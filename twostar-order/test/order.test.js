@@ -921,3 +921,41 @@ test('낱개: 예전 DB(장바구니 수량 > 0 규칙) 를 옮겨도 담아 둔
   await db.run('UPDATE cart SET qty = 0, loose = 2'); // 박스 0 + 낱개만 가능
   assert.ok((await db.all('PRAGMA table_info(order_lines)')).some((c) => c.name === 'loose'));
 });
+
+test('카톡 자동 알림(Event API): 상태를 바꾸면 이벤트 발송 → 알림 블록(ev=1)은 알림 카드만', async () => {
+  const db = open(':memory:');
+  const sent = [];
+  const fetchImpl = async (u, init) => { sent.push({ u, init }); return new Response(JSON.stringify({ taskId: 't1', status: 'SUCCESS' }), { status: 200 }); };
+  const handle = createHandler({ db, cfg: { adminPassword: 'pw', skillKey: 'k', blockId: 'B', minAmount: 0, guest: {}, secret: 's' }, log: () => {}, assets: async () => null, fetch: fetchImpl });
+  const call = (path, init) => handle(new Request(`https://x.com${path}`, init), { ip: '1' });
+  const r = await call('/admin/login', { method: 'POST', body: JSON.stringify({ password: 'pw' }) });
+  const H = { cookie: r.headers.get('set-cookie').split(';')[0], 'x-ts': '1' };
+  const post = async (sub, body) => call(`/api/admin/${sub}`, { method: 'POST', headers: H, body: JSON.stringify(body) });
+  await post('items', { category: 'cafe', grp: '시럽', name: '바닐라', price: 10000 });
+  const st = await (await post('stores', { name: '카페', biz: 'cafe' })).json();
+  await post('settings', { kakaoBotId: '6ab7647ef9ce1361981d6482', kakaoRestKey: 'abcdef0123456789abcdef0123456789', kakaoEvent: 'order_notice' });
+  const talk = async (extra, u = '버튼', q = '') => (await call(`/kakao/skill?key=k${q}`, { method: 'POST', body: JSON.stringify({ userRequest: { user: { id: 'bot-user-1' }, utterance: u }, action: { clientExtra: extra } }) })).json();
+  await talk({}, st.code);
+  const item = (await (await call('/api/admin/data', { headers: H })).json()).items[0];
+  const store = await O.storeOf(db, st.id);
+  await O.setQty(db, store, item.id, 2);
+  await O.submit(db, store, (await O.cartOf(db, store)).rev, { via: 'chat' });
+  const id = (await (await call('/api/admin/data', { headers: H })).json()).orders[0].id;
+  sent.length = 0;
+  await talk({ s: 'home' }); // 접수 알림은 여기서 읽음
+  const res = await (await post('status', { id, status: 'confirmed' })).json();
+  assert.equal(res.notify.sent, 1, JSON.stringify(res.notify));
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].u, 'https://bot-api.kakao.com/v2/bots/6ab7647ef9ce1361981d6482/talk');
+  assert.equal(sent[0].init.headers.authorization, 'KakaoAK abcdef0123456789abcdef0123456789');
+  const body = JSON.parse(sent[0].init.body);
+  assert.equal(body.event.name, 'order_notice');
+  assert.deepEqual(body.user, [{ type: 'botUserKey', id: 'bot-user-1' }]);
+  // 카카오가 알림 블록을 부름 → 알림 카드만 (처음 화면 메뉴 없이)
+  const ev = await talk({}, '', '&ev=1');
+  const outs = ev.template.outputs;
+  assert.equal(outs.length, 1);
+  assert.match(outs[0].textCard.title, /발주가 확인되었어요/);
+  const again = await talk({}, '', '&ev=1');
+  assert.match(again.template.outputs[0].simpleText.text, /알림이 있어요/, '이미 보여 준 알림은 다시 안 나옴');
+});

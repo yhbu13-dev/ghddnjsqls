@@ -141,9 +141,11 @@
       D = r;
       if (storeView) await openStore(storeView.id, storeView.data.month);
       render();
-      // 처리 후 바로 카톡 답장 문구를 띄운다 (붙여넣기만 하면 점주에게 즉시 도착)
-      if (r.notify && r.notify.reply) replySheet(r.notify.reply, `${o.no} ${D.labels.status[s]} 처리했어요`);
-      else toast(`${o.no} ${D.labels.status[s]} 처리${notifyMsg(r.notify)}`);
+      // 카톡 자동 알림이 나갔으면 끝. 아니면(설정 전·실패) 직접 보낼 카톡 답장 문구를 띄운다
+      const n = r.notify;
+      if (n && n.configured && n.sent && !n.error) toast(`${o.no} ${D.labels.status[s]} 처리 · 카톡 알림 ${n.sent}명에게 바로 보냈어요`);
+      else if (n && n.reply) replySheet(n.reply, `${o.no} ${D.labels.status[s]} 처리했어요${n.error ? ` (자동 알림 실패: ${n.error})` : ''}`);
+      else toast(`${o.no} ${D.labels.status[s]} 처리${notifyMsg(n)}`);
     } catch (e) { toast(e.message); }
   }
   // ── 실물 명세서 사진 올리기: 휴대폰 사진·스캔 파일을 긴 변 2000px JPEG 로 줄여서 (한 장 2MB 이하) ──
@@ -683,8 +685,11 @@
         h('ol', { class: 'small guide' },
           h('li', null, '카카오 디벨로퍼스(developers.kakao.com)에서 앱을 만들고 [앱 키 → REST API 키]를 복사'),
           h('li', null, '오픈빌더 → 이 챗봇 → 설정 → Event API 에서 그 앱을 연결 (안내에 따라 사용 신청)'),
-          h('li', null, '오픈빌더에 블록 하나를 새로 만들고, 이벤트 이름을 아래 [이벤트 이름]과 똑같이 적은 뒤 봇 응답을 스킬 데이터(발주서버)로 설정 → 배포'),
-          h('li', null, '오픈빌더 주소창 bots/ 뒤의 값(봇 ID)과 REST API 키를 아래에 넣고 저장 → 매장 상세에서 [알림 테스트]'),
+          h('li', null, '오픈빌더 → 스킬 → [생성]: 이름 "발주알림", URL 은 아래 [알림 스킬 URL]을 붙여넣고 저장'),
+          D.skillUrl ? h('li', { class: 'urlrow' }, h('span', { class: 'url' }, `${D.skillUrl}&ev=1`),
+            h('button', { class: 'btn small', onclick: () => navigator.clipboard.writeText(`${D.skillUrl}&ev=1`).then(() => toast('알림 스킬 URL 을 복사했어요'), () => toast('주소를 직접 선택해 복사해 주세요')) }, '복사')) : null,
+          h('li', null, '오픈빌더 → 시나리오 → 블록 하나 새로 만들기 ("발주알림"): 패턴(사용자 발화)은 비우고, [이벤트] 칸에 아래 [이벤트 이름]과 똑같이 입력 → 파라미터 설정에서 스킬 "발주알림" 선택 → 봇 응답 [스킬데이터 사용] → 저장 → [배포]'),
+          h('li', null, '오픈빌더 주소창 bots/ 뒤의 값(봇 ID)과 REST API 키를 아래에 넣고 저장 → 매장 상세에서 [알림 테스트]로 카톡이 바로 오는지 확인'),
           h('li', null, '카카오 요금: 보낸 알림 1건당 15원(VAT 별도), 전송에 성공한 건만 과금')),
         h('div', { class: 'form' },
           h('label', null, '봇 ID', F.kakaoBotId), h('label', null, 'REST API 키', F.kakaoRestKey), h('label', null, '이벤트 이름', F.kakaoEvent),
