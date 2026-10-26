@@ -305,6 +305,7 @@
       searchBox(),
       h('div', { id: 'list' }, ...listBody().flat().filter(Boolean)),
       extras(),
+      window.siteFooter ? window.siteFooter(V.company) : null,
       h('div', { class: 'pad' }),
       h('div', { class: 'bar', id: 'bar' }),
     ].flat().filter(Boolean));

@@ -39,6 +39,7 @@ const FILES = {
   '/assets/jspdf.umd.min.js': ['jspdf.umd.min.js', 'text/javascript; charset=utf-8'],
   // 관리자 품목 엑셀 올리기: 엑셀 읽기 · 품목 등록 양식
   '/assets/xlsx.js': ['xlsx.js', 'text/javascript; charset=utf-8'],
+  '/assets/footer.js': ['footer.js', 'text/javascript; charset=utf-8'], // 모든 화면 하단 사업자 정보
   '/assets/item-template.xlsx': ['item-template.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     { 'content-disposition': `attachment; filename="item-template.xlsx"; filename*=UTF-8''${encodeURIComponent('투스타_품목등록_양식.xlsx')}` }],
   '/assets/icon-192.png': ['icon-192.png', 'image/png'],
@@ -142,6 +143,8 @@ function createHandler({ db, cfg, assets, log = console.log, fetch: fetchImpl = 
     }
     if (m === 'GET' && p === '/') return redirect('/admin');
     if (m === 'GET' && p === '/health') return json(200, { ok: true });
+    // 사업자 정보 (누구나 볼 수 있는 화면 하단 표시용)
+    if (m === 'GET' && p === '/api/company') return json(200, O.companyInfo(await O.getSettings(db)));
     if (m === 'GET' && p.startsWith('/img/')) {
       const img = await images.read(db, p.slice(5));
       return img ? reply(200, img.body, img.type, { 'cache-control': 'public, max-age=31536000, immutable' }) : reply(404, 'not found', 'text/plain');
@@ -437,6 +440,7 @@ function createHandler({ db, cfg, assets, log = console.log, fetch: fetchImpl = 
       items,
       cart: O.cartMap(cart),
       rev: cart.rev,
+      company: O.companyInfo(s), // 화면 하단 사업자 정보
       minAmount: cfg.minAmount,
       // 발주서 상단 '마감까지 ○시간' · 도착 예정일 계산용
       rules: { cutoffHour: s.cutoffHour, deliveryMin: s.deliveryMin, deliveryMax: s.deliveryMax, skipWeekend: s.skipWeekend },

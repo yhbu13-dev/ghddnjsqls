@@ -646,6 +646,7 @@
     const inp = (k, ph) => h('input', { value: S[k] ?? '', placeholder: ph || '' });
     const F = {
       company: inp('company'), bizNo: inp('bizNo', '000-00-00000'), ceo: inp('ceo'), tel: inp('tel', '02-000-0000'),
+      mailOrderNo: inp('mailOrderNo', '예: 제2026-경기광주-0000호'), email: inp('email', '예: twostar@example.com'),
       address: inp('address'), bizType: inp('bizType', '도소매'), bizItem: inp('bizItem', '식품'), account: inp('account', '은행 계좌번호 예금주'),
       cutoffHour: h('input', { value: S.cutoffHour, inputmode: 'numeric' }),
       deliveryMin: h('input', { value: S.deliveryMin, inputmode: 'numeric' }), deliveryMax: h('input', { value: S.deliveryMax, inputmode: 'numeric' }),
@@ -662,11 +663,12 @@
     return [
       title('설정', '확인서·명세서에 들어갈 회사 정보와 알림 방식을 정해요'),
       h('div', { class: 'panel' }, h('h2', null, '회사 정보'),
-        h('p', { class: 'small muted' }, '발주 확인서 · 거래명세서의 공급자 칸에 들어갑니다.'),
+        h('p', { class: 'small muted' }, '발주 확인서 · 거래명세서의 공급자 칸, 그리고 발주서 · 관리자 · 로그인 화면 맨 아래 사업자 정보에 들어갑니다 (입금 계좌·업태·종목은 하단에 안 나와요).'),
         h('div', { class: 'form' },
           h('label', null, '상호', F.company), h('label', null, '사업자등록번호', F.bizNo), h('label', null, '대표', F.ceo), h('label', null, '연락처', F.tel),
           h('label', null, '주소', F.address), h('label', null, '업태', F.bizType), h('label', null, '종목', F.bizItem), h('label', null, '입금 계좌', F.account),
-          h('button', { class: 'btn primary', onclick: () => save(['company', 'bizNo', 'ceo', 'tel', 'address', 'bizType', 'bizItem', 'account']) }, '저장'))),
+          h('label', null, '통신판매업 신고번호', F.mailOrderNo), h('label', null, '이메일', F.email),
+          h('button', { class: 'btn primary', onclick: () => save(['company', 'bizNo', 'ceo', 'tel', 'address', 'bizType', 'bizItem', 'account', 'mailOrderNo', 'email']) }, '저장'))),
       h('div', { class: 'panel' }, h('h2', null, '주문 마감 · 배송'),
         h('p', { class: 'small muted' }, `발주서 맨 위에 "마감까지 ○시간 ○분"과 도착 예정일을 보여 줘요. 마감 시각이 지나면 다음 영업일 접수로 계산해요 (0 = 마감 없음). 단가는 모두 부가세 별도로 표시돼요.`),
         h('div', { class: 'form' },

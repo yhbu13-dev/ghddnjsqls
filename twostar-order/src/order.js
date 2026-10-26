@@ -545,6 +545,7 @@ async function storeMonths(db, storeId) {
 // ── 관리자 설정 (회사 정보 · 배송 기간 · 부가세 · 카톡 알림) ───────────
 const SETTINGS = {
   company: '투스타글로벌(주)', bizNo: '', ceo: '', address: '', tel: '', bizType: '', bizItem: '', account: '',
+  mailOrderNo: '', email: '', // 통신판매업 신고번호 · 이메일 (모든 화면 하단 사업자 정보)
   deliveryMin: 2, deliveryMax: 3, skipWeekend: true,
   cutoffHour: 16, // 이 시각(한국 시간) 이후 주문은 다음 날 접수로 계산. 0 = 마감 없음
   vat: 'excluded', // 단가는 부가세 별도 (확인서·명세서에 10% 세액을 더해 표시)
@@ -562,7 +563,7 @@ async function getSettings(db) {
 async function saveSettings(db, patch) {
   const cur = await getSettings(db);
   const next = { ...cur };
-  for (const k of ['company', 'bizNo', 'ceo', 'address', 'tel', 'bizType', 'bizItem', 'account']) {
+  for (const k of ['company', 'bizNo', 'ceo', 'address', 'tel', 'bizType', 'bizItem', 'account', 'mailOrderNo', 'email']) {
     if (patch[k] !== undefined) next[k] = String(patch[k]).trim().slice(0, 120);
   }
   if (patch.deliveryMin !== undefined || patch.deliveryMax !== undefined) {
@@ -606,6 +607,8 @@ async function saveSettings(db, patch) {
 }
 
 /** 관리자 화면에 보낼 설정 (REST 키는 저장 여부만) */
+/** 화면 하단에 누구나 볼 수 있게 보여 줄 사업자 정보 (계좌·카카오 키 등은 빼고) */
+const companyInfo = (s) => ({ company: s.company, ceo: s.ceo, bizNo: s.bizNo, mailOrderNo: s.mailOrderNo, address: s.address, tel: s.tel, email: s.email });
 const publicSettings = (s) => ({ ...s, kakaoRestKey: '', kakaoKeySet: !!s.kakaoRestKey });
 
 // ── 배송 예정일 ──────────────────────────────────────
@@ -681,7 +684,7 @@ async function takeNotices(db, userKey, limit = 2, now = Date.now()) {
 module.exports = {
   CATEGORIES, BIZ, STATUS, FLOW, MAX_QTY, UserError, won,
   withLines, orderWithStore, kstDate, kstYmd, kstText, storeOrders, storeMonths,
-  SETTINGS, getSettings, saveSettings, publicSettings, eta, addNotices, takeNotices, setChatUrl,
+  SETTINGS, getSettings, saveSettings, publicSettings, companyInfo, eta, addNotices, takeNotices, setChatUrl,
   limited, clearAttempts, note,
   createStore, reissueCode, storeOf, storeByUser, storesOfUser, useStore, linkUser, unlinkUser, unlinkStore,
   categoriesOf, accessStates, requestAccess, decideAccess,
