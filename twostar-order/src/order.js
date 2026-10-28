@@ -544,8 +544,8 @@ async function storeMonths(db, storeId) {
 
 // ── 관리자 설정 (회사 정보 · 배송 기간 · 부가세 · 카톡 알림) ───────────
 const SETTINGS = {
-  company: '투스타글로벌(주)', bizNo: '', ceo: '', address: '', tel: '', bizType: '', bizItem: '', account: '',
-  mailOrderNo: '', email: '', // 통신판매업 신고번호 · 이메일 (모든 화면 하단 사업자 정보)
+  company: '투스타글로벌(주)', bizNo: '222-81-33809', ceo: '홍이성', address: '', tel: '031-592-344', bizType: '', bizItem: '', account: '',
+  mailOrderNo: '제2016-경기남양주-0458호', email: 'twostar33@nate.com', // 통신판매업 신고번호 · 이메일 (모든 화면 하단 사업자 정보)
   deliveryMin: 2, deliveryMax: 3, skipWeekend: true,
   cutoffHour: 16, // 이 시각(한국 시간) 이후 주문은 다음 날 접수로 계산. 0 = 마감 없음
   vat: 'excluded', // 단가는 부가세 별도 (확인서·명세서에 10% 세액을 더해 표시)

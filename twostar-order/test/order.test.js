@@ -969,7 +969,7 @@ test('사업자 정보: 누구나 /api/company 로 보기 (계좌·카카오 키
   const post = async (sub, body) => call(`/api/admin/${sub}`, { method: 'POST', headers: H, body: JSON.stringify(body) });
   await post('settings', { ceo: '홍길동', bizNo: '123-45-67890', mailOrderNo: '제2026-경기광주-0001호', email: 'a@b.kr', account: '농협 1234', kakaoRestKey: 'abcdef0123456789abcdef0123456789' });
   const c = await (await call('/api/company')).json();
-  assert.deepEqual(c, { company: '투스타글로벌(주)', ceo: '홍길동', bizNo: '123-45-67890', mailOrderNo: '제2026-경기광주-0001호', address: '', tel: '', email: 'a@b.kr' });
+  assert.deepEqual(c, { company: '투스타글로벌(주)', ceo: '홍길동', bizNo: '123-45-67890', mailOrderNo: '제2026-경기광주-0001호', address: '', tel: '031-592-344', email: 'a@b.kr' });
   const st = await (await post('stores', { name: '카페', biz: 'cafe' })).json();
   const v = await (await call(`/api/o/${new URL(st.link).pathname.split('/').pop()}`)).json();
   assert.equal(v.company.ceo, '홍길동');
