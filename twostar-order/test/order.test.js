@@ -623,7 +623,7 @@ test('주문 확인 → 카톡 알림(Event API · 채팅방) · 발주 확인�
   const body = JSON.parse(sent[0].init.body);
   assert.equal(body.event.name, 'order_notice');
   assert.deepEqual(body.user, [{ type: 'botUserKey', id: 'owner1' }]);
-  assert.match(body.event.data.text, /출고/);
+  assert.deepEqual(body, { event: { name: 'order_notice' }, user: [{ type: 'botUserKey', id: 'owner1' }] }, '카카오 예시와 같은 최소 형식');
   // 테스트 알림
   res = await post('notify-test', { id: st.id });
   assert.equal(res.sent, 1);
