@@ -37,7 +37,7 @@ function orderMessage(o, kind, s, now = Date.now()) {
  * userKeys 에게 이벤트 발송. 결과: { configured, sent, error }
  * settings: { kakaoBotId, kakaoRestKey, kakaoEvent }
  */
-async function sendEvent(settings, userKeys, text, fetchImpl = globalThis.fetch) {
+async function sendEvent(settings, userKeys, _text, fetchImpl = globalThis.fetch) { // _text: 예전 호출 호환용 (보내지 않음)
   if (!settings.kakaoBotId || !settings.kakaoRestKey) return { configured: false, sent: 0, error: '' };
   if (!userKeys.length) return { configured: true, sent: 0, error: '' };
   // 한 번 보내기. 실패하면 카카오가 돌려준 설명을 그대로 담아 던진다 (관리자 화면에서 원인을 볼 수 있게)
@@ -46,7 +46,8 @@ async function sendEvent(settings, userKeys, text, fetchImpl = globalThis.fetch)
       method: 'POST',
       headers: { authorization: `KakaoAK ${settings.kakaoRestKey}`, 'content-type': 'application/json' },
       body: JSON.stringify({
-        event: { name: settings.kakaoEvent || 'order_notice', data: { text: String(text).slice(0, 400) } },
+        // 카카오 문서 예시와 같은 최소 형식: 이벤트 이름 + 받을 사용자. 알림 내용은 알림 블록이 서버에 쌓인 알림을 읽어 보여 준다
+        event: { name: settings.kakaoEvent || 'order_notice' },
         user: ids.map((id) => ({ type: 'botUserKey', id })),
       }),
       signal: AbortSignal.timeout(6000),
