@@ -84,7 +84,9 @@ async function skill(ctx, body) {
   // ── 카카오 Event API 로 먼저 보낸 알림 (주문 확인·출고·취소) ─────────
   //   관리자가 상태를 바꾸면 서버가 알림을 쌓고 이벤트를 보낸다 → 알림 블록이 이 스킬(…&ev=1)을 부른다
   if (ctx.event) {
-    const notes = store ? await O.takeNotices(db, userKey, 3, now) : [];
+    // 이벤트 1번 = 알림 1건 (접수 → 확인을 연달아 보내도 차례대로 한 장씩)
+    const n = store ? await O.popNotice(db, userKey, now) : null;
+    const notes = n ? [n] : [];
     if (!notes.length) return U.res([U.text('📦 투스타 발주 알림이 있어요. [처음으로]를 눌러 확인해 주세요.')], [home]);
     const cards = notes.map((n) => U.card(n.title, n.text,
       n.order_id && ctx.docLink ? [U.link('📄 발주 확인서', ctx.docLink(n.order_id)), U.btn('발주 내역', { s: 'history' })] : []));

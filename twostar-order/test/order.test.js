@@ -992,3 +992,15 @@ test('카톡 자동 알림: 카카오 거절 이유를 그대로 보여 주고, 
   const r2 = await sendEvent(s, ['x'], 'hi', async () => new Response('<html>Bad Request</html>', { status: 400 }));
   assert.match(r2.error, /400 · <html>Bad Request<\/html>/, 'JSON 이 아니어도 본문을 보여 줌');
 });
+
+test('카톡 자동 알림: 이벤트 1번 = 카드 1장 · 오래된(10분 넘은) 알림은 몰려 나오지 않음', async () => {
+  const db = open(':memory:');
+  await migrate(db);
+  const t0 = Date.UTC(2026, 9, 29, 6, 0);
+  await db.run("INSERT INTO notices (user_key, store_id, title, text, at) VALUES ('u', 1, '옛 테스트1', '', ?), ('u', 1, '옛 테스트2', '', ?)", [t0 - 3600e3, t0 - 1800e3]);
+  await db.run("INSERT INTO notices (user_key, store_id, title, text, at) VALUES ('u', 1, '접수', '', ?), ('u', 1, '확인', '', ?)", [t0 - 5e3, t0 - 1e3]);
+  assert.equal((await O.popNotice(db, 'u', t0)).title, '접수');
+  assert.equal((await O.popNotice(db, 'u', t0)).title, '확인');
+  assert.equal(await O.popNotice(db, 'u', t0), null);
+  assert.equal((await db.get('SELECT COUNT(*) AS n FROM notices WHERE seen = 0')).n, 0, '옛 알림은 읽음 처리');
+});

@@ -681,10 +681,21 @@ async function takeNotices(db, userKey, limit = 2, now = Date.now()) {
   return list.reverse();
 }
 
+/**
+ * 카카오 Event API 로 불렸을 때: 알림 1건 = 카드 1장. 아직 안 본 알림 중 가장 오래된 것 하나를 꺼낸다.
+ * maxAge(기본 10분)보다 오래된 알림은 이미 지나간 것으로 보고 읽음 처리 (실패한 테스트 등이 한꺼번에 몰려 나오지 않게)
+ */
+async function popNotice(db, userKey, now = Date.now(), maxAge = 10 * 60e3) {
+  await db.run('UPDATE notices SET seen = 1 WHERE user_key = ? AND seen = 0 AND at < ?', [userKey, now - maxAge]);
+  const n = await db.get('SELECT * FROM notices WHERE user_key = ? AND seen = 0 ORDER BY id LIMIT 1', [userKey]);
+  if (n) await db.run('UPDATE notices SET seen = 1 WHERE id = ?', [n.id]);
+  return n || null;
+}
+
 module.exports = {
   CATEGORIES, BIZ, STATUS, FLOW, MAX_QTY, UserError, won,
   withLines, orderWithStore, kstDate, kstYmd, kstText, storeOrders, storeMonths,
-  SETTINGS, getSettings, saveSettings, publicSettings, companyInfo, eta, addNotices, takeNotices, setChatUrl,
+  SETTINGS, getSettings, saveSettings, publicSettings, companyInfo, eta, addNotices, takeNotices, popNotice, setChatUrl,
   limited, clearAttempts, note,
   createStore, reissueCode, storeOf, storeByUser, storesOfUser, useStore, linkUser, unlinkUser, unlinkStore,
   categoriesOf, accessStates, requestAccess, decideAccess,
