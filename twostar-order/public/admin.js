@@ -252,7 +252,9 @@
     const test = async () => {
       try {
         const r = await call('/api/admin/notify-test', { id: s.id });
-        toast(r.error ? `자동 발송 실패: ${r.error}` : r.configured ? `테스트 알림을 ${r.sent}명에게 보냈어요` : '자동 발송 설정 전이에요. 점주가 채팅방을 열면 테스트 알림이 보여요');
+        // 실패는 창으로 띄워 원인 문장을 끝까지 읽고 복사할 수 있게
+        if (r.error) window.alert(`자동 발송 실패 (${r.sent}/${r.users}명 성공)\n\n${r.error}\n\n봇 ID: ${D.settings.kakaoBotId || '(비어 있음)'}\n이벤트 이름: ${D.settings.kakaoEvent || '(비어 있음)'}`);
+        else toast(r.configured ? `테스트 알림을 ${r.sent}명에게 보냈어요` : '자동 발송 설정 전이에요. 점주가 채팅방을 열면 테스트 알림이 보여요');
       } catch (e) { toast(e.message); }
     };
     const unlink = async () => {

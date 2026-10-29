@@ -366,7 +366,12 @@ function createHandler({ db, cfg, assets, log = console.log, fetch: fetchImpl = 
         const msg = orderMessage({ store, lines: [] }, 'test', s);
         const users = await O.addNotices(db, store.id, null, msg.title, msg.text);
         if (!users.length) throw new O.UserError('이 매장에 연결된 카톡이 없어요. 먼저 연결 코드로 연결해 주세요');
-        return json(200, { users: users.length, ...(await sendEvent(s, users, `${msg.title}\n${msg.text}`, fetchImpl)) });
+        const r = await sendEvent(s, users, `${msg.title}\n${msg.text}`, fetchImpl);
+        if (r.error) {
+          log(`[카톡 알림 테스트 실패] ${store.name} · 봇 ${s.kakaoBotId} · 이벤트 ${s.kakaoEvent} · 대상 ${users.length}명 · ${r.error}`);
+          await O.note(db, 'notify', `카톡 알림 테스트 실패 · ${store.name} · ${r.error}`);
+        }
+        return json(200, { users: users.length, ...r });
       }
       else if (sub === 'store-chat' && m === 'POST') return json(200, { chatUrl: await O.setChatUrl(db, Number(b.id), b.url) });
       else if (sub === 'access' && m === 'POST') await O.decideAccess(db, Number(b.store_id), String(b.category), String(b.decision));

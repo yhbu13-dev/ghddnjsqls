@@ -974,3 +974,21 @@ test('사업자 정보: 누구나 /api/company 로 보기 (계좌·카카오 키
   const v = await (await call(`/api/o/${new URL(st.link).pathname.split('/').pop()}`)).json();
   assert.equal(v.company.ceo, '홍길동');
 });
+
+test('카톡 자동 알림: 카카오 거절 이유를 그대로 보여 주고, 400이면 한 명씩 다시 보냄', async () => {
+  const { sendEvent } = require('../src/notify');
+  const s = { kakaoBotId: 'bot1', kakaoRestKey: 'k', kakaoEvent: 'order_notice' };
+  const calls = [];
+  const fetchImpl = async (u, init) => {
+    const ids = JSON.parse(init.body).user.map((x) => x.id);
+    calls.push(ids);
+    if (ids.includes('bad')) return new Response(JSON.stringify({ status: 'FAIL', message: 'invalid botUserKey' }), { status: 400 });
+    return new Response(JSON.stringify({ taskId: 't', status: 'SUCCESS' }), { status: 200 });
+  };
+  const r = await sendEvent(s, ['good1', 'bad', 'good2'], 'hi', fetchImpl);
+  assert.equal(r.sent, 2);
+  assert.match(r.error, /카카오 응답 400 FAIL · invalid botUserKey/);
+  assert.deepEqual(calls, [['good1', 'bad', 'good2'], ['good1'], ['bad'], ['good2']]);
+  const r2 = await sendEvent(s, ['x'], 'hi', async () => new Response('<html>Bad Request</html>', { status: 400 }));
+  assert.match(r2.error, /400 · <html>Bad Request<\/html>/, 'JSON 이 아니어도 본문을 보여 줌');
+});

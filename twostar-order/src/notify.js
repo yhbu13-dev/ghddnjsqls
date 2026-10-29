@@ -40,29 +40,45 @@ function orderMessage(o, kind, s, now = Date.now()) {
 async function sendEvent(settings, userKeys, text, fetchImpl = globalThis.fetch) {
   if (!settings.kakaoBotId || !settings.kakaoRestKey) return { configured: false, sent: 0, error: '' };
   if (!userKeys.length) return { configured: true, sent: 0, error: '' };
-  let sent = 0;
-  try {
-    for (let i = 0; i < userKeys.length; i += 100) { // 한 번에 100명까지
-      const chunk = userKeys.slice(i, i + 100);
-      const r = await fetchImpl(`${API}/${encodeURIComponent(settings.kakaoBotId)}/talk`, {
-        method: 'POST',
-        headers: { authorization: `KakaoAK ${settings.kakaoRestKey}`, 'content-type': 'application/json' },
-        body: JSON.stringify({
-          event: { name: settings.kakaoEvent || 'order_notice', data: { text: String(text).slice(0, 400) } },
-          user: chunk.map((id) => ({ type: 'botUserKey', id })),
-        }),
-        signal: AbortSignal.timeout(6000),
-      });
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok || /FAIL|ERROR/i.test(String(j.status || ''))) {
-        throw new Error(`카카오 응답 ${r.status}${j.status ? ` ${j.status}` : ''}${j.message ? ` · ${j.message}` : ''}`);
-      }
-      sent += chunk.length;
+  // 한 번 보내기. 실패하면 카카오가 돌려준 설명을 그대로 담아 던진다 (관리자 화면에서 원인을 볼 수 있게)
+  const post = async (ids) => {
+    const r = await fetchImpl(`${API}/${encodeURIComponent(settings.kakaoBotId)}/talk`, {
+      method: 'POST',
+      headers: { authorization: `KakaoAK ${settings.kakaoRestKey}`, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        event: { name: settings.kakaoEvent || 'order_notice', data: { text: String(text).slice(0, 400) } },
+        user: ids.map((id) => ({ type: 'botUserKey', id })),
+      }),
+      signal: AbortSignal.timeout(6000),
+    });
+    const raw = await r.text().catch(() => '');
+    let j = {};
+    try { j = JSON.parse(raw); } catch { /* JSON 이 아닌 응답 */ }
+    if (!r.ok || /FAIL|ERROR/i.test(String(j.status || ''))) {
+      const why = j.message || j.msg || j.error || raw.replace(/\s+/g, ' ').slice(0, 200);
+      const err = new Error(`카카오 응답 ${r.status}${j.status ? ` ${j.status}` : ''}${j.code != null ? ` (code ${j.code})` : ''}${why ? ` · ${why}` : ''}`);
+      err.status = r.status;
+      throw err;
     }
-    return { configured: true, sent, error: '' };
-  } catch (e) {
-    return { configured: true, sent, error: e.name === 'TimeoutError' ? '카카오 서버가 응답하지 않아요' : String(e.message || e) };
+  };
+  let sent = 0;
+  const errors = [];
+  const why = (e) => (e.name === 'TimeoutError' ? '카카오 서버가 응답하지 않아요' : String(e.message || e));
+  for (let i = 0; i < userKeys.length; i += 100) { // 한 번에 100명까지
+    const chunk = userKeys.slice(i, i + 100);
+    try {
+      await post(chunk);
+      sent += chunk.length;
+    } catch (e) {
+      // 여러 명 중 한 명(예: 봇 테스트 사용자·채널 차단)이 잘못돼 통째로 거절될 수 있어 한 명씩 다시 보낸다
+      if (e.status === 400 && chunk.length > 1) {
+        for (const id of chunk) {
+          try { await post([id]); sent++; } catch (e2) { errors.push(why(e2)); }
+        }
+      } else errors.push(why(e));
+    }
   }
+  return { configured: true, sent, error: errors.length ? `${errors[0]}${errors.length > 1 ? ` (외 ${errors.length - 1}건)` : ''}` : '' };
 }
 
 module.exports = { sendEvent, orderMessage };
