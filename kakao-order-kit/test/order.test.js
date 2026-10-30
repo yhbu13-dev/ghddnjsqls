@@ -1068,7 +1068,6 @@ test('담당자 발주 목록: 품목이 많으면 1,000자 안에서 자르고 
   assert.ok(m.text.length + m.title.length + 2 <= 1000, `${m.text.length}`);
   assert.match(m.text, /… 외 \d+품목 \(전체는 발주 확인서\)\n\n합계 3,045,200원 \(부가세 별도\)$/);
 });
-});
 
 test('연결 코드: 글자를 붙여 보내도 알아들음 (코드 123456 · 123-456입니다)', async () => {
   const db = open(':memory:');
