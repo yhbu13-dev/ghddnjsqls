@@ -1,0 +1,106 @@
+/* 발주 확인서 · 거래명세서 (A4 인쇄) */
+* { box-sizing: border-box; }
+body { margin: 0; background: #eef0f3; color: #111827; font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; }
+.toolbar { position: sticky; top: 0; z-index: 2; display: flex; gap: 8px; justify-content: flex-end; padding: 10px 16px; background: rgba(238,240,243,.92); backdrop-filter: blur(6px); }
+.tbtn { font: inherit; border: 1px solid #d1d5db; background: #fff; color: #111827; border-radius: 10px; padding: 8px 14px; text-decoration: none; cursor: pointer; }
+.tbtn.primary { background: #3182f6; color: #fff; border-color: #3182f6; margin-left: auto; font-weight: 600; }
+.doc { position: relative; max-width: 800px; margin: 8px auto 40px; background: #fff; padding: 40px 44px; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,.08), 0 8px 24px rgba(0,0,0,.06); }
+.dh { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #111827; padding-bottom: 14px; margin-bottom: 18px; }
+.dh h1 { margin: 0; font-size: 28px; letter-spacing: 8px; }
+.dh .sub { color: #4b5563; margin-top: 4px; }
+.stamp { border: 2px solid currentColor; border-radius: 8px; padding: 4px 12px; font-weight: 700; font-size: 15px; transform: rotate(-4deg); color: #6b7280; }
+.stamp.st-received { color: #dc2626; } .stamp.st-confirmed { color: #d97706; } .stamp.st-shipped { color: #2563eb; } .stamp.st-done { color: #16a34a; } .stamp.st-canceled { color: #6b7280; }
+.parties { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px; }
+.parties section { border: 1px solid #d1d5db; border-radius: 8px; overflow: hidden; }
+.parties h3 { margin: 0; padding: 6px 10px; font-size: 13px; background: #f3f4f6; border-bottom: 1px solid #d1d5db; letter-spacing: 2px; }
+.parties table { width: 100%; border-collapse: collapse; }
+.parties th { width: 84px; text-align: left; color: #6b7280; font-weight: 500; padding: 5px 10px; vertical-align: top; font-size: 13px; }
+.parties td { padding: 5px 10px 5px 0; font-size: 13px; }
+.facts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 0 0 16px; }
+.facts div { background: #f9fafb; border-radius: 8px; padding: 8px 10px; }
+.facts dt { color: #6b7280; font-size: 12px; }
+.facts dd { margin: 2px 0 0; font-weight: 600; }
+.amount { border: 1px solid #111827; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 15px; }
+.amount b { font-size: 17px; margin-left: 8px; }
+.amount span { color: #4b5563; margin-left: 6px; }
+table.lines { width: 100%; border-collapse: collapse; }
+table.lines th { background: #111827; color: #fff; font-weight: 500; padding: 8px; text-align: left; font-size: 13px; }
+table.lines td { padding: 7px 8px; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
+table.lines tr.first td { border-top: 1px solid #9ca3af; }
+.n { text-align: right !important; white-space: nowrap; }
+.c { text-align: center !important; }
+.show-m { display: none; }
+@media (max-width: 640px) { .show-m { display: block; } }
+.muted { color: #6b7280; font-size: 12px; font-weight: 400; }
+.sum { margin: 14px 0 0 auto; width: 300px; }
+.sum div { display: flex; justify-content: space-between; padding: 5px 0; }
+.sum .grand { border-top: 2px solid #111827; margin-top: 4px; padding-top: 8px; font-size: 18px; }
+.memo { background: #fffbe6; border-radius: 8px; padding: 10px 12px; margin: 16px 0 0; }
+.fine { color: #6b7280; font-size: 12px; margin: 18px 0 0; }
+.sign { text-align: right; margin-top: 24px; line-height: 1.8; }
+.void::after { content: '취소'; position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%) rotate(-18deg); font-size: 120px; font-weight: 800; color: rgba(220,38,38,.12); pointer-events: none; }
+@media (max-width: 640px) {
+  .doc { padding: 22px 16px; margin: 0 0 24px; border-radius: 0; }
+  .dh h1 { font-size: 22px; letter-spacing: 4px; }
+  .parties { grid-template-columns: 1fr; }
+  .facts { grid-template-columns: 1fr 1fr; }
+  table.lines { font-size: 12px; }
+  table.lines th, table.lines td { padding: 7px 4px; }
+  .hide-m { display: none; }
+  .sum { width: 100%; }
+}
+@page { size: A4; margin: 12mm; }
+@media print {
+  body { background: #fff; }
+  .noprint { display: none !important; }
+  .doc { box-shadow: none; margin: 0; padding: 0; max-width: none; }
+  table.lines th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  tr { break-inside: avoid; }
+}
+
+/* ── 발주 확인서: 종이 거래명세표 양식 ── */
+.fwrap { padding: 8px 12px 40px; }
+.fdoc { --ln: #2743d8; position: relative; width: 760px; margin: 0 auto; background: #fff; padding: 22px; color: #111; font-size: 13px; box-shadow: 0 1px 3px rgba(0,0,0,.08), 0 8px 24px rgba(0,0,0,.06); transform-origin: top left; }
+.fdoc table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.fdoc th, .fdoc td { border: 1px solid var(--ln); padding: 4px 6px; vertical-align: middle; }
+.fdoc th { color: var(--ln); font-weight: 500; text-align: center; font-size: 12px; line-height: 1.2; }
+.fdoc .n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fdoc .c { text-align: center; }
+.ftop { margin-bottom: -1px; }
+.ftop th.lb { width: 56px; }
+.ftop td.dt { width: 200px; font-size: 13px; }
+.ftop td.ttl { text-align: center; border: 0; padding: 6px 0; }
+.ftop td.ttl span { display: inline-block; border: 1.5px solid var(--ln); color: var(--ln); font-size: 24px; letter-spacing: 6px; padding: 2px 22px; }
+.ftop td.rt { width: 110px; border: 0; color: var(--ln); font-size: 12px; text-align: right; vertical-align: top; }
+.fparty .cv { width: 24px; } .fparty .ck { width: 40px; } .fparty .cn { width: 70px; }
+.fparty th.v { padding: 2px; }
+.fparty td { height: 30px; font-size: 13px; }
+.fparty td.big { font-size: 16px; text-align: center; letter-spacing: 1px; }
+.flines .w-u { width: 48px; } .flines .w-q { width: 62px; } .flines .w-p { width: 80px; } .flines .w-a { width: 96px; } .flines .w-t { width: 84px; }
+.flines thead th { font-size: 14px; letter-spacing: 2px; padding: 6px; }
+.flines td { height: 30px; border-top-color: #c9d1f7; border-bottom-color: #c9d1f7; }
+.flines td.nm { word-break: keep-all; }
+.flines td.blank-end { text-align: center; color: #333; letter-spacing: 1px; }
+.fnote { margin-top: -1px; }
+.fnote th.v { width: 44px; }
+.fnote td { height: 76px; line-height: 1.7; font-size: 12.5px; vertical-align: top; }
+.fsum { margin-top: -1px; }
+.fsum th { width: 44px; }
+.fsum td { font-size: 14px; }
+.fsum td.grand { font-weight: 700; font-size: 15px; }
+.fsum td.sig { width: 96px; }
+.fconfirm { text-align: right; margin: 12px 0 0; font-size: 12.5px; color: #333; }
+@media print {
+  .fwrap { padding: 0; }
+  .fdoc { box-shadow: none; padding: 0; width: 100%; transform: none !important; }
+  .fdoc th, .fdoc td { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+.pdfout { position: fixed; inset: 0; z-index: 30; overflow: auto; background: #eef0f3; padding: 12px; }
+.pdfout-hd { position: sticky; top: 0; background: #fff; border-radius: 12px; padding: 12px; margin-bottom: 12px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+.pdfout-hd p { margin: 0; flex: 1 1 100%; font-size: 14px; color: #333; }
+.pdfout img { display: block; width: 100%; max-width: 800px; margin: 0 auto 12px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+.tbtn:disabled { opacity: .6; }
+.toolbar .tbtn.primary { margin-left: auto; }
+.toolbar .tbtn.on { background: #e8f3ff; color: #3182f6; border-color: #3182f6; font-weight: 600; }
+.stview .dh h1 { letter-spacing: 0; font-size: 22px; }
+.stview img { display: block; width: 100%; height: auto; margin: 0 0 12px; border: 1px solid #e5e7eb; border-radius: 4px; }
