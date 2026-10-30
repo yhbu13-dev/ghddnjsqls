@@ -34,6 +34,26 @@ function orderMessage(o, kind, s, now = Date.now()) {
 }
 
 /**
+ * 담당자에게 가는 새 발주 알림: 품목 전체 목록 (카톡 말풍선 1,000자 안에서, 넘치면 '외 N품목')
+ * o = orderWithStore(...)
+ */
+function staffOrderMessage(o, now = Date.now()) {
+  const when = O.kstText(o.created_at || now);
+  const head = `${o.store.name} · 주문번호 ${o.no}\n${when} · ${o.via === 'chat' ? '카톡 주문' : '발주서 주문'}`;
+  const tail = `\n\n합계 ${O.won(o.total)} (부가세 별도)${o.memo ? `\n요청: ${o.memo}` : ''}`;
+  const lines = o.lines.map((l) => `· ${l.name}${l.loose ? ' (낱개)' : ''} ${l.qty}${l.unit}`);
+  let body = '';
+  let shown = 0;
+  for (const l of lines) {
+    if (head.length + body.length + l.length + tail.length + 40 > 950) break;
+    body += `\n${l}`;
+    shown++;
+  }
+  const more = lines.length > shown ? `\n… 외 ${lines.length - shown}품목 (전체는 발주 확인서)` : '';
+  return { title: `🛒 새 발주 · ${o.store.name}`, text: `${head}\n${body}${more}${tail}`, count: lines.length };
+}
+
+/**
  * userKeys 에게 이벤트 발송. 결과: { configured, sent, error }
  * settings: { kakaoBotId, kakaoRestKey, kakaoEvent }
  */
@@ -82,4 +102,4 @@ async function sendEvent(settings, userKeys, _text, fetchImpl = globalThis.fetch
   return { configured: true, sent, error: errors.length ? `${errors[0]}${errors.length > 1 ? ` (외 ${errors.length - 1}건)` : ''}` : '' };
 }
 
-module.exports = { sendEvent, orderMessage };
+module.exports = { sendEvent, orderMessage, staffOrderMessage };

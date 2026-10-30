@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS stores (
   cart_rev INTEGER NOT NULL DEFAULT 0,    -- 장바구니가 바뀔 때마다 +1 (중복 주문 방지)
   link_ver INTEGER NOT NULL DEFAULT 0,    -- 발주서 링크 버전. 올리면 예전 링크는 모두 무효
   chat_url TEXT NOT NULL DEFAULT '',      -- 카카오 비즈니스 1:1 채팅방 주소 (관리자가 바로 답장하러 가는 곳)
+  staff_id INTEGER,                       -- 이 매장 담당자 (발주가 들어오면 그 담당자 카톡으로 발주 목록)
   active INTEGER NOT NULL DEFAULT 1,
   created_at INTEGER NOT NULL
 );
@@ -117,9 +118,19 @@ CREATE TABLE IF NOT EXISTS notices (      -- 점주 카톡 알림 (주문 확인
   title TEXT NOT NULL,
   text TEXT NOT NULL,
   at INTEGER NOT NULL,
-  seen INTEGER NOT NULL DEFAULT 0
+  seen INTEGER NOT NULL DEFAULT 0,
+  kind TEXT NOT NULL DEFAULT ''           -- 'staff' = 담당자에게 간 새 발주 목록
 );
 CREATE INDEX IF NOT EXISTS notices_user ON notices (user_key, seen);
+CREATE TABLE IF NOT EXISTS staff (       -- 지점 담당자 (투스타 직원). 카톡 연결 코드 8자리로 연결
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  phone TEXT NOT NULL DEFAULT '',
+  code TEXT UNIQUE,                       -- 연결 코드 (한 번 쓰면 사라짐)
+  user_key TEXT UNIQUE,                   -- 연결된 카카오 챗봇 사용자
+  linked_at INTEGER,
+  created_at INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS meta (         -- 서버가 스스로 만든 값 (서명 비밀키·스킬 키·관리자 설정)
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
@@ -163,6 +174,9 @@ async function migrate(db) {
   const scols = await db.all('PRAGMA table_info(stores)');
   if (!scols.some((c) => c.name === 'link_ver')) await db.run('ALTER TABLE stores ADD COLUMN link_ver INTEGER NOT NULL DEFAULT 0');
   if (!scols.some((c) => c.name === 'chat_url')) await db.run("ALTER TABLE stores ADD COLUMN chat_url TEXT NOT NULL DEFAULT ''");
+  if (!scols.some((c) => c.name === 'staff_id')) await db.run('ALTER TABLE stores ADD COLUMN staff_id INTEGER');
+  const ncols = await db.all('PRAGMA table_info(notices)');
+  if (!ncols.some((c) => c.name === 'kind')) await db.run("ALTER TABLE notices ADD COLUMN kind TEXT NOT NULL DEFAULT ''");
   await db.run('INSERT OR IGNORE INTO user_stores (user_key, store_id, linked_at) SELECT user_key, store_id, linked_at FROM links');
   await db.run("INSERT INTO meta (key, value) VALUES ('schema', ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value", [VERSION]);
 }

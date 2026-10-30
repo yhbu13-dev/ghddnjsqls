@@ -9,6 +9,7 @@
 
 const O = require('./order');
 const ST = require('./statements');
+const SF = require('./staff');
 
 const PAGE = 9; // 캐러셀 10장 = 품목 9장 + [다음]
 const cut = (s, n) => (String(s).length > n ? `${String(s).slice(0, n - 1)}…` : String(s));
@@ -52,6 +53,15 @@ async function skill(ctx, body) {
   let store = await O.storeByUser(db, userKey);
   const code = x.s ? '' : utter.replace(/[\s-]/g, '');
 
+  // ── 담당자 연결 코드 8자리 (투스타 직원): 담당 매장 발주 목록을 이 카톡으로 받는다 ───
+  if (/^\d{8}$/.test(code)) {
+    if (await O.limited(db, `link:${userKey}`, 5, 10 * 60e3, now)) return U.res([U.text('입력 횟수를 넘었어요. 10분 뒤에 다시 입력해 주세요.')]);
+    const st = await SF.link(db, userKey, code, now);
+    if (!st) return U.res([U.text('담당자 연결 코드가 맞지 않아요. 관리자 화면 [매장] → 담당자에서 새 코드를 받아 주세요.')]);
+    const n = (await db.get('SELECT COUNT(*) AS n FROM stores WHERE staff_id = ? AND active = 1', [st.id])).n;
+    return U.res([U.text(`✅ ${st.name} 담당자로 연결되었어요.\n담당 매장 ${n}곳에서 발주가 들어오면 이 카톡으로 발주 목록이 바로 와요.`)]);
+  }
+
   // ── 연결 코드 6자리: 처음 연결 · 다른 지점 추가 모두 여기서 ───────
   if (/^\d{6}$/.test(code)) {
     if (await O.limited(db, `link:${userKey}`, 5, 10 * 60e3, now)) return U.res([U.text('입력 횟수를 넘었어요. 10분 뒤에 다시 입력해 주세요.')]);
@@ -85,12 +95,25 @@ async function skill(ctx, body) {
   //   관리자가 상태를 바꾸면 서버가 알림을 쌓고 이벤트를 보낸다 → 알림 블록이 이 스킬(…&ev=1)을 부른다
   if (ctx.event) {
     // 이벤트 1번 = 알림 1건 (접수 → 확인을 연달아 보내도 차례대로 한 장씩)
-    const n = store ? await O.popNotice(db, userKey, now) : null;
-    const notes = n ? [n] : [];
-    if (!notes.length) return U.res([U.text('📦 투스타 발주 알림이 있어요. [처음으로]를 눌러 확인해 주세요.')], [home]);
-    const cards = notes.map((n) => U.card(n.title, n.text,
-      n.order_id && ctx.docLink ? [U.link('📄 발주 확인서', ctx.docLink(n.order_id)), U.btn('발주 내역', { s: 'history' })] : []));
-    return tag(U.res(cards, [home]), store);
+    const n = await O.popNotice(db, userKey, now);
+    if (!n) return U.res([U.text('📦 투스타 발주 알림이 있어요. [처음으로]를 눌러 확인해 주세요.')], [home]);
+    if (n.kind === 'staff') return U.res(staffNotice(ctx, U, n), [home]);
+    const cards = [U.card(n.title, n.text,
+      n.order_id && ctx.docLink ? [U.link('📄 발주 확인서', ctx.docLink(n.order_id)), U.btn('발주 내역', { s: 'history' })] : [])];
+    return store ? tag(U.res(cards, [home]), store) : U.res(cards, [home]);
+  }
+
+  // 담당자(직원)인데 점주로 연결된 매장이 없으면: 담당자 화면
+  if (!store) {
+    const staff = await SF.byUser(db, userKey);
+    if (staff) {
+      const n = (await db.get('SELECT COUNT(*) AS n FROM stores WHERE staff_id = ? AND active = 1', [staff.id])).n;
+      const notes = (await O.takeNotices(db, userKey, 2, now)).filter((x) => x.kind === 'staff');
+      return U.res([
+        U.text(`👋 ${staff.name} 담당자님 · 담당 매장 ${n}곳\n발주가 들어오면 이 카톡으로 발주 목록이 바로 와요.`),
+        ...notes.flatMap((x) => staffNotice(ctx, U, x)).slice(0, 2),
+      ]);
+    }
   }
 
   if (!store) {
@@ -150,6 +173,15 @@ async function skill(ctx, body) {
     if (e instanceof O.UserError) return tag(U.res([U.text(`⚠️ ${e.message}`)], [U.btn('장바구니', { s: 'cart' }), home]), store);
     throw e;
   }
+}
+
+/** 담당자에게 보여 줄 새 발주: 품목 전체 목록(말풍선) + 확인서·관리자 버튼 카드 */
+function staffNotice(ctx, U, n) {
+  const buttons = [
+    n.order_id && ctx.docLink ? U.link('📄 발주 확인서', ctx.docLink(n.order_id)) : null,
+    ctx.adminUrl ? U.link('🖥 관리자에서 처리', ctx.adminUrl) : null,
+  ].filter(Boolean);
+  return [U.text(`${n.title}\n\n${n.text}`), U.card('발주 확인서', '품목·금액 전체 보기 · PDF 저장', buttons)];
 }
 
 /** 응답 안의 모든 블록 버튼에 매장 번호(st)를 붙인다 */

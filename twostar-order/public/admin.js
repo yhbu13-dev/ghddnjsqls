@@ -345,6 +345,47 @@
   }
 
   // ── 매장 ──
+  // ── 지점 담당자: 점주가 발주하면 그 매장 담당자 카톡으로 발주 목록이 간다 ──
+  let staffFlash = null; // 방금 만든 담당자 연결 코드 { name, code }
+  const staffPick = (s) => {
+    if (!D.staff.length) return h('span', { class: 'muted small' }, '-');
+    const sel = h('select', { class: 'mini', 'aria-label': `${s.name} 담당자`, onchange: (e) => act('/api/admin/store-staff', { id: s.id, staff_id: e.target.value || null }, e.target.value ? '담당자를 지정했어요' : '담당자를 뺐어요') },
+      h('option', { value: '' }, '없음'),
+      D.staff.map((t) => h('option', { value: t.id, selected: s.staff_id === t.id }, `${t.name}${t.linked ? '' : ' (카톡 미연결)'}`)));
+    return sel;
+  };
+  function staffPanel() {
+    const name = h('input', { placeholder: '예: 김영업' });
+    const phone = h('input', { placeholder: '010-0000-0000' });
+    const add = async () => {
+      try { const r = await call('/api/admin/staff', { name: name.value, phone: phone.value }); D = r.data; staffFlash = { name: name.value, code: r.code }; render(); } catch (e) { toast(e.message); }
+    };
+    const newCode = async (t) => {
+      try { const r = await call('/api/admin/staff-code', { id: t.id }); D = r.data; staffFlash = { name: t.name, code: r.code }; render(); } catch (e) { toast(e.message); }
+    };
+    return h('div', { class: 'panel' },
+      h('h2', null, '지점 담당자', h('span', { class: 'small muted' }, '매장에 담당자를 지정하면, 점주가 발주할 때 그 담당자 카톡으로 발주 목록이 바로 가요 (건당 15원)')),
+      staffFlash ? h('div', { class: 'note blue', style: 'margin:0 0 14px' }, h('span', null, '🔑'),
+        h('span', null, h('b', null, `${staffFlash.name} 담당자 연결 코드: ${staffFlash.code}`), h('br'),
+          '담당자 휴대폰 카톡에서 "투스타글로벌(발주)" 채널을 추가하고 채팅창에 이 8자리를 보내면 연결돼요. (한 번만 사용)'),
+        h('button', { class: 'x', onclick: () => { staffFlash = null; render(); } }, '닫기')) : null,
+      D.staff.length ? h('div', { class: 'tbl' }, h('table', null,
+        h('tr', null, h('th', null, '담당자'), h('th', null, '카톡'), h('th', { class: 'num' }, '담당 매장'), h('th', null, '')),
+        D.staff.map((t) => h('tr', null,
+          h('td', null, h('b', null, t.name), t.phone ? h('div', { class: 'small muted' }, t.phone) : null),
+          h('td', null, t.linked ? h('span', { class: 'stat' }, h('span', { class: 'dot on' }), '연결됨')
+            : h('span', { class: 'stat muted' }, h('span', { class: 'dot' }), t.code ? `코드 ${t.code}` : '미연결')),
+          h('td', { class: 'num' }, `${t.stores}곳`),
+          h('td', null, h('div', { class: 'acts' },
+            h('button', { class: 'btn small', onclick: () => newCode(t) }, t.linked ? '다른 폰으로 연결' : '연결 코드'),
+            t.linked ? h('button', { class: 'btn small', onclick: () => confirm(`${t.name} 담당자 카톡 연결을 끊을까요?`) && act('/api/admin/staff-unlink', { id: t.id }, '연결을 끊었어요') }, '연결 끊기') : null,
+            h('button', { class: 'btn small bad', onclick: () => confirm(`${t.name} 담당자를 삭제할까요?\n담당 매장 ${t.stores}곳의 담당자가 비워집니다.`) && act('/api/admin/staff-delete', { id: t.id }, '담당자를 삭제했어요') }, '삭제')))))))
+        : h('p', { class: 'small muted' }, '아직 담당자가 없어요. 아래에서 추가한 뒤, 매장 목록의 [담당자] 칸에서 지정하세요.'),
+      h('div', { class: 'form', style: 'margin-top:12px' },
+        h('label', null, '담당자 이름', name), h('label', null, '연락처', phone),
+        h('button', { class: 'btn primary', onclick: add }, '추가하고 연결 코드 받기')));
+  }
+
   function stores() {
     if (storeView) return storeDetail();
     const L = D.labels;
@@ -391,7 +432,7 @@
           h('button', { class: 'btn', onclick: () => { flash = null; render(); } }, '닫기'))) : null,
       h('div', { class: 'panel' },
         D.stores.length ? h('div', { class: 'tbl' }, h('table', null,
-          h('tr', null, h('th', null, '매장'), h('th', null, '카톡'), h('th', null, '추가 승인 품목'), h('th', null, '')),
+          h('tr', null, h('th', null, '매장'), h('th', null, '카톡'), h('th', null, '담당자'), h('th', null, '추가 승인 품목'), h('th', null, '')),
           D.stores.map((s) => h('tr', null,
             h('td', null, h('a', { href: '#', onclick: (e) => { e.preventDefault(); openStore(s.id); } }, h('b', null, s.name)),
               h('div', { class: 'small muted' }, [L.biz[s.biz], s.owner, s.phone].filter(Boolean).join(' · '))),
@@ -405,6 +446,7 @@
                   },
                 }, '해제')]
               : h('span', { class: 'stat muted' }, h('span', { class: 'dot' }), s.code ? `코드 ${s.code}` : '미연결')),
+            h('td', null, staffPick(s)),
             h('td', null, (s.extra || '').split(',').filter(Boolean).map((c) => h('button', {
               class: 'btn small', title: '누르면 승인 취소',
               onclick: () => confirm(`${s.name}의 ${L.categories[c]} 승인을 취소할까요?`) && act('/api/admin/access', { store_id: s.id, category: c, decision: 'revoke' }, '승인을 취소했어요'),
@@ -415,6 +457,7 @@
               h('button', { class: 'btn small', onclick: () => copyLink(s) }, '발주서 링크'),
               h('button', { class: 'btn small bad', onclick: () => confirm(`${s.name} 매장을 숨길까요?\n(주문 기록은 남고, 목록과 카톡 연결에서 빠집니다)`) && act('/api/admin/store-hide', { id: s.id }, '매장을 숨겼어요') }, '숨기기')))))))
           : empty('아직 매장이 없어요')),
+      staffPanel(),
       h('div', { class: 'panel' }, h('h2', null, '매장 추가'),
         h('div', { class: 'form' },
           h('label', null, '매장 이름', name), h('label', null, '업종', biz), h('label', null, '점주', owner), h('label', null, '연락처', phone),

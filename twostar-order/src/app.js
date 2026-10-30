@@ -12,7 +12,8 @@ const tokens = require('./tokens');
 const images = require('./images');
 const ST = require('./statements');
 const docs = require('./docs');
-const { sendEvent, orderMessage } = require('./notify');
+const { sendEvent, orderMessage, staffOrderMessage } = require('./notify');
+const SF = require('./staff');
 const { migrate, metaValue } = require('./schema');
 const { seed } = require('./sample');
 
@@ -120,6 +121,18 @@ function createHandler({ db, cfg, assets, log = console.log, fetch: fetchImpl = 
       if (r.error) await O.note(db, 'notify', `카톡 알림 실패 · ${o.store.name} ${o.no} · ${r.error}`);
       return { users: users.length, ...r, reply: chatReply(o, msg) };
     };
+    // 새 발주 → 그 매장 담당자 카톡으로 발주 목록 (담당자를 지정하고 카톡을 연결한 매장만)
+    const notifyStaff = async (orderId) => {
+      const o = await O.orderWithStore(db, orderId);
+      const staff = o && await SF.ofStore(db, o.store_id);
+      if (!staff) return null;
+      const msg = staffOrderMessage(o);
+      await db.run("INSERT INTO notices (user_key, store_id, order_id, title, text, at, kind) VALUES (?, ?, ?, ?, ?, ?, 'staff')",
+        [staff.user_key, o.store_id, o.id, msg.title, msg.text, Date.now()]);
+      const r = await sendEvent(await O.getSettings(db), [staff.user_key], msg.title, fetchImpl);
+      if (r.error) await O.note(db, 'notify', `담당자 카톡 알림 실패 · ${staff.name} · ${o.store.name} ${o.no} · ${r.error}`);
+      return r;
+    };
     // 관리자가 카카오 비즈니스 1:1 채팅으로 직접 보낼 답장 (무료). 문구 + 확인서 링크 + 그 매장 채팅방 주소
     const chatReply = (o, msg) => ({
       store: o.store.name, owner: o.store.owner || '', chatUrl: o.store.chat_url || '',
@@ -130,6 +143,7 @@ function createHandler({ db, cfg, assets, log = console.log, fetch: fetchImpl = 
         if (dup) return;
         const s = await O.storeOf(db, order.store_id);
         await O.note(db, 'order', `새 주문 ${order.no} · ${s ? s.name : ''} · ${O.won(order.total)}`);
+        await notifyStaff(order.id);
       },
       async onAccess(store, category) { await O.note(db, 'access', `품목 신청 · ${store.name} · ${O.CATEGORIES[category]}`); },
     };
@@ -164,7 +178,7 @@ function createHandler({ db, cfg, assets, log = console.log, fetch: fetchImpl = 
       try {
         // ev=1: 알림 전용 블록(카카오 Event API)에서 부른 것 → 알림 카드만 보여 준다
         const event = url.searchParams.get('ev') === '1';
-        out = await skill({ db, blockId: cfg.blockId, orderLink, docLink, stLink, minAmount: cfg.minAmount, guest: cfg.guest, event, ...hooks }, body);
+        out = await skill({ db, blockId: cfg.blockId, orderLink, docLink, stLink, adminUrl: `${base}/admin`, minAmount: cfg.minAmount, guest: cfg.guest, event, ...hooks }, body);
       } catch (e) {
         // 어떤 오류가 나도 카카오에는 규격에 맞는 답을 보낸다 (500을 보내면 '스킬 응답 오류'로 끝남)
         console.error(`[카톡 오류] ${what}:`, e);
@@ -374,6 +388,12 @@ function createHandler({ db, cfg, assets, log = console.log, fetch: fetchImpl = 
         return json(200, { users: users.length, ...r });
       }
       else if (sub === 'store-chat' && m === 'POST') return json(200, { chatUrl: await O.setChatUrl(db, Number(b.id), b.url) });
+      // 지점 담당자: 추가(연결 코드 8자리) · 새 코드 · 카톡 연결 끊기 · 삭제 · 매장에 지정
+      else if (sub === 'staff' && m === 'POST') { const r = await SF.create(db, b); return json(200, { ...r, data: await data() }); }
+      else if (sub === 'staff-code' && m === 'POST') { const code = await SF.reissue(db, Number(b.id)); return json(200, { code, data: await data() }); }
+      else if (sub === 'staff-unlink' && m === 'POST') await SF.unlink(db, Number(b.id));
+      else if (sub === 'staff-delete' && m === 'POST') await SF.remove(db, Number(b.id));
+      else if (sub === 'store-staff' && m === 'POST') await SF.assign(db, Number(b.id), b.staff_id);
       else if (sub === 'access' && m === 'POST') await O.decideAccess(db, Number(b.store_id), String(b.category), String(b.decision));
       else if (sub === 'stores' && m === 'POST') {
         const r = await O.createStore(db, b);
@@ -481,6 +501,7 @@ function createHandler({ db, cfg, assets, log = console.log, fetch: fetchImpl = 
       items: await db.all('SELECT * FROM items ORDER BY category, sort, id'),
       events: (await db.all('SELECT at, kind, text FROM events ORDER BY id DESC LIMIT 30')).reverse(),
       skillUrl,
+      staff: await SF.list(db), // 지점 담당자 (매장마다 한 명 지정)
       settings: O.publicSettings(await O.getSettings(db)),
       labels: { categories: O.CATEGORIES, biz: Object.fromEntries(Object.entries(O.BIZ).map(([k, v]) => [k, v.label])), status: O.STATUS },
     };

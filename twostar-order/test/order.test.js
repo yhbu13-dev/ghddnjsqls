@@ -1004,3 +1004,63 @@ test('카톡 자동 알림: 이벤트 1번 = 카드 1장 · 오래된(10분 넘�
   assert.equal(await O.popNotice(db, 'u', t0), null);
   assert.equal((await db.get('SELECT COUNT(*) AS n FROM notices WHERE seen = 0')).n, 0, '옛 알림은 읽음 처리');
 });
+
+test('지점 담당자: 8자리 코드로 카톡 연결 → 매장에 지정 → 점주 발주 시 담당자 카톡으로 발주 목록', async () => {
+  const db = open(':memory:');
+  const sent = [];
+  const fetchImpl = async (u, init) => { sent.push(JSON.parse(init.body)); return new Response(JSON.stringify({ taskId: 't', status: 'SUCCESS' }), { status: 200 }); };
+  const handle = createHandler({ db, cfg: { adminPassword: 'pw', skillKey: 'k', blockId: 'B', minAmount: 0, guest: {}, secret: 's' }, log: () => {}, assets: async () => null, fetch: fetchImpl });
+  const call = (path, init) => handle(new Request(`https://x.com${path}`, init), { ip: '1' });
+  const r = await call('/admin/login', { method: 'POST', body: JSON.stringify({ password: 'pw' }) });
+  const H = { cookie: r.headers.get('set-cookie').split(';')[0], 'x-ts': '1' };
+  const post = async (sub, body) => call(`/api/admin/${sub}`, { method: 'POST', headers: H, body: JSON.stringify(body) });
+  await post('settings', { kakaoBotId: 'bot1234', kakaoRestKey: 'abcdef0123456789abcdef0123456789', kakaoEvent: 'order_notice' });
+  await post('items', { category: 'snack', grp: '음료', name: '삼다수', unit: '박스', price: 8080 });
+  await post('items', { category: 'snack', grp: '음료', name: '콜라', unit: '박스', price: 21280, loose_on: true, pack: 24, loose_unit: '캔' });
+  const st = await (await post('stores', { name: '해오름사우나', biz: 'sauna' })).json();
+  const other = await (await post('stores', { name: '다른 매장', biz: 'sauna' })).json();
+  const staff = await (await post('staff', { name: '김영업', phone: '010-1' })).json();
+  assert.match(staff.code, /^\d{8}$/);
+  const talk = async (user, extra, u = '버튼', q = '') => (await call(`/kakao/skill?key=k${q}`, { method: 'POST', body: JSON.stringify({ userRequest: { user: { id: user }, utterance: u }, action: { clientExtra: extra } }) })).json();
+  assert.match((await talk('staff-user', {}, '1234-5678')).template.outputs[0].simpleText.text, /담당자 연결 코드가 맞지 않아요/);
+  assert.match((await talk('staff-user', {}, staff.code)).template.outputs[0].simpleText.text, /김영업 담당자로 연결/);
+  await post('store-staff', { id: st.id, staff_id: staff.id });
+  let d = await (await call('/api/admin/data', { headers: H })).json();
+  assert.deepEqual(d.staff.map((t) => [t.name, t.linked, t.stores, t.code]), [['김영업', 1, 1, null]]);
+
+  // 점주 웹 발주 → 점주 접수 알림 + 담당자 발주 목록
+  const tk = new URL(st.link).pathname.split('/').pop();
+  let v = await (await call(`/api/o/${tk}`)).json();
+  const [water, cola] = v.items;
+  v = await (await call(`/api/o/${tk}/cart`, { method: 'PUT', headers: { 'x-ts': '1' }, body: JSON.stringify({ cart: { [water.id]: 3, [cola.id]: 1, [`${cola.id}L`]: 5 } }) })).json();
+  sent.length = 0;
+  await call(`/api/o/${tk}/submit`, { method: 'POST', headers: { 'x-ts': '1' }, body: JSON.stringify({ rev: v.rev, memo: '오전 배송' }) });
+  assert.deepEqual(sent.map((b) => b.user[0].id), ['staff-user'], '점주 카톡은 미연결이라 담당자에게만');
+  const ev = await talk('staff-user', {}, '', '&ev=1');
+  const [list, card] = ev.template.outputs;
+  assert.match(list.simpleText.text, /^🛒 새 발주 · 해오름사우나\n\n해오름사우나 · 주문번호 .+\n.+발주서 주문\n\n· 삼다수 3박스\n· 콜라 1박스\n· 콜라 \(낱개\) 5캔\n\n합계 /);
+  assert.match(list.simpleText.text, /요청: 오전 배송$/);
+  assert.deepEqual(card.textCard.buttons.map((b) => b.label), ['📄 발주 확인서', '🖥 관리자에서 처리']);
+
+  // 담당자가 없는 매장은 담당자 알림 없음
+  const tk2 = new URL(other.link).pathname.split('/').pop();
+  v = await (await call(`/api/o/${tk2}/cart`, { method: 'PUT', headers: { 'x-ts': '1' }, body: JSON.stringify({ cart: { [water.id]: 1 } }) })).json();
+  sent.length = 0;
+  await call(`/api/o/${tk2}/submit`, { method: 'POST', headers: { 'x-ts': '1' }, body: JSON.stringify({ rev: v.rev }) });
+  assert.equal(sent.length, 0);
+
+  // 담당자 화면 · 삭제하면 매장 담당자도 비워짐
+  assert.match((await talk('staff-user', { s: 'home' })).template.outputs[0].simpleText.text, /김영업 담당자님 · 담당 매장 1곳/);
+  await post('staff-delete', { id: staff.id });
+  d = await (await call('/api/admin/data', { headers: H })).json();
+  assert.equal(d.staff.length, 0);
+  assert.equal(d.stores.find((s) => s.id === st.id).staff_id, null);
+});
+
+test('담당자 발주 목록: 품목이 많으면 1,000자 안에서 자르고 "외 N품목"', () => {
+  const { staffOrderMessage } = require('../src/notify');
+  const lines = Array.from({ length: 80 }, (_, i) => ({ name: `아주 긴 품목 이름 ${i + 1}번 상품 1박스 24입`, qty: 2, unit: '박스', loose: 0 }));
+  const m = staffOrderMessage({ store: { name: '해오름사우나' }, no: '1030-001', via: 'web', created_at: Date.now(), total: 3045200, memo: '', lines });
+  assert.ok(m.text.length + m.title.length + 2 <= 1000, `${m.text.length}`);
+  assert.match(m.text, /… 외 \d+품목 \(전체는 발주 확인서\)\n\n합계 3,045,200원 \(부가세 별도\)$/);
+});
