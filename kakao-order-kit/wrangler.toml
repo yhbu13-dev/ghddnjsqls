@@ -1,0 +1,37 @@
+# 카카오톡 발주 키트 — Cloudflare Workers 설정
+# 배포: Windows 에서 deploy-cloudflare.bat 더블클릭 (= node scripts/deploy-cloudflare.js)
+name = "kakao-order"
+main = "src/worker.mjs"
+compatibility_date = "2025-09-01"
+compatibility_flags = ["nodejs_compat"]   # node:crypto · Buffer 사용
+workers_dev = true      # https://kakao-order.<내 계정>.workers.dev 주소로 바로 열림
+preview_urls = false
+
+# 회사 도메인을 쓰려면 (카카오톡 링크 버튼은 workers.dev 주소를 막을 수 있어 자체 도메인 권장 — README 2-4)
+# routes = [
+#   { pattern = "order.example.com", custom_domain = true },
+# ]
+
+# 서버 코드를 DB(D1) 가까운 곳에서 실행 → 한 요청에 DB 를 여러 번 읽을 때 빨라짐
+[placement]
+mode = "smart"
+
+[assets]
+directory = "./public"          # 발주서·관리자 화면 파일
+binding = "ASSETS"
+run_worker_first = true         # 모든 요청을 코드가 먼저 받아 보안 헤더를 붙인다
+html_handling = "none"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "kakao-order"
+database_id = "REPLACE_WITH_D1_ID"   # deploy-cloudflare 가 자동으로 채움
+
+[vars]
+PUBLIC_URL = ""      # 회사 도메인을 붙였으면 "https://order.example.com". 비우면 접속한 주소 그대로
+BLOCK_ID = ""        # 오픈빌더 "발주" 블록 ID (README 3단계에서 확인해 넣기)
+MIN_ORDER = "0"      # 최소 발주 금액 (원). 0 = 제한 없음
+SEED_SAMPLE = "0"    # 1 = 품목이 하나도 없을 때 샘플 품목·매장을 넣음 (둘러보기용). 운영 중에는 0
+
+[observability]
+enabled = true       # Cloudflare 대시보드에서 요청 기록(로그) 보기

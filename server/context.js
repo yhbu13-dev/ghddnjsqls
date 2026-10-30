@@ -7,11 +7,11 @@ const settings = require('./settings');
 const { createNotifier } = require('./adapters/notifier');
 const { createPayment } = require('./adapters/payment');
 
-const ENV_SECRET = { link: 'BEVFLOW_LINK_SECRET', ingest: 'BEVFLOW_INGEST_SECRET', webhook: 'BEVFLOW_WEBHOOK_SECRET' };
+const ENV_SECRET = { link: 'BEVFLOW_LINK_SECRET', ingest: 'BEVFLOW_INGEST_SECRET', webhook: 'BEVFLOW_WEBHOOK_SECRET', kakao: 'BEVFLOW_KAKAO_SKILL_SECRET' };
 
 function createContext({ file = ':memory:', env = process.env } = {}) {
   const db = new Db(file);
-  const ctx = { db, env };
+  const ctx = { db, env, fetch: (...a) => globalThis.fetch(...a) }; // fetch: 카카오 API 호출 (테스트에서 교체)
   ctx.reload = () => { ctx.settings = settings.load(db); ctx.R = settings.rules(ctx.settings); return ctx.R; };
   ctx.getSecret = (name) => {
     if (env[ENV_SECRET[name]]) return env[ENV_SECRET[name]];

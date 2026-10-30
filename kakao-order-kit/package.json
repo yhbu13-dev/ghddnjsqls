@@ -1,0 +1,13 @@
+{
+  "name": "kakao-order-kit",
+  "version": "0.1.0",
+  "private": true,
+  "description": "카카오톡 발주 키트 — 카카오톡 챗봇 · 웹 발주서 · 관리자 화면 · 확인서/명세서 · 카톡 알림 (Cloudflare Workers + D1)",
+  "license": "UNLICENSED",
+  "engines": { "node": ">=22.13" },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning src/server.js",
+    "seed": "node --disable-warning=ExperimentalWarning scripts/seed.js",
+    "test": "node --disable-warning=ExperimentalWarning --test test/*.test.js"
+  }
+}

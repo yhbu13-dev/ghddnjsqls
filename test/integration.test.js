@@ -31,7 +31,7 @@ test('샘플 데이터 생성기가 실제 엔진으로 1주 파일럿을 끝까
   const out = execFileSync(process.execPath, ['--disable-warning=ExperimentalWarning', path.join(__dirname, '..', 'scripts', 'seed-sample.js'), '--db', ':memory:', '--weeks', '1'], { encoding: 'utf8', timeout: 120000 });
   const m = /매장 (\d+) · POS 판매 (\d+) · 발주 (\d+) · 배송 (\d+) · 실사 (\d+)/.exec(out);
   assert.ok(m, out);
-  assert.equal(+m[1], 50);
+  assert.equal(+m[1], 56, '식당 50 · 카페 3 · 사우나 3');
   assert.ok(+m[2] > 1000, 'POS 판매 ' + m[2]);
   assert.ok(+m[3] > 20, '발주 ' + m[3]);
   assert.ok(+m[4] > 10, '배송 ' + m[4]);

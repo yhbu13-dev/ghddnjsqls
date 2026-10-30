@@ -1,0 +1,35 @@
+# 투스타 발주 — Render 클라우드 배포 설정 (Blueprint)
+# Render 대시보드 → New → Blueprint → 이 저장소 선택 → 아래 내용대로 서버가 만들어진다.
+# 고정 주소: https://<서비스이름>.onrender.com  (서버를 다시 켜도 바뀌지 않음)
+services:
+  - type: web
+    name: twostar-order
+    runtime: node
+    plan: starter            # 월 $7. 무료 플랜은 잠들었다 깨는 데 오래 걸려 카카오 5초 제한에 걸리고 디스크를 못 씀
+    region: singapore        # 한국에서 가장 가까운 지역
+    rootDir: twostar-order
+    buildCommand: echo "외부 패키지 없음 - 빌드 생략"
+    startCommand: node --disable-warning=ExperimentalWarning src/server.js
+    healthCheckPath: /health
+    autoDeploy: true         # 저장소에 새 코드가 올라오면 자동 반영
+    disk:
+      name: order-data
+      mountPath: /var/data   # 주문·매장·품목 DB 와 품목 사진이 여기 저장됨 (다시 배포해도 유지)
+      sizeGB: 1
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: DATA_DIR
+        value: /var/data
+      - key: TRUST_PROXY
+        value: "1"
+      - key: BLOCK_ID          # 오픈빌더 "발주" 블록 ID
+        value: 6ab764d9f6804a5978559653
+      - key: MIN_ORDER
+        value: "0"
+      - key: SEED_SAMPLE       # 1 이면 품목이 없을 때 샘플 품목 69개·매장 3곳을 넣음 (실제 운영 전 0 으로)
+        value: "1"
+      - key: SKILL_KEY         # 오픈빌더 스킬 URL 의 key — Render 가 자동으로 만들어 줌
+        generateValue: true
+      - key: ADMIN_PASSWORD    # 관리자 비밀번호 — 만들 때 직접 입력 (8자 이상 권장)
+        sync: false

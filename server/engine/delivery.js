@@ -97,7 +97,8 @@ function complete(ctx, stopId, { counts = null, routeId = null, actor = 'driver'
     const store = db.get('SELECT * FROM stores WHERE id = ?', [s.store_id]);
     const arrivedAt = s.arrived_at || now;
     if (counts && Object.keys(counts).length) inv.applyCount(ctx, store, counts, { source: 'driver', stopId, actor }, now);
-    for (const l of db.all('SELECT sku_id, qty FROM proposal_lines WHERE proposal_id = ? AND qty > 0', [s.proposal_id])) {
+    // 재고 추정은 음료 품목만 (카페·스낵 품목은 입고 기록 없이 배송만 처리)
+    for (const l of db.all("SELECT l.sku_id, l.qty FROM proposal_lines l JOIN skus k ON k.id = l.sku_id WHERE l.proposal_id = ? AND l.qty > 0 AND k.category = 'beverage'", [s.proposal_id])) {
       db.run('INSERT OR IGNORE INTO store_skus (store_id, sku_id) VALUES (?, ?)', [store.id, l.sku_id]);
       inv.applyReceipt(ctx, store, l.sku_id, l.qty, now);
     }

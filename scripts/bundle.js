@@ -47,7 +47,8 @@ ${Object.entries(COMMANDS).map(([k, [, d]]) => `//   node bevflow.js ${k.padEnd(
 //
 // 데이터는 이 파일 옆 data/bevflow.db 에 저장됩니다 (BEVFLOW_DB로 변경).
 // 환경 변수: PORT, HOST, BEVFLOW_DB, BEVFLOW_TRUST_PROXY, BEVFLOW_ADMIN_EMAIL, BEVFLOW_ADMIN_PASSWORD,
-//            BEVFLOW_LINK_SECRET, BEVFLOW_INGEST_SECRET, BEVFLOW_WEBHOOK_SECRET
+//            BEVFLOW_LINK_SECRET, BEVFLOW_INGEST_SECRET, BEVFLOW_WEBHOOK_SECRET,
+//            BEVFLOW_KAKAO_SKILL_SECRET, BEVFLOW_KAKAO_CLIENT_SECRET
 //
 // 이 파일은 scripts/bundle.js 가 소스(server/ · scripts/ · public/)로부터 만든 결과물입니다.
 // 고칠 때는 소스를 고친 뒤 \`npm run bundle\`로 다시 만드세요.
