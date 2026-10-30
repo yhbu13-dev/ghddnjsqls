@@ -132,6 +132,8 @@
       h('h2', null, '💬 카톡으로 알리기'),
       h('p', { class: 'small muted' }, head ? `${head} · ` : '', `${r.store}${r.owner ? `(${r.owner})` : ''} 채팅방에 아래 문구를 보내세요. 비용은 없어요.`),
       ta,
+      // 1:1 채팅으로 직접 보내면 그 방이 '상담 모드'가 되어 챗봇이 멈춘다 → 보낸 뒤 상담 종료 안내
+      h('p', { class: 'warnbox' }, '⚠️ 직접 보내면 그 채팅방이 상담 모드로 바뀌어 점주의 챗봇 버튼·연결 코드가 멈춰요. 보낸 뒤 꼭 그 채팅방에서 [상담 종료]를 눌러 주세요.'),
       r.chatUrl ? null : h('p', { class: 'small muted' }, '💡 매장 상세 → [카톡 채팅방 주소]를 저장해 두면 다음부터 이 매장 채팅방이 바로 열려요'),
       h('div', { class: 'acts' },
         h('button', { class: 'btn', onclick: close }, '닫기'),
@@ -222,7 +224,7 @@
       h('div', { class: 'acts noprint' },
         o.next.filter((s) => s !== 'canceled').map((s) => h('button', { class: 'btn primary small', onclick: () => changeStatus(o, s) },
           s === 'confirmed' ? '확인하고 카톡 알림' : s === 'shipped' ? '출고 처리' : `${L.status[s]} 처리`)),
-        h('button', { class: 'btn small', onclick: () => openReply(o) }, '💬 카톡 답장'),
+        D.settings.kakaoBotId && D.settings.kakaoKeySet ? null : h('button', { class: 'btn small', onclick: () => openReply(o) }, '💬 카톡 답장'),
         docBtns(o),
         h('span', { class: 'sp' }),
         o.next.includes('canceled') ? h('button', { class: 'btn bad small', onclick: () => changeStatus(o, 'canceled') }, '주문 취소') : null));
