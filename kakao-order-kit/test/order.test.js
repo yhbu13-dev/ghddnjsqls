@@ -1068,3 +1068,15 @@ test('담당자 발주 목록: 품목이 많으면 1,000자 안에서 자르고 
   assert.ok(m.text.length + m.title.length + 2 <= 1000, `${m.text.length}`);
   assert.match(m.text, /… 외 \d+품목 \(전체는 발주 확인서\)\n\n합계 3,045,200원 \(부가세 별도\)$/);
 });
+});
+
+test('연결 코드: 글자를 붙여 보내도 알아들음 (코드 123456 · 123-456입니다)', async () => {
+  const db = open(':memory:');
+  await migrate(db);
+  const st1 = await O.createStore(db, { name: '가게1', biz: 'cafe' });
+  const st2 = await O.createStore(db, { name: '가게2', biz: 'cafe' });
+  const say = async (u, utterance) => JSON.stringify(await skill({ db, blockId: 'B', orderLink: () => 'https://x/o/t' }, { userRequest: { user: { id: u }, utterance }, action: { clientExtra: {} } }));
+  assert.match(await say('a', `코드 ${st1.code}`), /가게1 매장과 연결/);
+  assert.match(await say('b', `${st2.code.slice(0, 3)}-${st2.code.slice(3)}입니다`), /가게2 매장과 연결/);
+  assert.doesNotMatch(await say('c', '010 1234 5678'), /연결 코드가 맞지/, '전화번호 같은 긴 숫자는 코드로 보지 않음');
+});

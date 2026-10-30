@@ -52,7 +52,9 @@ async function skill(ctx, body) {
   const home = U.btn('처음으로', { s: 'home' });
   const brand = async () => (await O.getSettings(db)).brand; // 서비스 이름 (안내 문구용, 필요할 때만 읽음)
   let store = await O.storeByUser(db, userKey);
-  const code = x.s ? '' : utter.replace(/[\s-]/g, '');
+  // 연결 코드: 숫자만 보내도, '코드 123456' · '123-456입니다'처럼 글자를 붙여 보내도 알아듣는다 (숫자 묶음이 하나일 때)
+  const runs = x.s ? null : utter.replace(/[\s-]/g, '').match(/\d+/g);
+  const code = runs && runs.length === 1 && /^(\d{6}|\d{8})$/.test(runs[0]) ? runs[0] : '';
 
   // ── 담당자 연결 코드 8자리 (공급사 직원): 담당 매장 발주 목록을 이 카톡으로 받는다 ───
   if (/^\d{8}$/.test(code)) {
