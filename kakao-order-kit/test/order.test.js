@@ -933,7 +933,7 @@ test('카톡 자동 알림(Event API): 상태를 바꾸면 이벤트 발송 → 
   const post = async (sub, body) => call(`/api/admin/${sub}`, { method: 'POST', headers: H, body: JSON.stringify(body) });
   await post('items', { category: 'cafe', grp: '시럽', name: '바닐라', price: 10000 });
   const st = await (await post('stores', { name: '카페', biz: 'cafe' })).json();
-  await post('settings', { kakaoBotId: '6ab7647ef9ce1361981d6482', kakaoRestKey: 'abcdef0123456789abcdef0123456789', kakaoEvent: 'order_notice' });
+  await post('settings', { kakaoBotId: '0123456789abcdef01234567', kakaoRestKey: 'abcdef0123456789abcdef0123456789', kakaoEvent: 'order_notice' });
   const talk = async (extra, u = '버튼', q = '') => (await call(`/kakao/skill?key=k${q}`, { method: 'POST', body: JSON.stringify({ userRequest: { user: { id: 'bot-user-1' }, utterance: u }, action: { clientExtra: extra } }) })).json();
   await talk({}, st.code);
   const item = (await (await call('/api/admin/data', { headers: H })).json()).items[0];
@@ -946,7 +946,7 @@ test('카톡 자동 알림(Event API): 상태를 바꾸면 이벤트 발송 → 
   const res = await (await post('status', { id, status: 'confirmed' })).json();
   assert.equal(res.notify.sent, 1, JSON.stringify(res.notify));
   assert.equal(sent.length, 1);
-  assert.equal(sent[0].u, 'https://bot-api.kakao.com/v2/bots/6ab7647ef9ce1361981d6482/talk');
+  assert.equal(sent[0].u, 'https://bot-api.kakao.com/v2/bots/0123456789abcdef01234567/talk');
   assert.equal(sent[0].init.headers.authorization, 'KakaoAK abcdef0123456789abcdef0123456789');
   const body = JSON.parse(sent[0].init.body);
   assert.equal(body.event.name, 'order_notice');
