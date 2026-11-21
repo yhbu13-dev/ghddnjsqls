@@ -85,11 +85,11 @@
     <!-- 카테고리 필터 탭 -->
     <nav id="menu-section" class="sticky top-[57px] z-20 bg-white border-b border-zinc-100 px-4 py-2.5">
       <div class="flex items-center gap-2 overflow-x-auto no-scrollbar" id="category-tabs">
-        <button type="button" data-category="all" class="cat-tab shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-zinc-900 text-white transition">전체 품목</button>
-        <button type="button" data-category="water" class="cat-tab shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-zinc-100 text-zinc-600 hover:bg-zinc-200 transition">생수·물</button>
-        <button type="button" data-category="soda" class="cat-tab shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-zinc-100 text-zinc-600 hover:bg-zinc-200 transition">콜라·사이다·음료</button>
-        <button type="button" data-category="beans" class="cat-tab shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-zinc-100 text-zinc-600 hover:bg-zinc-200 transition">원두</button>
-        <button type="button" data-category="supplies" class="cat-tab shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-zinc-100 text-zinc-600 hover:bg-zinc-200 transition">카페 자재</button>
+        <button type="button" data-category="all" class="cat-tab shrink-0 px-4 py-2 rounded-full text-[13px] font-semibold bg-zinc-900 text-white transition">전체 품목</button>
+        <button type="button" data-category="water" class="cat-tab shrink-0 px-4 py-2 rounded-full text-[13px] font-semibold bg-zinc-100 text-zinc-600 hover:bg-zinc-200 transition">생수·물</button>
+        <button type="button" data-category="soda" class="cat-tab shrink-0 px-4 py-2 rounded-full text-[13px] font-semibold bg-zinc-100 text-zinc-600 hover:bg-zinc-200 transition">콜라·사이다·음료</button>
+        <button type="button" data-category="beans" class="cat-tab shrink-0 px-4 py-2 rounded-full text-[13px] font-semibold bg-zinc-100 text-zinc-600 hover:bg-zinc-200 transition">원두</button>
+        <button type="button" data-category="supplies" class="cat-tab shrink-0 px-4 py-2 rounded-full text-[13px] font-semibold bg-zinc-100 text-zinc-600 hover:bg-zinc-200 transition">카페 자재</button>
       </div>
     </nav>
 
@@ -231,22 +231,26 @@
           <div class="flex justify-between text-rose-600"><dt id="sum-coupon-label">쿠폰 할인</dt><dd id="sum-coupon">0원</dd></div>
           <div class="flex justify-between font-extrabold text-zinc-900 text-base pt-1"><dt>결제 예정 금액</dt><dd id="sum-total">0원</dd></div>
         </dl>
-        <p id="shipping-hint" class="mt-2 text-[11px] text-sky-700 font-medium"></p>
+        <p id="shipping-hint" class="mt-2 text-[11px] text-zinc-900 font-semibold"></p>
         <p class="mt-1 text-[11px] text-zinc-400">결제는 배송 시 현장 카드·계좌이체 또는 사업자 월말 정산으로 진행됩니다.</p>
       </section>
     </main>
 
     <!-- 하단 고정 주문 바 -->
     <div class="fixed bottom-0 left-0 right-0 z-40">
-      <div class="mx-auto max-w-md bg-white border-t border-zinc-200 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(0,0,0,0.06)]">
-        <div class="flex items-center gap-3">
-          <div class="flex-1 min-w-0">
-            <p class="text-[11px] text-zinc-500"><span id="bar-count">0</span>개 품목 · <span id="bar-coupon-state">쿠폰 미적용</span></p>
+      <div class="mx-auto max-w-md bg-white border-t border-zinc-100 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <button id="start-order-btn" type="button"
+                class="w-full py-4 rounded-2xl bg-zinc-900 text-white text-[15px] font-bold shadow-lg hover:bg-zinc-800 transition" >
+          제품을 선택하고 로켓주문하기
+        </button>
+        <div id="bar-filled" class="hidden flex items-center gap-3">
+          <div class="flex-1 min-w-0 pl-1">
+            <p class="text-[11px] text-zinc-500"><span id="bar-count">0</span>개 담음 · <span id="bar-coupon-state">쿠폰 미적용</span></p>
             <p id="bar-total" class="text-lg font-extrabold text-zinc-900 leading-tight">0원</p>
           </div>
           <button id="submit-order-btn" type="button"
-                  class="shrink-0 px-5 py-3 rounded-xl bg-blue-600 text-white text-sm font-bold shadow hover:bg-blue-700 disabled:bg-zinc-300 disabled:cursor-not-allowed transition">
-            로켓 주문하기 🚀
+                  class="shrink-0 px-6 py-4 rounded-2xl bg-zinc-900 text-white text-[15px] font-bold shadow-lg hover:bg-zinc-800 disabled:bg-zinc-300 disabled:cursor-not-allowed transition">
+            로켓주문하기 🚀
           </button>
         </div>
       </div>
@@ -267,11 +271,38 @@
       </div>
     </div>
 
+    <!-- 규격·수량 선택 시트 -->
+    <div id="option-modal" class="hidden fixed inset-0 z-50 bg-black/50 flex items-end justify-center">
+      <div class="w-full max-w-md bg-white rounded-t-3xl p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] max-h-[85vh] overflow-y-auto">
+        <div class="mx-auto mb-4 w-10 h-1 rounded-full bg-zinc-200"></div>
+        <div class="flex gap-3 items-center">
+          <div id="sheet-thumb"></div>
+          <div class="min-w-0 flex-1">
+            <span id="sheet-badge" class="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-zinc-100 text-zinc-700"></span>
+            <h3 id="sheet-name" class="mt-1 text-base font-extrabold text-zinc-900 leading-snug"></h3>
+            <p id="sheet-desc" class="text-[11px] text-zinc-500"></p>
+          </div>
+          <button type="button" class="close-modal-btn self-start p-1 rounded-full hover:bg-zinc-100" aria-label="닫기"><i data-lucide="x" class="w-5 h-5"></i></button>
+        </div>
+        <p class="mt-5 mb-2 text-xs font-semibold text-zinc-700">규격 선택</p>
+        <div id="sheet-options" class="space-y-2"></div>
+        <div class="mt-5 flex items-center justify-between">
+          <span class="text-xs font-semibold text-zinc-700">수량 (박스)</span>
+          <div class="flex items-center rounded-xl border border-zinc-200">
+            <button type="button" id="sheet-dec" class="w-10 h-10 text-lg text-zinc-600" aria-label="수량 줄이기">−</button>
+            <span id="sheet-qty" class="w-8 text-center text-base font-bold">1</span>
+            <button type="button" id="sheet-inc" class="w-10 h-10 text-lg text-zinc-600" aria-label="수량 늘리기">+</button>
+          </div>
+        </div>
+        <button type="button" id="sheet-add-btn" class="mt-5 w-full py-4 rounded-2xl bg-zinc-900 text-white text-[15px] font-bold hover:bg-zinc-800">담기</button>
+      </div>
+    </div>
+
     <!-- 주문 완료 모달 -->
     <div id="done-modal" class="hidden fixed inset-0 z-50 bg-black/50 flex items-end justify-center">
       <div class="w-full max-w-md bg-white rounded-t-2xl p-5 max-h-[85vh] overflow-y-auto">
         <div class="text-center">
-          <div class="mx-auto w-12 h-12 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mb-2">
+          <div class="mx-auto w-12 h-12 rounded-full bg-zinc-100 text-zinc-900 flex items-center justify-center mb-2">
             <i data-lucide="rocket" class="w-6 h-6"></i>
           </div>
           <h3 class="text-base font-extrabold">주문서가 준비됐어요</h3>
@@ -280,7 +311,7 @@
         <pre id="order-text" class="mt-4 p-3 rounded-xl bg-zinc-50 border border-zinc-200 text-[12px] leading-relaxed whitespace-pre-wrap font-sans"></pre>
         <div class="mt-4 grid grid-cols-2 gap-2">
           <button id="copy-order-btn" type="button" class="py-3 rounded-xl border border-zinc-300 text-sm font-bold hover:bg-zinc-50">주문서 복사</button>
-          <a id="sms-order-btn" href="#" class="py-3 rounded-xl bg-blue-600 text-white text-sm font-bold text-center hover:bg-blue-700">문자로 보내기</a>
+          <a id="sms-order-btn" href="#" class="py-3 rounded-xl bg-zinc-900 text-white text-sm font-bold text-center hover:bg-zinc-800">문자로 보내기</a>
         </div>
         <a id="call-btn" href="#" class="mt-2 block py-3 rounded-xl bg-zinc-100 text-zinc-800 text-sm font-bold text-center">전화로 바로 주문</a>
         <button type="button" class="close-modal-btn mt-2 w-full py-2 text-xs text-zinc-500">닫기</button>
@@ -305,29 +336,38 @@
     };
 
     // TODO: 실제 판매 단가로 교체하세요. 아래 가격은 화면 확인용 예시입니다.
+    // img: 제품 사진 경로 (이 파일 옆 images 폴더). 사진이 없으면 아이콘 타일로 자동 대체됩니다.
     const PRODUCTS = [
-      { id: 'w1', cat: 'water', icon: 'droplets', tone: 'sky', name: '생수 500ml', badge: 'BEST',
-        options: [{ label: '20병 1박스', price: 6900 }, { label: '40병 2박스', price: 13200 }] },
-      { id: 'w2', cat: 'water', icon: 'droplets', tone: 'sky', name: '생수 2L',
-        options: [{ label: '6병 1박스', price: 5900 }, { label: '12병 2박스', price: 11300 }] },
-      { id: 'w3', cat: 'water', icon: 'sparkle', tone: 'cyan', name: '탄산수 500ml',
-        options: [{ label: '20병 1박스', price: 12900 }] },
-      { id: 's1', cat: 'soda', icon: 'cup-soda', tone: 'rose', name: '콜라 355ml 캔', badge: '인기',
-        options: [{ label: '24캔 1박스', price: 17900 }, { label: '업소용 190ml 30캔', price: 14900 }] },
-      { id: 's2', cat: 'soda', icon: 'cup-soda', tone: 'emerald', name: '사이다 355ml 캔',
-        options: [{ label: '24캔 1박스', price: 16900 }, { label: '업소용 190ml 30캔', price: 13900 }] },
-      { id: 's3', cat: 'soda', icon: 'citrus', tone: 'amber', name: '이온·주스 음료',
-        options: [{ label: '500ml 20병', price: 21900 }, { label: '240ml 30캔', price: 18900 }] },
-      { id: 'b1', cat: 'beans', icon: 'coffee', tone: 'stone', name: '하우스 블렌드 원두', badge: '카페 추천',
-        options: [{ label: '1kg', price: 22000 }, { label: '1kg × 5', price: 105000 }] },
-      { id: 'b2', cat: 'beans', icon: 'coffee', tone: 'orange', name: '싱글오리진 원두',
+      { id: 'w1', cat: 'water', icon: 'droplets', tone: 'sky', img: 'images/water.jpg',
+        name: '프리미엄 생수 (1박스)', badge: '무조건 로켓', desc: '깨끗한 암반수 · 무라벨/일반 선택 가능',
+        options: [{ label: '500ml × 20병 (일반)', price: 7900 }, { label: '500ml × 20병 (무라벨)', price: 8400 }, { label: '2L × 6병', price: 6900 }] },
+      { id: 's1', cat: 'soda', icon: 'cup-soda', tone: 'rose', img: 'images/cola.jpg',
+        name: '콜라 355ml 캔 (24입 박스)', badge: '인기 1위', desc: '식당·카페·가정 어디서나 가장 잘 나가는 업소/대용량 팩',
+        options: [{ label: '355ml × 24캔', price: 18900 }, { label: '제로 355ml × 24캔', price: 19900 }, { label: '업소용 190ml × 30캔', price: 15900 }] },
+      { id: 's2', cat: 'soda', icon: 'cup-soda', tone: 'emerald', img: 'images/cider.jpg',
+        name: '사이다 355ml 캔 (24입 박스)', badge: '업소 필수', desc: '고깃집·분식·치킨집 테이블 회전용 기본 음료',
+        options: [{ label: '355ml × 24캔', price: 17900 }, { label: '제로 355ml × 24캔', price: 18900 }, { label: '업소용 190ml × 30캔', price: 14900 }] },
+      { id: 'w2', cat: 'water', icon: 'sparkle', tone: 'cyan', img: 'images/sparkling.jpg',
+        name: '탄산수 500ml (20입)', badge: '카페 인기', desc: '플레인·레몬 · 에이드 베이스로 쓰기 좋은 강탄산',
+        options: [{ label: '플레인 × 20병', price: 12900 }, { label: '레몬 × 20병', price: 13900 }] },
+      { id: 's3', cat: 'soda', icon: 'citrus', tone: 'amber', img: 'images/drinks.jpg',
+        name: '이온·주스 음료 (박스)', badge: '사무실 추천', desc: '탕비실·현장 간식용 이온음료와 주스 박스',
+        options: [{ label: '이온음료 500ml × 20병', price: 21900 }, { label: '주스 240ml × 30캔', price: 18900 }] },
+      { id: 'b1', cat: 'beans', icon: 'coffee', tone: 'stone', img: 'images/beans-house.jpg',
+        name: '하우스 블렌드 원두 1kg', badge: '카페 추천', desc: '고소·초콜릿 노트 · 주문 후 로스팅 7일 이내 발송',
+        options: [{ label: '1kg', price: 22000 }, { label: '1kg × 5 (정기)', price: 105000 }] },
+      { id: 'b2', cat: 'beans', icon: 'coffee', tone: 'orange', img: 'images/beans-single.jpg',
+        name: '싱글오리진 원두', badge: '스페셜티', desc: '에티오피아·콜롬비아 · 산미 있는 핸드드립용',
         options: [{ label: '500g', price: 16000 }, { label: '1kg', price: 29000 }] },
-      { id: 'c1', cat: 'supplies', icon: 'cup-soda', tone: 'zinc', name: '일회용 컵 (아이스 16oz)',
-        options: [{ label: '1,000개', price: 42000 }, { label: '500개', price: 23000 }] },
-      { id: 'c2', cat: 'supplies', icon: 'pipette', tone: 'violet', name: '시럽·소스',
-        options: [{ label: '바닐라 1L', price: 9900 }, { label: '헤이즐넛 1L', price: 9900 }] },
-      { id: 'c3', cat: 'supplies', icon: 'package', tone: 'lime', name: '빨대·홀더·캐리어 세트',
-        options: [{ label: '빨대 1,000 + 홀더 500', price: 19900 }] }
+      { id: 'c1', cat: 'supplies', icon: 'cup-soda', tone: 'zinc', img: 'images/cups.jpg',
+        name: '아이스컵 16oz + 뚜껑', badge: '대용량', desc: 'PET 투명컵 · 뚜껑 세트 · 카페 표준 규격',
+        options: [{ label: '500개', price: 23000 }, { label: '1,000개', price: 42000 }] },
+      { id: 'c2', cat: 'supplies', icon: 'pipette', tone: 'violet', img: 'images/syrup.jpg',
+        name: '카페 시럽 1L', badge: '맛 선택', desc: '바닐라·헤이즐넛·카라멜 · 펌프 별도',
+        options: [{ label: '바닐라', price: 9900 }, { label: '헤이즐넛', price: 9900 }, { label: '카라멜', price: 9900 }] },
+      { id: 'c3', cat: 'supplies', icon: 'package', tone: 'lime', img: 'images/straws.jpg',
+        name: '빨대·홀더 세트', badge: '묶음 할인', desc: '빨대 1,000개 + 컵홀더 500개 한 번에',
+        options: [{ label: '세트 1개', price: 19900 }] }
     ];
 
     // 목록 중간에 끼워 넣는 광고 카드 (n번째 제품 뒤)
@@ -399,30 +439,20 @@
       const list = PRODUCTS.filter(p => state.category === 'all' || p.cat === state.category);
       const html = [];
       list.forEach((p, i) => {
-        const sel = state.selectedOption[p.id] ?? 0;
-        const opt = p.options[sel];
+        const minPrice = Math.min(...p.options.map(o => o.price));
         const qtyInCart = p.options.reduce((s, _, oi) => s + (state.cart[p.id + '|' + oi] || 0), 0);
         html.push(`
-          <article class="rounded-2xl border border-zinc-200 p-3.5 flex gap-3">
-            <div class="w-16 h-16 shrink-0 rounded-xl ${TONES[p.tone]} flex items-center justify-center">
-              <i data-lucide="${p.icon}" class="w-7 h-7"></i>
-            </div>
-            <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-1.5">
-                <h3 class="text-sm font-bold text-zinc-900 truncate">${esc(p.name)}</h3>
-                ${p.badge ? `<span class="shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-50 text-rose-600">${esc(p.badge)}</span>` : ''}
-              </div>
-              <div class="mt-1.5 flex flex-wrap gap-1.5">
-                ${p.options.map((o, oi) => `
-                  <button type="button" data-pid="${p.id}" data-opt="${oi}"
-                    class="opt-btn px-2 py-1 rounded-lg text-[11px] font-semibold border transition ${oi === sel ? 'border-zinc-900 bg-zinc-900 text-white' : 'border-zinc-200 bg-white text-zinc-600'}">
-                    ${esc(o.label)}</button>`).join('')}
-              </div>
-              <div class="mt-2 flex items-center justify-between">
-                <span class="text-sm font-extrabold text-zinc-900">${won(opt.price)}</span>
+          <article class="rounded-2xl border border-zinc-200 bg-white p-3.5 flex gap-3.5 ${qtyInCart ? 'ring-2 ring-zinc-900/80 border-transparent' : ''}">
+            ${thumb(p, 'w-[84px] h-[84px]')}
+            <div class="flex-1 min-w-0 flex flex-col">
+              ${p.badge ? `<span class="self-start text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-zinc-100 text-zinc-700">${esc(p.badge)}</span>` : ''}
+              <h3 class="mt-1 text-[15px] font-extrabold text-zinc-900 leading-snug">${esc(p.name)}</h3>
+              <p class="mt-0.5 text-[11px] text-zinc-500 leading-snug line-clamp-2">${esc(p.desc || '')}</p>
+              <div class="mt-auto pt-2 flex items-center justify-between">
+                <span class="text-base font-extrabold text-zinc-900">${won(minPrice)}${p.options.length > 1 ? '~' : ''}</span>
                 <button type="button" data-add="${p.id}"
-                  class="add-btn inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition">
-                  <i data-lucide="plus" class="w-3.5 h-3.5"></i> 담기${qtyInCart ? ` <span class="ml-0.5 px-1.5 rounded-full bg-white/25">${qtyInCart}</span>` : ''}
+                  class="add-btn inline-flex items-center gap-1 px-3.5 py-2 rounded-xl bg-zinc-900 text-white text-xs font-bold hover:bg-zinc-800 active:scale-95 transition">
+                  + 담기${qtyInCart ? ` <span class="ml-0.5 px-1.5 rounded-full bg-white text-zinc-900 text-[10px]">${qtyInCart}</span>` : ''}
                 </button>
               </div>
             </div>
@@ -493,6 +523,8 @@
       else hint.textContent = '';
 
       const count = t.lines.reduce((s, l) => s + l.qty, 0);
+      $('#start-order-btn').classList.toggle('hidden', count > 0);
+      $('#bar-filled').classList.toggle('hidden', count === 0);
       $('#bar-count').textContent = count;
       $('#bar-total').textContent = won(t.total);
       $('#bar-coupon-state').textContent = !state.couponOn ? '쿠폰 미적용' : t.coupon ? `쿠폰 −${won(t.coupon)}` : '쿠폰 대기';
@@ -501,12 +533,48 @@
       badge.classList.toggle('hidden', count === 0);
     }
 
-    function addToCart(pid) {
-      const oi = state.selectedOption[pid] ?? 0;
-      const key = pid + '|' + oi;
-      state.cart[key] = (state.cart[key] || 0) + 1;
+    // 제품 사진 타일 (사진이 없으면 아이콘 타일이 보임)
+    function thumb(p, size) {
+      return `<div class="${size} shrink-0 relative rounded-xl overflow-hidden bg-gradient-to-br from-zinc-50 to-zinc-200">
+        <div class="absolute inset-0 flex items-center justify-center ${TONES[p.tone]}"><i data-lucide="${p.icon}" class="w-8 h-8"></i></div>
+        ${p.img ? `<img src="${esc(p.img)}" alt="${esc(p.name)}" loading="lazy" class="absolute inset-0 w-full h-full object-cover" onerror="this.remove()" />` : ''}
+      </div>`;
+    }
+
+    // 담기 → 규격·수량 선택 시트
+    const sheet = { pid: null, opt: 0, qty: 1 };
+    function openSheet(pid) {
       const p = PRODUCTS.find(x => x.id === pid);
-      toast(`${p.name} · ${p.options[oi].label} 담았어요`);
+      sheet.pid = pid; sheet.opt = state.selectedOption[pid] ?? 0; sheet.qty = 1;
+      $('#sheet-thumb').innerHTML = thumb(p, 'w-16 h-16');
+      $('#sheet-badge').textContent = p.badge || '';
+      $('#sheet-badge').classList.toggle('hidden', !p.badge);
+      $('#sheet-name').textContent = p.name;
+      $('#sheet-desc').textContent = p.desc || '';
+      renderSheet();
+      openModal('#option-modal');
+    }
+    function renderSheet() {
+      const p = PRODUCTS.find(x => x.id === sheet.pid);
+      $('#sheet-options').innerHTML = p.options.map((o, oi) => `
+        <button type="button" data-sheet-opt="${oi}"
+          class="w-full flex items-center justify-between px-3.5 py-3 rounded-xl border text-left transition ${oi === sheet.opt ? 'border-zinc-900 bg-zinc-50 ring-1 ring-zinc-900' : 'border-zinc-200'}">
+          <span class="flex items-center gap-2.5">
+            <span class="w-4 h-4 rounded-full border-2 ${oi === sheet.opt ? 'border-zinc-900 bg-zinc-900 shadow-[inset_0_0_0_3px_white]' : 'border-zinc-300'}"></span>
+            <span class="text-sm font-semibold text-zinc-800">${esc(o.label)}</span>
+          </span>
+          <span class="text-sm font-bold text-zinc-900">${won(o.price)}</span>
+        </button>`).join('');
+      $('#sheet-qty').textContent = sheet.qty;
+      $('#sheet-add-btn').textContent = `${won(p.options[sheet.opt].price * sheet.qty)} 담기`;
+    }
+    function confirmSheet() {
+      const p = PRODUCTS.find(x => x.id === sheet.pid);
+      const key = sheet.pid + '|' + sheet.opt;
+      state.cart[key] = (state.cart[key] || 0) + sheet.qty;
+      state.selectedOption[sheet.pid] = sheet.opt;
+      closeModals();
+      toast(`${p.name} · ${p.options[sheet.opt].label} ${sheet.qty}개 담았어요`);
       renderMenu(); renderCart();
     }
 
@@ -614,7 +682,7 @@
 
     /* ===================== 모달 ===================== */
     function openModal(sel) { $(sel).classList.remove('hidden'); document.body.style.overflow = 'hidden'; icons(); }
-    function closeModals() { $$('#info-modal, #done-modal').forEach(m => m.classList.add('hidden')); document.body.style.overflow = ''; }
+    function closeModals() { $$('#info-modal, #done-modal, #option-modal').forEach(m => m.classList.add('hidden')); document.body.style.overflow = ''; }
     function openInfo(id) {
       const c = AD_CONTENT[id]; if (!c) return;
       $('#info-modal-title').textContent = c.title;
@@ -626,7 +694,7 @@
     document.addEventListener('click', (e) => {
       const t = e.target.closest('button, a');
       if (!t) {
-        if (e.target.id === 'info-modal' || e.target.id === 'done-modal') closeModals();
+        if (['info-modal', 'done-modal', 'option-modal'].includes(e.target.id)) closeModals();
         return;
       }
       if (t.classList.contains('cat-tab')) {
@@ -637,10 +705,17 @@
           b.classList.toggle('bg-zinc-100', !on); b.classList.toggle('text-zinc-600', !on);
         });
         renderMenu();
-      } else if (t.classList.contains('opt-btn')) {
-        state.selectedOption[t.dataset.pid] = +t.dataset.opt; renderMenu();
       } else if (t.dataset.add) {
-        addToCart(t.dataset.add);
+        openSheet(t.dataset.add);
+      } else if (t.dataset.sheetOpt) {
+        sheet.opt = +t.dataset.sheetOpt; renderSheet();
+      } else if (t.id === 'sheet-inc' || t.id === 'sheet-dec') {
+        sheet.qty = Math.min(99, Math.max(1, sheet.qty + (t.id === 'sheet-inc' ? 1 : -1))); renderSheet();
+      } else if (t.id === 'sheet-add-btn') {
+        confirmSheet();
+      } else if (t.id === 'start-order-btn') {
+        document.querySelector('#menu-section').scrollIntoView({ behavior: 'smooth' });
+        toast('제품의 [+ 담기]를 눌러 주세요');
       } else if (t.dataset.inc || t.dataset.dec) {
         const key = t.dataset.inc || t.dataset.dec;
         state.cart[key] = Math.max(0, (state.cart[key] || 0) + (t.dataset.inc ? 1 : -1));
