@@ -4,7 +4,6 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>구리·남양주 로켓납품 · 생수·음료·원두·카페자재 바로주문</title>
-  <meta name="description" content="투스타글로벌 · 구리·남양주 생수·음료·원두·카페자재 로켓납품 바로주문" />
   <script src="https://cdn.tailwindcss.com/3.4.17"></script>
   <script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
   <style>
@@ -56,7 +55,7 @@
 
     <!-- 1. 상단 히어로 광고 배너 -->
     <section class="relative">
-      <div class="relative aspect-[16/9] w-full overflow-hidden bg-gradient-to-br from-sky-700 via-blue-800 to-indigo-900">
+      <div class="relative aspect-[16/9] w-full overflow-hidden bg-gradient-to-br from-zinc-700 to-zinc-900">
         <img src="user_uploaded_files/ttl=63d/tool_generated/watermarked_img_7318451213115415585.jpg"
              alt="생수, 캔음료, 원두, 카페 자재 로켓배송 상품"
              class="w-full h-full object-cover"
@@ -85,11 +84,11 @@
     <!-- 카테고리 필터 탭 -->
     <nav id="menu-section" class="sticky top-[57px] z-20 bg-white border-b border-zinc-100 px-4 py-2.5">
       <div class="flex items-center gap-2 overflow-x-auto no-scrollbar" id="category-tabs">
-        <button type="button" data-category="all" class="cat-tab shrink-0 px-4 py-2 rounded-full text-[13px] font-semibold bg-zinc-900 text-white transition">전체 품목</button>
-        <button type="button" data-category="water" class="cat-tab shrink-0 px-4 py-2 rounded-full text-[13px] font-semibold bg-zinc-100 text-zinc-600 hover:bg-zinc-200 transition">생수·물</button>
-        <button type="button" data-category="soda" class="cat-tab shrink-0 px-4 py-2 rounded-full text-[13px] font-semibold bg-zinc-100 text-zinc-600 hover:bg-zinc-200 transition">콜라·사이다·음료</button>
-        <button type="button" data-category="beans" class="cat-tab shrink-0 px-4 py-2 rounded-full text-[13px] font-semibold bg-zinc-100 text-zinc-600 hover:bg-zinc-200 transition">원두</button>
-        <button type="button" data-category="supplies" class="cat-tab shrink-0 px-4 py-2 rounded-full text-[13px] font-semibold bg-zinc-100 text-zinc-600 hover:bg-zinc-200 transition">카페 자재</button>
+        <button type="button" data-category="all" class="cat-tab shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-zinc-900 text-white transition">전체 품목</button>
+        <button type="button" data-category="water" class="cat-tab shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-zinc-100 text-zinc-600 hover:bg-zinc-200 transition">생수·물</button>
+        <button type="button" data-category="soda" class="cat-tab shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-zinc-100 text-zinc-600 hover:bg-zinc-200 transition">콜라·사이다·음료</button>
+        <button type="button" data-category="beans" class="cat-tab shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-zinc-100 text-zinc-600 hover:bg-zinc-200 transition">원두</button>
+        <button type="button" data-category="supplies" class="cat-tab shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-zinc-100 text-zinc-600 hover:bg-zinc-200 transition">카페 자재</button>
       </div>
     </nav>
 
@@ -142,645 +141,804 @@
           <div class="relative">
             <i data-lucide="phone" class="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
             <input id="phone-input" type="tel" inputmode="numeric" autocomplete="tel" maxlength="13"
-                   placeholder="010-1234-5678"
-                   class="w-full pl-9 pr-3 py-2.5 rounded-xl border border-zinc-300 bg-white text-sm font-medium focus:outline-none focus:ring-2 focus:ring-zinc-900/20 focus:border-zinc-900" />
+                   placeholder="010-0000-0000"
+                   class="w-full pl-9 pr-3 py-2.5 rounded-xl border border-zinc-300 bg-white text-sm font-medium text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:border-zinc-900" />
           </div>
-          <p id="phone-error" class="hidden mt-1 text-[11px] font-medium text-rose-600">휴대폰 번호를 정확히 입력해 주세요. (예: 010-1234-5678)</p>
+          <p class="text-[11px] text-zinc-500 mt-1">주문 확인 및 로켓배송 출발 안내 문자가 발송됩니다.</p>
         </div>
 
-        <!-- 주문 지역 (시 선택) -->
+        <!-- 주문 지역 선택 -->
         <div>
-          <span class="block text-xs font-semibold text-zinc-700 mb-1.5">주문 지역</span>
-          <div class="grid grid-cols-2 gap-2" id="city-group">
-            <button type="button" data-city="구리시" class="city-btn py-2.5 rounded-xl border border-zinc-300 bg-white text-sm font-bold text-zinc-700 transition">구리시</button>
-            <button type="button" data-city="남양주시" class="city-btn py-2.5 rounded-xl border border-zinc-300 bg-white text-sm font-bold text-zinc-700 transition">남양주시</button>
+          <div class="flex items-center justify-between mb-1.5">
+            <label for="region-input" class="block text-xs font-semibold text-zinc-700">
+              주문 지역 선택
+            </label>
+            <span class="text-[11px] font-bold text-sky-600">🚀 구리·남양주 무조건 로켓배송</span>
           </div>
-        </div>
-
-        <!-- 읍·면·동 선택 -->
-        <div>
-          <label for="dong-select" class="block text-xs font-semibold text-zinc-700 mb-1.5">읍·면·동</label>
-          <select id="dong-select" disabled
-                  class="w-full px-3 py-2.5 rounded-xl border border-zinc-300 bg-white text-sm font-medium disabled:bg-zinc-100 disabled:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900/20 focus:border-zinc-900">
-            <option value="">먼저 시를 선택해 주세요</option>
-          </select>
-        </div>
-
-        <!-- 상세 주소 -->
-        <div>
-          <label for="address-input" class="block text-xs font-semibold text-zinc-700 mb-1.5">상세 주소 · 상호명</label>
-          <input id="address-input" type="text" autocomplete="street-address"
-                 placeholder="예) 인창동 OO빌딩 1층 OO카페"
-                 class="w-full px-3 py-2.5 rounded-xl border border-zinc-300 bg-white text-sm font-medium focus:outline-none focus:ring-2 focus:ring-zinc-900/20 focus:border-zinc-900" />
-        </div>
-
-        <!-- 고객 유형 -->
-        <div>
-          <span class="block text-xs font-semibold text-zinc-700 mb-1.5">주문 유형</span>
-          <div class="flex flex-wrap gap-2" id="customer-type-group">
-            <button type="button" data-type="가정" class="type-btn px-3 py-1.5 rounded-full border border-zinc-300 bg-white text-xs font-semibold text-zinc-600 transition">가정</button>
-            <button type="button" data-type="카페" class="type-btn px-3 py-1.5 rounded-full border border-zinc-300 bg-white text-xs font-semibold text-zinc-600 transition">카페</button>
-            <button type="button" data-type="식당·매장" class="type-btn px-3 py-1.5 rounded-full border border-zinc-300 bg-white text-xs font-semibold text-zinc-600 transition">식당·매장</button>
-            <button type="button" data-type="사무실" class="type-btn px-3 py-1.5 rounded-full border border-zinc-300 bg-white text-xs font-semibold text-zinc-600 transition">사무실</button>
+          <div class="flex flex-wrap gap-1.5 mb-2" id="region-chips">
+            <button type="button" data-region="구리시 전체 (인창·수택·갈매)" class="region-chip px-2.5 py-1.5 rounded-lg border border-zinc-200 bg-white text-xs font-medium text-zinc-700 hover:border-zinc-400 transition">구리시 전체</button>
+            <button type="button" data-region="남양주 다산·별내" class="region-chip px-2.5 py-1.5 rounded-lg border border-zinc-200 bg-white text-xs font-medium text-zinc-700 hover:border-zinc-400 transition">남양주 다산·별내</button>
+            <button type="button" data-region="남양주 평내·호평" class="region-chip px-2.5 py-1.5 rounded-lg border border-zinc-200 bg-white text-xs font-medium text-zinc-700 hover:border-zinc-400 transition">남양주 평내·호평</button>
+            <button type="button" data-region="남양주 진접·오남" class="region-chip px-2.5 py-1.5 rounded-lg border border-zinc-200 bg-white text-xs font-medium text-zinc-700 hover:border-zinc-400 transition">남양주 진접·오남</button>
+            <button type="button" data-region="남양주 와부·화도" class="region-chip px-2.5 py-1.5 rounded-lg border border-zinc-200 bg-white text-xs font-medium text-zinc-700 hover:border-zinc-400 transition">남양주 와부·화도</button>
+          </div>
+          <div class="relative">
+            <i data-lucide="map-pin" class="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+            <input id="region-input" type="text"
+                   placeholder="예: 구리시 수택동 / 남양주시 다산동 (직접 입력 가능)"
+                   class="w-full pl-9 pr-3 py-2.5 rounded-xl border border-zinc-300 bg-white text-sm font-medium text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:border-zinc-900" />
           </div>
         </div>
 
-        <!-- 희망 배송 시간 -->
+        <!-- 상세 주소 / 요청사항 -->
         <div>
-          <span class="block text-xs font-semibold text-zinc-700 mb-1.5">희망 배송 시간</span>
-          <div class="grid grid-cols-3 gap-2" id="slot-group">
-            <button type="button" data-slot="오늘 오전" class="slot-btn py-2 rounded-xl border border-zinc-300 bg-white text-xs font-semibold text-zinc-600 transition">오늘 오전</button>
-            <button type="button" data-slot="오늘 오후" class="slot-btn py-2 rounded-xl border border-zinc-300 bg-white text-xs font-semibold text-zinc-600 transition">오늘 오후</button>
-            <button type="button" data-slot="내일 오전" class="slot-btn py-2 rounded-xl border border-zinc-300 bg-white text-xs font-semibold text-zinc-600 transition">내일 오전</button>
-          </div>
-          <p id="slot-hint" class="mt-1 text-[11px] text-zinc-500"></p>
-        </div>
-
-        <!-- 요청사항 -->
-        <div>
-          <label for="memo-input" class="block text-xs font-semibold text-zinc-700 mb-1.5">요청사항 <span class="font-normal text-zinc-400">(선택)</span></label>
-          <textarea id="memo-input" rows="2" maxlength="200"
-                    placeholder="예) 엘리베이터 없음, 매장 뒷문 하차, 세금계산서 발행 요청"
-                    class="w-full px-3 py-2.5 rounded-xl border border-zinc-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900/20 focus:border-zinc-900"></textarea>
-        </div>
-
-        <!-- 단가표 동의 / 개인정보 동의 -->
-        <div class="space-y-2 pt-1">
-          <label class="flex items-start gap-2 text-xs text-zinc-700">
-            <input id="sample-agree" type="checkbox" class="mt-0.5 w-4 h-4 accent-amber-500" />
-            <span>도매 단가표 · 원두 샘플 함께 받기 <span class="text-zinc-400">(5박스 이상 주문 시 샘플 동봉)</span></span>
+          <label for="address-detail-input" class="block text-xs font-semibold text-zinc-700 mb-1.5">
+            상세 주소 / 매장명 <span class="font-normal text-zinc-400">(선택)</span>
           </label>
-          <label class="flex items-start gap-2 text-xs text-zinc-700">
-            <input id="privacy-agree" type="checkbox" class="mt-0.5 w-4 h-4 accent-zinc-900" />
-            <span><b class="text-rose-600">[필수]</b> 주문 확인·배송을 위한 전화번호·주소 수집에 동의합니다.
-              <button type="button" data-ad-id="privacy" class="open-ad-modal-btn underline text-zinc-500">내용 보기</button></span>
-          </label>
+          <input id="address-detail-input" type="text" autocomplete="street-address"
+                 placeholder="예: 다산중앙로 00 OO카페 1층 / 문 앞에 적재 부탁드려요"
+                 class="w-full px-3 py-2.5 rounded-xl border border-zinc-300 bg-white text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:border-zinc-900" />
         </div>
-      </section>
 
-      <!-- 3. 주문 요약 -->
-      <section aria-label="주문 요약" class="rounded-2xl border border-zinc-200 p-4">
-        <h2 class="text-base font-bold text-zinc-900 mb-3">3. 주문 내역 확인</h2>
-        <div id="cart-empty" class="py-6 text-center text-xs text-zinc-400">
-          아직 담은 제품이 없어요. 위에서 제품을 골라 주세요.
+        <!-- 장바구니 요약 박스 -->
+        <div class="rounded-xl bg-white border border-zinc-200 p-3.5 space-y-2">
+          <div class="flex items-center justify-between text-xs font-semibold text-zinc-700">
+            <span>선택한 품목</span>
+            <span id="summary-count" class="text-zinc-500">0개</span>
+          </div>
+          <div id="summary-items" class="text-xs text-zinc-500 py-1">
+            아직 담은 품목이 없습니다. 위 목록에서 제품을 선택해 주세요.
+          </div>
+          <div class="border-t border-zinc-100 pt-2 space-y-1 text-xs">
+            <div class="flex justify-between text-zinc-600">
+              <span>상품 금액</span>
+              <span id="summary-subtotal">0원</span>
+            </div>
+            <div id="promo-discount-row" class="hidden flex justify-between text-rose-600 font-medium">
+              <span>인스타 첫 주문 할인</span>
+              <span id="summary-discount">-2,000원</span>
+            </div>
+            <div class="flex justify-between text-zinc-600">
+              <span>배송비 <span class="text-[10px] text-zinc-400">(10박스 주문 시 무료배송)</span> <span id="free-delivery-badge" class="hidden text-[10px] font-bold text-emerald-600 ml-1">무료 적용!</span></span>
+              <span id="summary-delivery">0원</span>
+            </div>
+            <div class="flex justify-between text-sm font-extrabold text-zinc-900 pt-1 border-t border-zinc-100">
+              <span>총 결제 예정 금액</span>
+              <span id="summary-total">0원</span>
+            </div>
+          </div>
         </div>
-        <ul id="cart-list" class="divide-y divide-zinc-100"></ul>
-        <dl class="mt-3 pt-3 border-t border-zinc-200 space-y-1.5 text-sm">
-          <div class="flex justify-between text-zinc-600"><dt>상품 금액</dt><dd id="sum-subtotal">0원</dd></div>
-          <div class="flex justify-between text-zinc-600"><dt>배송비</dt><dd id="sum-shipping">0원</dd></div>
-          <div class="flex justify-between text-rose-600"><dt id="sum-coupon-label">쿠폰 할인</dt><dd id="sum-coupon">0원</dd></div>
-          <div class="flex justify-between font-extrabold text-zinc-900 text-base pt-1"><dt>결제 예정 금액</dt><dd id="sum-total">0원</dd></div>
-        </dl>
-        <p id="shipping-hint" class="mt-2 text-[11px] text-zinc-900 font-semibold"></p>
-        <p class="mt-1 text-[11px] text-zinc-400">결제는 배송 시 현장 카드·계좌이체 또는 사업자 월말 정산으로 진행됩니다.</p>
+
+        <!-- 개인정보 동의 (전화번호·주소 수집 시 필요) -->
+        <label class="flex items-start gap-2 text-[11px] text-zinc-600">
+          <input id="privacy-agree" type="checkbox" class="mt-0.5 w-4 h-4 accent-zinc-900 shrink-0" />
+          <span><b class="text-rose-600">[필수]</b> 주문 확인·배송을 위해 전화번호·주소를 수집하며, 거래 기록은 전자상거래법에 따라 5년간 보관 후 파기합니다.</span>
+        </label>
+
+        <p id="form-error-msg" class="hidden text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2"></p>
       </section>
     </main>
 
     <!-- 하단 고정 주문 바 -->
-    <div class="fixed bottom-0 left-0 right-0 z-40">
-      <div class="mx-auto max-w-md bg-white border-t border-zinc-100 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-        <button id="start-order-btn" type="button"
-                class="w-full py-4 rounded-2xl bg-zinc-900 text-white text-[15px] font-bold shadow-lg hover:bg-zinc-800 transition" >
-          제품을 선택하고 로켓주문하기
-        </button>
-        <div id="bar-filled" class="hidden flex items-center gap-3">
-          <div class="flex-1 min-w-0 pl-1">
-            <p class="text-[11px] text-zinc-500"><span id="bar-count">0</span>개 담음 · <span id="bar-coupon-state">쿠폰 미적용</span></p>
-            <p id="bar-total" class="text-lg font-extrabold text-zinc-900 leading-tight">0원</p>
+    <div class="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md z-30 bg-white/95 backdrop-blur border-t border-zinc-200 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+      <button id="submit-order-btn" type="button"
+              class="w-full py-3.5 rounded-xl bg-zinc-900 text-white text-sm font-bold shadow-lg hover:bg-zinc-800 active:scale-[0.99] disabled:opacity-60 transition flex items-center justify-center gap-2">
+        <span id="submit-btn-text">제품을 선택하고 로켓주문하기</span>
+      </button>
+    </div>
+
+    <!-- 토스트 알림 -->
+    <div id="toast" class="pointer-events-none fixed top-16 left-1/2 -translate-x-1/2 z-[60] opacity-0 transition-opacity duration-200">
+      <div id="toast-inner" class="px-4 py-2 rounded-full bg-zinc-900/90 text-white text-xs font-semibold shadow-lg whitespace-nowrap"></div>
+    </div>
+
+    <!-- 규격/옵션 선택 모달 -->
+    <div id="option-modal" class="hidden fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center">
+      <div class="w-full max-w-md bg-white rounded-t-2xl sm:rounded-2xl p-5 space-y-4 shadow-2xl">
+        <div class="flex items-start justify-between">
+          <div>
+            <span id="opt-modal-badge" class="text-[10px] font-bold px-2 py-0.5 rounded bg-zinc-100 text-zinc-700">규격 선택</span>
+            <h3 id="opt-modal-title" class="text-base font-bold text-zinc-900 mt-1">제품명</h3>
+            <p id="opt-modal-price" class="text-xs font-semibold text-zinc-500">0원</p>
           </div>
-          <button id="submit-order-btn" type="button"
-                  class="shrink-0 px-6 py-4 rounded-2xl bg-zinc-900 text-white text-[15px] font-bold shadow-lg hover:bg-zinc-800 disabled:bg-zinc-300 disabled:cursor-not-allowed transition">
-            로켓주문하기 🚀
+          <button type="button" id="close-opt-modal" class="p-1.5 rounded-full hover:bg-zinc-100 text-zinc-500" aria-label="닫기">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <div class="space-y-3">
+          <div>
+            <p id="opt-group-1-label" class="text-xs font-semibold text-zinc-700 mb-1.5">옵션 1</p>
+            <div class="grid grid-cols-2 gap-2" id="opt-group-1"></div>
+          </div>
+          <div>
+            <p id="opt-group-2-label" class="text-xs font-semibold text-zinc-700 mb-1.5">옵션 2</p>
+            <div class="grid grid-cols-2 gap-2" id="opt-group-2"></div>
+          </div>
+        </div>
+
+        <button type="button" id="confirm-opt-btn" class="w-full py-3 rounded-xl bg-rose-600 text-white text-sm font-bold hover:bg-rose-700 transition">
+          장바구니에 담기
+        </button>
+      </div>
+    </div>
+
+    <!-- 중간 광고 상세 모달 -->
+    <div id="ad-modal" class="hidden fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+      <div class="w-full max-w-sm bg-white rounded-2xl overflow-hidden shadow-2xl">
+        <div class="bg-gradient-to-r from-sky-600 to-indigo-600 px-5 py-4 text-white flex items-center justify-between">
+          <span class="text-xs font-bold tracking-wide">AD · 구리·남양주 로켓배송 안내</span>
+          <button type="button" id="close-ad-modal" class="p-1 rounded-full hover:bg-white/20" aria-label="닫기">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+        <div class="p-5 space-y-3">
+          <h3 id="ad-modal-title" class="text-base font-extrabold text-zinc-900">안내</h3>
+          <p id="ad-modal-body" class="text-xs text-zinc-600 leading-relaxed"></p>
+          <button type="button" id="ad-modal-action-btn" class="w-full py-2.5 rounded-xl bg-zinc-900 text-white text-xs font-bold hover:bg-zinc-800 transition">
+            확인하고 주문 계속하기
           </button>
         </div>
       </div>
     </div>
 
-    <!-- 토스트 -->
-    <div id="toast" class="hidden fixed left-1/2 -translate-x-1/2 bottom-28 z-50 px-4 py-2 rounded-full bg-zinc-900/90 text-white text-xs font-semibold shadow-lg"></div>
-
-    <!-- 안내 모달 -->
-    <div id="info-modal" class="hidden fixed inset-0 z-50 bg-black/50 flex items-end justify-center">
-      <div class="w-full max-w-md bg-white rounded-t-2xl p-5 max-h-[80vh] overflow-y-auto">
-        <div class="flex items-center justify-between mb-3">
-          <h3 id="info-modal-title" class="text-base font-extrabold"></h3>
-          <button type="button" class="close-modal-btn p-1 rounded-full hover:bg-zinc-100" aria-label="닫기"><i data-lucide="x" class="w-5 h-5"></i></button>
-        </div>
-        <div id="info-modal-body" class="text-sm text-zinc-700 leading-relaxed space-y-2"></div>
-        <button type="button" class="close-modal-btn mt-5 w-full py-3 rounded-xl bg-zinc-900 text-white text-sm font-bold">확인</button>
-      </div>
-    </div>
-
-    <!-- 규격·수량 선택 시트 -->
-    <div id="option-modal" class="hidden fixed inset-0 z-50 bg-black/50 flex items-end justify-center">
-      <div class="w-full max-w-md bg-white rounded-t-3xl p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] max-h-[85vh] overflow-y-auto">
-        <div class="mx-auto mb-4 w-10 h-1 rounded-full bg-zinc-200"></div>
-        <div class="flex gap-3 items-center">
-          <div id="sheet-thumb"></div>
-          <div class="min-w-0 flex-1">
-            <span id="sheet-badge" class="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-zinc-100 text-zinc-700"></span>
-            <h3 id="sheet-name" class="mt-1 text-base font-extrabold text-zinc-900 leading-snug"></h3>
-            <p id="sheet-desc" class="text-[11px] text-zinc-500"></p>
-          </div>
-          <button type="button" class="close-modal-btn self-start p-1 rounded-full hover:bg-zinc-100" aria-label="닫기"><i data-lucide="x" class="w-5 h-5"></i></button>
-        </div>
-        <p class="mt-5 mb-2 text-xs font-semibold text-zinc-700">규격 선택</p>
-        <div id="sheet-options" class="space-y-2"></div>
-        <div class="mt-5 flex items-center justify-between">
-          <span class="text-xs font-semibold text-zinc-700">수량 (박스)</span>
-          <div class="flex items-center rounded-xl border border-zinc-200">
-            <button type="button" id="sheet-dec" class="w-10 h-10 text-lg text-zinc-600" aria-label="수량 줄이기">−</button>
-            <span id="sheet-qty" class="w-8 text-center text-base font-bold">1</span>
-            <button type="button" id="sheet-inc" class="w-10 h-10 text-lg text-zinc-600" aria-label="수량 늘리기">+</button>
-          </div>
-        </div>
-        <button type="button" id="sheet-add-btn" class="mt-5 w-full py-4 rounded-2xl bg-zinc-900 text-white text-[15px] font-bold hover:bg-zinc-800">담기</button>
-      </div>
-    </div>
-
     <!-- 주문 완료 모달 -->
-    <div id="done-modal" class="hidden fixed inset-0 z-50 bg-black/50 flex items-end justify-center">
-      <div class="w-full max-w-md bg-white rounded-t-2xl p-5 max-h-[85vh] overflow-y-auto">
-        <div class="text-center">
-          <div class="mx-auto w-12 h-12 rounded-full bg-zinc-100 text-zinc-900 flex items-center justify-center mb-2">
-            <i data-lucide="rocket" class="w-6 h-6"></i>
+    <div id="success-modal" class="hidden fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+      <div class="w-full max-w-sm bg-white rounded-2xl p-5 space-y-4 shadow-2xl text-center max-h-[90vh] overflow-y-auto">
+        <div id="success-icon" class="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 mx-auto flex items-center justify-center">
+          <i data-lucide="check" class="w-6 h-6"></i>
+        </div>
+        <div>
+          <span id="success-kicker" class="text-[11px] font-bold text-emerald-600">로켓배송 주문서 작성 완료</span>
+          <h3 id="success-title" class="text-lg font-extrabold text-zinc-900 mt-0.5">마지막으로 주문서를 보내 주세요</h3>
+          <p id="success-order-no" class="text-xs text-zinc-500 mt-1">주문번호 #RK-0000</p>
+        </div>
+        <div id="success-details" class="text-left rounded-xl bg-zinc-50 border border-zinc-200 p-3.5 text-xs space-y-1.5 text-zinc-700"></div>
+
+        <!-- 실제 주문 전달 버튼 -->
+        <div id="send-actions" class="space-y-2">
+          <a id="sms-order-btn" href="#" class="block w-full py-3 rounded-xl bg-rose-600 text-white text-sm font-bold hover:bg-rose-700 transition">
+            문자로 주문 보내기 (필수)
+          </a>
+          <div class="grid grid-cols-2 gap-2">
+            <button type="button" id="copy-order-btn" class="py-2.5 rounded-xl border border-zinc-300 text-xs font-bold text-zinc-800 hover:bg-zinc-50">주문서 복사 (DM용)</button>
+            <a id="call-order-btn" href="#" class="py-2.5 rounded-xl border border-zinc-300 text-xs font-bold text-zinc-800 hover:bg-zinc-50">전화로 주문</a>
           </div>
-          <h3 class="text-base font-extrabold">주문서가 준비됐어요</h3>
-          <p id="done-desc" class="text-xs text-zinc-500 mt-1">아래 버튼으로 주문서를 보내 주시면 확인 전화를 드립니다.</p>
         </div>
-        <pre id="order-text" class="mt-4 p-3 rounded-xl bg-zinc-50 border border-zinc-200 text-[12px] leading-relaxed whitespace-pre-wrap font-sans"></pre>
-        <div class="mt-4 grid grid-cols-2 gap-2">
-          <button id="copy-order-btn" type="button" class="py-3 rounded-xl border border-zinc-300 text-sm font-bold hover:bg-zinc-50">주문서 복사</button>
-          <a id="sms-order-btn" href="#" class="py-3 rounded-xl bg-zinc-900 text-white text-sm font-bold text-center hover:bg-zinc-800">문자로 보내기</a>
-        </div>
-        <a id="call-btn" href="#" class="mt-2 block py-3 rounded-xl bg-zinc-100 text-zinc-800 text-sm font-bold text-center">전화로 바로 주문</a>
-        <button type="button" class="close-modal-btn mt-2 w-full py-2 text-xs text-zinc-500">닫기</button>
+
+        <button type="button" id="close-success-modal" class="w-full py-3 rounded-xl bg-zinc-900 text-white text-xs font-bold hover:bg-zinc-800 transition">
+          새 주문 작성하기
+        </button>
       </div>
     </div>
+
   </div>
 
   <script>
     /* =========================================================
-     * 운영 설정 — 실제 오픈 전 반드시 확인·수정하세요
+     * 운영 설정 — 오픈 전 반드시 실제 값으로 바꾸세요
      * ========================================================= */
     const CONFIG = {
       storeName: '투스타글로벌',
-      orderPhone: '010-0000-0000',      // TODO: 주문 접수 휴대폰 번호 (문자·전화 수신)
-      orderEndpoint: '',                // TODO(선택): 주문 JSON을 받을 웹훅 URL (구글 Apps Script, Make, Zapier 등). 비워 두면 문자/복사만 사용
-      couponAmount: 2000,
-      couponMinOrder: 20000,            // 쿠폰 적용 최소 상품금액
-      freeShippingOver: 30000,          // 이 금액 이상 무료배송
-      shippingFee: 3000,
-      sameDayCutoffHour: 14,            // 이 시각 이전 주문만 '오늘 오후' 가능
-      bulkBoxThreshold: 5               // 정기·대량 기준 (박스)
+      orderPhone: '010-0000-0000',   // TODO: 주문 문자·전화를 받을 사장님 휴대폰 번호
+      orderEndpoint: '',             // TODO(선택): 주문을 자동 저장할 웹훅 주소 (구글 Apps Script·Make·Zapier). 비우면 문자 전달만 사용
+      discount: 2000,
+      deliveryFee: 2500,
+      freeDeliveryBoxes: 10
     };
 
-    // TODO: 실제 판매 단가로 교체하세요. 아래 가격은 화면 확인용 예시입니다.
-    // img: 제품 사진 경로 (이 파일 옆 images 폴더). 사진이 없으면 아이콘 타일로 자동 대체됩니다.
     const PRODUCTS = [
-      { id: 'w1', cat: 'water', icon: 'droplets', tone: 'sky', img: 'images/water.jpg',
-        name: '프리미엄 생수 (1박스)', badge: '무조건 로켓', desc: '깨끗한 암반수 · 무라벨/일반 선택 가능',
-        options: [{ label: '500ml × 20병 (일반)', price: 7900 }, { label: '500ml × 20병 (무라벨)', price: 8400 }, { label: '2L × 6병', price: 6900 }] },
-      { id: 's1', cat: 'soda', icon: 'cup-soda', tone: 'rose', img: 'images/cola.jpg',
-        name: '콜라 355ml 캔 (24입 박스)', badge: '인기 1위', desc: '식당·카페·가정 어디서나 가장 잘 나가는 업소/대용량 팩',
-        options: [{ label: '355ml × 24캔', price: 18900 }, { label: '제로 355ml × 24캔', price: 19900 }, { label: '업소용 190ml × 30캔', price: 15900 }] },
-      { id: 's2', cat: 'soda', icon: 'cup-soda', tone: 'emerald', img: 'images/cider.jpg',
-        name: '사이다 355ml 캔 (24입 박스)', badge: '업소 필수', desc: '고깃집·분식·치킨집 테이블 회전용 기본 음료',
-        options: [{ label: '355ml × 24캔', price: 17900 }, { label: '제로 355ml × 24캔', price: 18900 }, { label: '업소용 190ml × 30캔', price: 14900 }] },
-      { id: 'w2', cat: 'water', icon: 'sparkle', tone: 'cyan', img: 'images/sparkling.jpg',
-        name: '탄산수 500ml (20입)', badge: '카페 인기', desc: '플레인·레몬 · 에이드 베이스로 쓰기 좋은 강탄산',
-        options: [{ label: '플레인 × 20병', price: 12900 }, { label: '레몬 × 20병', price: 13900 }] },
-      { id: 's3', cat: 'soda', icon: 'citrus', tone: 'amber', img: 'images/drinks.jpg',
-        name: '이온·주스 음료 (박스)', badge: '사무실 추천', desc: '탕비실·현장 간식용 이온음료와 주스 박스',
-        options: [{ label: '이온음료 500ml × 20병', price: 21900 }, { label: '주스 240ml × 30캔', price: 18900 }] },
-      { id: 'b1', cat: 'beans', icon: 'coffee', tone: 'stone', img: 'images/beans-house.jpg',
-        name: '하우스 블렌드 원두 1kg', badge: '카페 추천', desc: '고소·초콜릿 노트 · 주문 후 로스팅 7일 이내 발송',
-        options: [{ label: '1kg', price: 22000 }, { label: '1kg × 5 (정기)', price: 105000 }] },
-      { id: 'b2', cat: 'beans', icon: 'coffee', tone: 'orange', img: 'images/beans-single.jpg',
-        name: '싱글오리진 원두', badge: '스페셜티', desc: '에티오피아·콜롬비아 · 산미 있는 핸드드립용',
-        options: [{ label: '500g', price: 16000 }, { label: '1kg', price: 29000 }] },
-      { id: 'c1', cat: 'supplies', icon: 'cup-soda', tone: 'zinc', img: 'images/cups.jpg',
-        name: '아이스컵 16oz + 뚜껑', badge: '대용량', desc: 'PET 투명컵 · 뚜껑 세트 · 카페 표준 규격',
-        options: [{ label: '500개', price: 23000 }, { label: '1,000개', price: 42000 }] },
-      { id: 'c2', cat: 'supplies', icon: 'pipette', tone: 'violet', img: 'images/syrup.jpg',
-        name: '카페 시럽 1L', badge: '맛 선택', desc: '바닐라·헤이즐넛·카라멜 · 펌프 별도',
-        options: [{ label: '바닐라', price: 9900 }, { label: '헤이즐넛', price: 9900 }, { label: '카라멜', price: 9900 }] },
-      { id: 'c3', cat: 'supplies', icon: 'package', tone: 'lime', img: 'images/straws.jpg',
-        name: '빨대·홀더 세트', badge: '묶음 할인', desc: '빨대 1,000개 + 컵홀더 500개 한 번에',
-        options: [{ label: '세트 1개', price: 19900 }] }
+      {
+        id: 'mineral-water',
+        name: '프리미엄 생수 (1박스)',
+        category: 'water',
+        price: 7900,
+        badge: '무조건 로켓',
+        desc: '깨끗한 암반수 · 무라벨/일반 선택 가능',
+        img: 'user_uploaded_files/ttl=63d/tool_generated/watermarked_img_16540912320823451997.jpg',
+        gradient: 'from-sky-300 to-blue-500',
+        emoji: '💧',
+        opt1Label: '용량/입수',
+        opt1List: [
+          { label: '500ml × 20병', extra: 0 },
+          { label: '2L × 12병', extra: 2000 }
+        ],
+        opt2Label: '포장 구분',
+        opt2List: [
+          { label: '일반 라벨', extra: 0 },
+          { label: '무라벨 친환경', extra: 0 }
+        ]
+      },
+      {
+        id: 'cola-box',
+        name: '콜라 355ml 캔 (24입 박스)',
+        category: 'soda',
+        price: 18900,
+        badge: '인기 1위',
+        desc: '식당·카페·가정 어디서나 가장 잘 나가는 업소/대용량 팩',
+        img: 'user_uploaded_files/ttl=63d/tool_generated/watermarked_img_8847404140659057761.jpg',
+        gradient: 'from-rose-400 to-red-600',
+        emoji: '🥤',
+        opt1Label: '종류',
+        opt1List: [
+          { label: '오리지널 콜라', extra: 0 },
+          { label: '제로 슈거', extra: 500 }
+        ],
+        opt2Label: '수량 단위',
+        opt2List: [
+          { label: '1박스 (24캔)', extra: 0, boxes: 1 },
+          { label: '2박스 묶음 (-1,000원)', extra: 17900, boxes: 2 }
+        ]
+      },
+      {
+        id: 'cider-box',
+        name: '사이다 355ml 캔 (24입 박스)',
+        category: 'soda',
+        price: 17900,
+        badge: '청량 특가',
+        desc: '톡 쏘는 탄산감의 깔끔한 레몬라임 사이다 1박스',
+        img: null,
+        gradient: 'from-emerald-400 to-teal-600',
+        emoji: '🍋',
+        opt1Label: '종류',
+        opt1List: [
+          { label: '오리지널 사이다', extra: 0 },
+          { label: '제로 사이다', extra: 500 }
+        ],
+        opt2Label: '규격',
+        opt2List: [
+          { label: '355ml × 24캔', extra: 0 },
+          { label: '1.5L × 12페트', extra: 3000 }
+        ]
+      },
+      {
+        id: 'coffee-beans',
+        name: '스페셜티 에스프레소 원두 (1kg)',
+        category: 'beans',
+        price: 21000,
+        badge: '매장 직송',
+        desc: '다크 초콜릿·너티 밸런스가 좋은 카페 납품용 갓 볶은 원두',
+        img: 'user_uploaded_files/ttl=63d/tool_generated/watermarked_img_6727712893004136281.jpg',
+        gradient: 'from-amber-700 to-stone-800',
+        emoji: '☕',
+        opt1Label: '로스팅',
+        opt1List: [
+          { label: '다크 (고소한 맛)', extra: 0 },
+          { label: '미디엄 (산미·밸런스)', extra: 0 }
+        ],
+        opt2Label: '분쇄 여부',
+        opt2List: [
+          { label: '홀빈 (원두 그대로)', extra: 0 },
+          { label: '에스프레소 분쇄', extra: 0 }
+        ]
+      },
+      {
+        id: 'cafe-supplies',
+        name: '카페 테이크아웃 컵·리드 세트 (100입)',
+        category: 'supplies',
+        price: 14500,
+        badge: '카페 자재',
+        desc: '투명 아이스컵/크라프트 핫컵 + 뚜껑 + 빨대 일괄 구성',
+        // TODO: 지금은 원두 사진과 같은 파일입니다. 컵 사진으로 바꿔 주세요.
+        img: 'user_uploaded_files/ttl=63d/tool_generated/watermarked_img_6727712893004136281.jpg',
+        gradient: 'from-zinc-300 to-zinc-500',
+        emoji: '🧋',
+        opt1Label: '컵 규격',
+        opt1List: [
+          { label: '아이스 16oz (100세트)', extra: 0 },
+          { label: '핫 13oz (100세트)', extra: -1000 }
+        ],
+        opt2Label: '부자재 추가',
+        opt2List: [
+          { label: '컵+리드 기본', extra: 0 },
+          { label: '빨대·홀더 포함', extra: 2500 }
+        ]
+      },
+      {
+        id: 'other-drinks',
+        name: '기타 음료 (탄산수·주스·아이스티)',
+        category: 'soda',
+        price: 13900,
+        badge: '다양한 구성',
+        desc: '매장·사무실 구비용 탄산수, 오렌지주스, 복숭아 아이스티 박스',
+        img: null,
+        gradient: 'from-amber-400 to-orange-500',
+        emoji: '🧃',
+        opt1Label: '품목 선택',
+        opt1List: [
+          { label: '플레인 탄산수 (24병)', extra: 0 },
+          { label: '복숭아 아이스티 (24캔)', extra: 1500 }
+        ],
+        opt2Label: '포장',
+        opt2List: [
+          { label: '기본 박스', extra: 0 },
+          { label: '완충 안전포장', extra: 0 }
+        ]
+      }
     ];
 
-    // 목록 중간에 끼워 넣는 광고 카드 (n번째 제품 뒤)
-    const INLINE_ADS = [
-      { after: 3, id: 'rocket', tag: 'AD · 로켓배송', title: '오후 2시 전 주문하면 오늘 바로 도착', desc: '구리·남양주 전 지역 자체 차량 직배송. 무거운 생수도 문 앞까지 올려드려요.', grad: 'from-sky-600 to-indigo-700' },
-      { after: 7, id: 'cafe', tag: 'AD · 카페 사장님', title: '원두 + 컵 + 시럽 한 번에 묶음 납품', desc: '거래처 여러 곳 대신 한 번에. 월말 정산·세금계산서 발행 가능.', grad: 'from-stone-700 to-amber-800' }
-    ];
-
-    const AD_CONTENT = {
-      'bulk-event': { title: '정기납품·대량주문 안내', html:
-        `<p>· <b>${CONFIG.bulkBoxThreshold}박스 이상</b> 주문 시 로스팅 원두 샘플(100g)과 도매 단가표를 함께 보내드립니다.</p>
-         <p>· 주 1회·주 2회 정기 납품 등록 시 품목별 도매가를 적용해 드립니다.</p>
-         <p>· 사업자 고객은 세금계산서 발행 및 월말 정산이 가능합니다.</p>
-         <p>· 주문서의 '단가표 함께 받기'를 체크해 주시면 확인 전화 때 안내드립니다.</p>` },
-      'rocket': { title: '로켓배송 안내', html:
-        `<p>· 배송 지역: 구리시·남양주시 전 지역</p>
-         <p>· 오후 ${CONFIG.sameDayCutoffHour}시 이전 주문은 당일 오후, 이후 주문은 다음 날 오전 도착합니다.</p>
-         <p>· 상품금액 ${won(CONFIG.freeShippingOver)} 이상 무료배송, 미만 시 배송비 ${won(CONFIG.shippingFee)}.</p>
-         <p>· 기상·교통 상황에 따라 도착 시간이 달라질 수 있으며, 이 경우 미리 연락드립니다.</p>` },
-      'cafe': { title: '카페 묶음 납품', html:
-        `<p>· 원두·컵·시럽·빨대 등 카페 자재를 한 차량으로 함께 납품합니다.</p>
-         <p>· 매장 규모에 맞는 월 사용량 견적을 무료로 드립니다.</p>
-         <p>· 요청사항에 '견적 요청'이라고 적어 주세요.</p>` },
-      'privacy': { title: '개인정보 수집·이용 안내', html:
-        `<p>· 수집 항목: 전화번호, 배송 주소(상호명), 요청사항</p>
-         <p>· 이용 목적: 주문 확인 연락, 배송, 결제·정산</p>
-         <p>· 보유 기간: 거래 종료 후 5년(전자상거래법에 따른 거래 기록 보관), 그 외 목적에는 사용하지 않습니다.</p>
-         <p>· 동의를 거부하실 수 있으나, 이 경우 주문 접수가 불가합니다.</p>` }
-    };
-
-    const DONGS = {
-      '구리시': ['갈매동', '동구동', '인창동', '교문1동', '교문2동', '수택1동', '수택2동', '수택3동'],
-      '남양주시': ['다산1동', '다산2동', '별내동', '별내면', '퇴계원읍', '진접읍', '오남읍', '진건읍', '와부읍', '조안면', '화도읍', '수동면', '호평동', '평내동', '금곡동', '양정동']
-    };
-
-    const TONES = {
-      sky: 'bg-sky-50 text-sky-600', cyan: 'bg-cyan-50 text-cyan-600', rose: 'bg-rose-50 text-rose-600',
-      emerald: 'bg-emerald-50 text-emerald-600', amber: 'bg-amber-50 text-amber-600', stone: 'bg-stone-100 text-stone-700',
-      orange: 'bg-orange-50 text-orange-700', zinc: 'bg-zinc-100 text-zinc-600', violet: 'bg-violet-50 text-violet-600',
-      lime: 'bg-lime-50 text-lime-700'
-    };
-
-    /* ===================== 상태 ===================== */
     const state = {
       category: 'all',
-      selectedOption: {},      // productId -> option index
-      cart: {},                // key "pid|optIdx" -> qty
-      couponOn: false,
-      city: '', type: '', slot: ''
+      cart: {},
+      promoApplied: false,
+      sampleRequested: false,
+      activeModalItem: null,
+      opt1Idx: 0,
+      opt2Idx: 0,
+      lastOrderText: ''
     };
 
-    const $ = (s) => document.querySelector(s);
-    const $$ = (s) => Array.from(document.querySelectorAll(s));
-    function won(n) { return n.toLocaleString('ko-KR') + '원'; }
-    function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
-    function icons() { if (window.lucide) lucide.createIcons(); }
+    const formatWon = (n) => n.toLocaleString('ko-KR') + '원';
+    const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-    let toastTimer;
-    function toast(msg) {
-      const t = $('#toast');
-      t.textContent = msg;
-      t.classList.remove('hidden');
-      clearTimeout(toastTimer);
-      toastTimer = setTimeout(() => t.classList.add('hidden'), 1800);
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      const inner = document.getElementById('toast-inner');
+      inner.textContent = msg;
+      toast.classList.remove('opacity-0');
+      toast.classList.add('opacity-100');
+      clearTimeout(window._toastTimer);
+      window._toastTimer = setTimeout(() => {
+        toast.classList.remove('opacity-100');
+        toast.classList.add('opacity-0');
+      }, 2000);
     }
 
-    /* ===================== 제품 목록 ===================== */
+    function getCartArray() {
+      return Object.entries(state.cart).map(([key, val]) => ({ key, ...val }));
+    }
+
+    function getItemTotalQty(itemId) {
+      return getCartArray()
+        .filter((c) => c.id === itemId)
+        .reduce((sum, c) => sum + c.qty, 0);
+    }
+
+    // 계산은 한 곳에서: 화면 표시와 주문서 금액이 항상 같도록
+    function calcTotals() {
+      const items = getCartArray();
+      const totalQty = items.reduce((s, i) => s + i.qty, 0);
+      const totalBoxes = items.reduce((s, i) => s + i.qty * (i.boxes || 1), 0);
+      const subtotal = items.reduce((s, i) => s + i.unitPrice * i.qty, 0);
+      const discount = state.promoApplied && subtotal > 0 ? Math.min(CONFIG.discount, subtotal) : 0;
+      const deliveryFee = totalQty === 0 ? 0 : (totalBoxes >= CONFIG.freeDeliveryBoxes ? 0 : CONFIG.deliveryFee);
+      const total = Math.max(0, subtotal - discount + deliveryFee);
+      return { items, totalQty, totalBoxes, subtotal, discount, deliveryFee, total };
+    }
+
+    // 사진이 없거나 경로가 깨지면 그라데이션 + 이모지 타일로 대체
+    function thumbHtml(item) {
+      const fallback = `<div class="absolute inset-0 bg-gradient-to-br ${item.gradient} flex items-center justify-center text-2xl shadow-inner">${item.emoji}</div>`;
+      const img = item.img
+        ? `<img src="${esc(item.img)}" alt="${esc(item.name)}" loading="lazy" class="absolute inset-0 w-full h-full object-cover bg-zinc-100" onerror="this.remove()" />`
+        : '';
+      return `<div class="relative w-20 h-20 rounded-xl overflow-hidden shrink-0">${fallback}${img}</div>`;
+    }
+
     function renderMenu() {
-      const list = PRODUCTS.filter(p => state.category === 'all' || p.cat === state.category);
-      const html = [];
-      list.forEach((p, i) => {
-        const minPrice = Math.min(...p.options.map(o => o.price));
-        const qtyInCart = p.options.reduce((s, _, oi) => s + (state.cart[p.id + '|' + oi] || 0), 0);
-        html.push(`
-          <article class="rounded-2xl border border-zinc-200 bg-white p-3.5 flex gap-3.5 ${qtyInCart ? 'ring-2 ring-zinc-900/80 border-transparent' : ''}">
-            ${thumb(p, 'w-[84px] h-[84px]')}
-            <div class="flex-1 min-w-0 flex flex-col">
-              ${p.badge ? `<span class="self-start text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-zinc-100 text-zinc-700">${esc(p.badge)}</span>` : ''}
-              <h3 class="mt-1 text-[15px] font-extrabold text-zinc-900 leading-snug">${esc(p.name)}</h3>
-              <p class="mt-0.5 text-[11px] text-zinc-500 leading-snug line-clamp-2">${esc(p.desc || '')}</p>
-              <div class="mt-auto pt-2 flex items-center justify-between">
-                <span class="text-base font-extrabold text-zinc-900">${won(minPrice)}${p.options.length > 1 ? '~' : ''}</span>
-                <button type="button" data-add="${p.id}"
-                  class="add-btn inline-flex items-center gap-1 px-3.5 py-2 rounded-xl bg-zinc-900 text-white text-xs font-bold hover:bg-zinc-800 active:scale-95 transition">
-                  + 담기${qtyInCart ? ` <span class="ml-0.5 px-1.5 rounded-full bg-white text-zinc-900 text-[10px]">${qtyInCart}</span>` : ''}
+      const container = document.getElementById('menu-container');
+      const filtered = state.category === 'all'
+        ? PRODUCTS
+        : PRODUCTS.filter((m) => m.category === state.category);
+
+      let html = '';
+      filtered.forEach((item, idx) => {
+        const qty = getItemTotalQty(item.id);
+
+        html += `
+          <div class="rounded-2xl border border-zinc-200 bg-white p-3 flex items-center gap-3.5 shadow-sm hover:border-zinc-300 transition">
+            ${thumbHtml(item)}
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-1.5">
+                <span class="px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-700 text-[10px] font-bold">${esc(item.badge)}</span>
+              </div>
+              <h3 class="text-sm font-bold text-zinc-900 truncate mt-0.5">${esc(item.name)}</h3>
+              <p class="text-[11px] text-zinc-500 line-clamp-1 mt-0.5">${esc(item.desc)}</p>
+              <div class="mt-2 flex items-center justify-between">
+                <span class="text-sm font-extrabold text-zinc-900">${formatWon(item.price)}~</span>
+                <div class="flex items-center gap-1.5">
+                  ${qty > 0 ? `<span class="text-[11px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full">${qty}개 담김</span>` : ''}
+                  <button type="button" data-open-item="${item.id}"
+                          class="open-opt-btn px-3 py-1.5 rounded-lg bg-zinc-900 text-white text-xs font-semibold hover:bg-zinc-800 transition">
+                    + 담기
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+
+        // 중간 광고 페이지 1: 두 번째 제품 카드 아래에 삽입
+        if (idx === 1) {
+          html += `
+            <div class="rounded-2xl bg-zinc-900 text-white p-4 relative overflow-hidden">
+              <div class="flex items-center justify-between mb-1">
+                <span class="px-2 py-0.5 rounded bg-white/15 text-amber-300 text-[10px] font-bold">AD · 중간 프로모션</span>
+                <span class="text-[11px] text-zinc-400">자동 혜택</span>
+              </div>
+              <p class="text-sm font-extrabold">구리·남양주 무조건 로켓배송 + 10박스 주문 시 무료배송!</p>
+              <p class="text-xs text-zinc-300 mt-0.5">무거운 생수·콜라·원두도 문 앞까지 빠르고 안전하게 직송해 드립니다.</p>
+              <div class="mt-2.5 flex items-center gap-2">
+                <button type="button" data-ad-id="free-delivery"
+                        class="open-ad-modal-btn px-3 py-1.5 rounded-lg bg-white text-zinc-900 text-xs font-bold hover:bg-zinc-100 transition">
+                  로켓배송 기준 보기
                 </button>
               </div>
             </div>
-          </article>`);
-        if (state.category === 'all') {
-          const ad = INLINE_ADS.find(a => a.after === i + 1);
-          if (ad) html.push(`
-            <button type="button" data-ad-id="${ad.id}" class="open-ad-modal-btn w-full text-left rounded-2xl bg-gradient-to-br ${ad.grad} p-4 text-white shadow-sm">
-              <span class="inline-block px-2 py-0.5 rounded-full bg-white/20 text-[10px] font-bold">${esc(ad.tag)}</span>
-              <p class="mt-1.5 text-sm font-extrabold">${esc(ad.title)}</p>
-              <p class="mt-0.5 text-xs text-white/80 leading-relaxed">${esc(ad.desc)}</p>
-              <span class="mt-2 inline-block text-[11px] font-bold underline underline-offset-2">자세히 보기 →</span>
-            </button>`);
+          `;
         }
       });
-      $('#menu-container').innerHTML = html.join('') || '<p class="py-8 text-center text-xs text-zinc-400">해당 카테고리에 제품이 없어요.</p>';
-      icons();
+
+      container.innerHTML = html;
     }
 
-    /* ===================== 장바구니 ===================== */
-    function cartLines() {
-      return Object.entries(state.cart).filter(([, q]) => q > 0).map(([key, qty]) => {
-        const [pid, oi] = key.split('|');
-        const p = PRODUCTS.find(x => x.id === pid);
-        const o = p.options[+oi];
-        return { key, p, o, qty, amount: o.price * qty };
-      });
-    }
+    function renderSummary() {
+      const { items, totalQty, totalBoxes, subtotal, discount, deliveryFee, total } = calcTotals();
 
-    function totals() {
-      const lines = cartLines();
-      const subtotal = lines.reduce((s, l) => s + l.amount, 0);
-      const boxes = lines.reduce((s, l) => s + l.qty, 0);
-      const shipping = subtotal === 0 || subtotal >= CONFIG.freeShippingOver ? 0 : CONFIG.shippingFee;
-      const couponEligible = subtotal >= CONFIG.couponMinOrder;
-      const coupon = state.couponOn && couponEligible ? CONFIG.couponAmount : 0;
-      return { lines, subtotal, boxes, shipping, coupon, couponEligible, total: Math.max(0, subtotal + shipping - coupon) };
-    }
+      const badge = document.getElementById('header-cart-badge');
+      if (totalQty > 0) {
+        badge.textContent = totalQty;
+        badge.classList.remove('hidden');
+      } else {
+        badge.classList.add('hidden');
+      }
 
-    function renderCart() {
-      const t = totals();
-      $('#cart-empty').classList.toggle('hidden', t.lines.length > 0);
-      $('#cart-list').innerHTML = t.lines.map(l => `
-        <li class="py-2.5 flex items-center gap-2">
-          <div class="flex-1 min-w-0">
-            <p class="text-sm font-semibold text-zinc-900 truncate">${esc(l.p.name)}</p>
-            <p class="text-[11px] text-zinc-500">${esc(l.o.label)} · ${won(l.o.price)}</p>
+      document.getElementById('summary-count').textContent = `${totalQty}개`;
+      document.getElementById('summary-subtotal').textContent = formatWon(subtotal);
+      document.getElementById('summary-delivery').textContent = deliveryFee === 0 && totalQty > 0 ? '무료' : formatWon(deliveryFee);
+      document.getElementById('summary-total').textContent = formatWon(total);
+      document.getElementById('summary-discount').textContent = '-' + formatWon(discount);
+
+      const promoRow = document.getElementById('promo-discount-row');
+      promoRow.classList.toggle('hidden', discount === 0);
+
+      const freeBadge = document.getElementById('free-delivery-badge');
+      freeBadge.classList.toggle('hidden', totalBoxes < CONFIG.freeDeliveryBoxes);
+
+      const listEl = document.getElementById('summary-items');
+      if (items.length === 0) {
+        listEl.innerHTML = '<p class="text-zinc-400">아직 담은 품목이 없습니다. 위 목록에서 제품을 선택해 주세요.</p>';
+      } else {
+        listEl.innerHTML = items.map((item) => `
+          <div class="flex items-center justify-between py-1.5 border-b border-zinc-100 last:border-b-0">
+            <div class="min-w-0 pr-2">
+              <p class="font-semibold text-zinc-800 truncate">${esc(item.name)}</p>
+              <p class="text-[11px] text-zinc-400">${esc(item.opt1)} · ${esc(item.opt2)} (${formatWon(item.unitPrice)})</p>
+            </div>
+            <div class="flex items-center gap-1.5 shrink-0">
+              <button type="button" data-cart-dec="${item.key}" class="w-6 h-6 rounded-md border border-zinc-200 flex items-center justify-center text-zinc-700 hover:bg-zinc-100 font-bold" aria-label="수량 줄이기">-</button>
+              <span class="w-4 text-center font-bold text-zinc-900">${item.qty}</span>
+              <button type="button" data-cart-inc="${item.key}" class="w-6 h-6 rounded-md border border-zinc-200 flex items-center justify-center text-zinc-700 hover:bg-zinc-100 font-bold" aria-label="수량 늘리기">+</button>
+            </div>
           </div>
-          <div class="flex items-center rounded-lg border border-zinc-200">
-            <button type="button" data-dec="${l.key}" class="qty-btn w-7 h-7 text-zinc-600" aria-label="수량 줄이기">−</button>
-            <span class="w-6 text-center text-sm font-bold">${l.qty}</span>
-            <button type="button" data-inc="${l.key}" class="qty-btn w-7 h-7 text-zinc-600" aria-label="수량 늘리기">+</button>
-          </div>
-          <span class="w-20 text-right text-sm font-bold">${won(l.amount)}</span>
-        </li>`).join('');
+        `).join('');
+      }
 
-      $('#sum-subtotal').textContent = won(t.subtotal);
-      $('#sum-shipping').textContent = t.shipping ? won(t.shipping) : (t.subtotal ? '무료' : '0원');
-      $('#sum-coupon').textContent = t.coupon ? '−' + won(t.coupon) : '0원';
-      $('#sum-coupon-label').textContent = state.couponOn
-        ? (t.couponEligible ? '로켓 할인 쿠폰' : `쿠폰 (${won(CONFIG.couponMinOrder)} 이상 시 적용)`)
-        : '쿠폰 할인';
-      $('#sum-total').textContent = won(t.total);
-
-      const hint = $('#shipping-hint');
-      if (t.subtotal > 0 && t.subtotal < CONFIG.freeShippingOver) hint.textContent = `${won(CONFIG.freeShippingOver - t.subtotal)} 더 담으면 무료배송 🚀`;
-      else if (t.subtotal > 0) hint.textContent = '무료 로켓배송 적용 🚀';
-      else hint.textContent = '';
-
-      const count = t.lines.reduce((s, l) => s + l.qty, 0);
-      $('#start-order-btn').classList.toggle('hidden', count > 0);
-      $('#bar-filled').classList.toggle('hidden', count === 0);
-      $('#bar-count').textContent = count;
-      $('#bar-total').textContent = won(t.total);
-      $('#bar-coupon-state').textContent = !state.couponOn ? '쿠폰 미적용' : t.coupon ? `쿠폰 −${won(t.coupon)}` : '쿠폰 대기';
-      const badge = $('#header-cart-badge');
-      badge.textContent = count;
-      badge.classList.toggle('hidden', count === 0);
+      const btnText = document.getElementById('submit-btn-text');
+      btnText.textContent = totalQty > 0
+        ? `${totalQty}개 · ${formatWon(total)} 로켓주문하기`
+        : '제품을 선택하고 로켓주문하기';
     }
 
-    // 제품 사진 타일 (사진이 없으면 아이콘 타일이 보임)
-    function thumb(p, size) {
-      return `<div class="${size} shrink-0 relative rounded-xl overflow-hidden bg-gradient-to-br from-zinc-50 to-zinc-200">
-        <div class="absolute inset-0 flex items-center justify-center ${TONES[p.tone]}"><i data-lucide="${p.icon}" class="w-8 h-8"></i></div>
-        ${p.img ? `<img src="${esc(p.img)}" alt="${esc(p.name)}" loading="lazy" class="absolute inset-0 w-full h-full object-cover" onerror="this.remove()" />` : ''}
-      </div>`;
+    function openOptionModal(itemId) {
+      const item = PRODUCTS.find((m) => m.id === itemId);
+      if (!item) return;
+      state.activeModalItem = item;
+      state.opt1Idx = 0;
+      state.opt2Idx = 0;
+
+      document.getElementById('opt-modal-badge').textContent = item.badge || '규격 선택';
+      document.getElementById('opt-modal-title').textContent = item.name;
+      document.getElementById('opt-modal-price').textContent = `기본 ${formatWon(item.price)}`;
+      document.getElementById('opt-group-1-label').textContent = item.opt1Label;
+      document.getElementById('opt-group-2-label').textContent = item.opt2Label;
+
+      syncOptionModalUI();
+      document.getElementById('option-modal').classList.remove('hidden');
     }
 
-    // 담기 → 규격·수량 선택 시트
-    const sheet = { pid: null, opt: 0, qty: 1 };
-    function openSheet(pid) {
-      const p = PRODUCTS.find(x => x.id === pid);
-      sheet.pid = pid; sheet.opt = state.selectedOption[pid] ?? 0; sheet.qty = 1;
-      $('#sheet-thumb').innerHTML = thumb(p, 'w-16 h-16');
-      $('#sheet-badge').textContent = p.badge || '';
-      $('#sheet-badge').classList.toggle('hidden', !p.badge);
-      $('#sheet-name').textContent = p.name;
-      $('#sheet-desc').textContent = p.desc || '';
-      renderSheet();
-      openModal('#option-modal');
-    }
-    function renderSheet() {
-      const p = PRODUCTS.find(x => x.id === sheet.pid);
-      $('#sheet-options').innerHTML = p.options.map((o, oi) => `
-        <button type="button" data-sheet-opt="${oi}"
-          class="w-full flex items-center justify-between px-3.5 py-3 rounded-xl border text-left transition ${oi === sheet.opt ? 'border-zinc-900 bg-zinc-50 ring-1 ring-zinc-900' : 'border-zinc-200'}">
-          <span class="flex items-center gap-2.5">
-            <span class="w-4 h-4 rounded-full border-2 ${oi === sheet.opt ? 'border-zinc-900 bg-zinc-900 shadow-[inset_0_0_0_3px_white]' : 'border-zinc-300'}"></span>
-            <span class="text-sm font-semibold text-zinc-800">${esc(o.label)}</span>
-          </span>
-          <span class="text-sm font-bold text-zinc-900">${won(o.price)}</span>
-        </button>`).join('');
-      $('#sheet-qty').textContent = sheet.qty;
-      $('#sheet-add-btn').textContent = `${won(p.options[sheet.opt].price * sheet.qty)} 담기`;
-    }
-    function confirmSheet() {
-      const p = PRODUCTS.find(x => x.id === sheet.pid);
-      const key = sheet.pid + '|' + sheet.opt;
-      state.cart[key] = (state.cart[key] || 0) + sheet.qty;
-      state.selectedOption[sheet.pid] = sheet.opt;
-      closeModals();
-      toast(`${p.name} · ${p.options[sheet.opt].label} ${sheet.qty}개 담았어요`);
-      renderMenu(); renderCart();
+    function syncOptionModalUI() {
+      const item = state.activeModalItem;
+      if (!item) return;
+
+      document.getElementById('opt-group-1').innerHTML = item.opt1List.map((o, i) => `
+        <button type="button" data-opt1-idx="${i}"
+                class="py-2 px-2 rounded-xl border text-xs font-semibold ${
+                  i === state.opt1Idx ? 'border-zinc-900 bg-zinc-900 text-white' : 'border-zinc-200 bg-white text-zinc-700'
+                }">
+          ${esc(o.label)}
+        </button>
+      `).join('');
+
+      document.getElementById('opt-group-2').innerHTML = item.opt2List.map((o, i) => `
+        <button type="button" data-opt2-idx="${i}"
+                class="py-2 px-2 rounded-xl border text-xs font-semibold ${
+                  i === state.opt2Idx ? 'border-zinc-900 bg-zinc-900 text-white' : 'border-zinc-200 bg-white text-zinc-700'
+                }">
+          ${esc(o.label)}
+        </button>
+      `).join('');
+
+      const unit = item.price + item.opt1List[state.opt1Idx].extra + item.opt2List[state.opt2Idx].extra;
+      document.getElementById('confirm-opt-btn').textContent = `${formatWon(unit)} 장바구니 담기`;
     }
 
-    /* ===================== 폼 ===================== */
-    function formatPhone(v) {
-      const d = v.replace(/\D/g, '').slice(0, 11);
-      if (d.length < 4) return d;
-      if (d.length < 8) return d.slice(0, 3) + '-' + d.slice(3);
-      return d.slice(0, 3) + '-' + d.slice(3, d.length - 4) + '-' + d.slice(-4);
-    }
-    const phoneValid = (v) => /^01[016789]-?\d{3,4}-?\d{4}$/.test(v);
-
-    function setChoice(selector, attr, value) {
-      $$(selector).forEach(b => {
-        const on = b.dataset[attr] === value;
-        b.classList.toggle('bg-zinc-900', on); b.classList.toggle('text-white', on); b.classList.toggle('border-zinc-900', on);
-        b.classList.toggle('bg-white', !on);
-      });
+    function formatPhone(raw) {
+      const digits = raw.replace(/\D/g, '').slice(0, 11);
+      if (digits.length < 4) return digits;
+      if (digits.length < 8) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+      // 10자리(011-123-4567)와 11자리(010-1234-5678) 모두 맞게
+      return `${digits.slice(0, 3)}-${digits.slice(3, digits.length - 4)}-${digits.slice(-4)}`;
     }
 
-    function refreshSlots() {
-      const late = new Date().getHours() >= CONFIG.sameDayCutoffHour;
-      const pm = $('[data-slot="오늘 오후"]');
-      pm.disabled = late;
-      pm.classList.toggle('opacity-40', late);
-      $('#slot-hint').textContent = late
-        ? `오후 ${CONFIG.sameDayCutoffHour}시가 지나 오늘 오후 배송은 마감됐어요. 내일 오전에 도착합니다.`
-        : `오후 ${CONFIG.sameDayCutoffHour}시 전 주문은 오늘 도착합니다.`;
-      if (late && state.slot === '오늘 오후') { state.slot = ''; setChoice('.slot-btn', 'slot', ''); }
+    function openAdModal(adId) {
+      const titleEl = document.getElementById('ad-modal-title');
+      const bodyEl = document.getElementById('ad-modal-body');
+      if (adId === 'free-delivery') {
+        titleEl.textContent = '구리·남양주 로켓배송 기준 안내';
+        bodyEl.textContent = `구리시와 남양주시 전 지역은 주문 접수 즉시 로켓배송 배차로 출발합니다. 생수·음료·원두·카페 자재를 합쳐 ${CONFIG.freeDeliveryBoxes}박스 주문 시 배송비(${formatWon(CONFIG.deliveryFee)})가 자동으로 무료 적용됩니다.`;
+      } else {
+        titleEl.textContent = '카페·사무실 정기납품 및 단가표 안내';
+        bodyEl.textContent = '구리·남양주 사업자 고객님께서 "단가표 함께 받기"를 체크하신 후 주문하시면, 배송 시 도매 단가표와 로스팅 원두 샘플(100g)을 함께 전달해 드립니다.';
+      }
+      document.getElementById('ad-modal').classList.remove('hidden');
     }
 
-    function buildOrder() {
-      const t = totals();
-      const now = new Date();
-      const orderNo = 'TS' + now.toISOString().slice(2, 10).replace(/-/g, '') + '-' + String(now.getTime()).slice(-4);
+    function buildOrder(orderNo, phone, region, detail) {
+      const t = calcTotals();
       const order = {
-        orderNo, createdAt: now.toISOString(),
-        phone: $('#phone-input').value, city: state.city, dong: $('#dong-select').value,
-        address: $('#address-input').value.trim(), customerType: state.type, slot: state.slot,
-        memo: $('#memo-input').value.trim(), wantsPriceList: $('#sample-agree').checked,
-        items: t.lines.map(l => ({ name: l.p.name, option: l.o.label, price: l.o.price, qty: l.qty, amount: l.amount })),
-        subtotal: t.subtotal, shipping: t.shipping, coupon: t.coupon, total: t.total
+        orderNo,
+        createdAt: new Date().toISOString(),
+        phone, region, detail,
+        sampleRequested: state.sampleRequested,
+        items: t.items.map((i) => ({ name: i.name, opt1: i.opt1, opt2: i.opt2, unitPrice: i.unitPrice, qty: i.qty })),
+        subtotal: t.subtotal, discount: t.discount, deliveryFee: t.deliveryFee, total: t.total
       };
       const text = [
         `[${CONFIG.storeName} 로켓주문] ${orderNo}`,
-        `연락처: ${order.phone}`,
-        `지역: ${order.city} ${order.dong}`,
-        `주소: ${order.address}`,
-        order.customerType ? `유형: ${order.customerType}` : null,
-        `희망: ${order.slot}`,
+        `연락처: ${phone}`,
+        `지역: ${region}`,
+        detail ? `상세: ${detail}` : null,
         '— 주문 품목 —',
-        ...order.items.map(i => `· ${i.name} (${i.option}) × ${i.qty} = ${won(i.amount)}`),
-        `상품 ${won(order.subtotal)} / 배송 ${order.shipping ? won(order.shipping) : '무료'}${order.coupon ? ` / 쿠폰 −${won(order.coupon)}` : ''}`,
-        `합계: ${won(order.total)}`,
-        order.wantsPriceList ? '※ 단가표·샘플 요청' : null,
-        order.memo ? `요청: ${order.memo}` : null
+        ...order.items.map((i) => `· ${i.name} (${i.opt1}/${i.opt2}) × ${i.qty} = ${formatWon(i.unitPrice * i.qty)}`),
+        `상품 ${formatWon(t.subtotal)}${t.discount ? ` / 할인 -${formatWon(t.discount)}` : ''} / 배송 ${t.deliveryFee ? formatWon(t.deliveryFee) : '무료'}`,
+        `합계: ${formatWon(t.total)}`,
+        state.sampleRequested ? '※ 도매 단가표 + 원두 샘플 요청' : null
       ].filter(Boolean).join('\n');
       return { order, text };
     }
 
-    function validate() {
-      const errs = [];
-      if (!cartLines().length) errs.push(['#menu-section', '제품을 1개 이상 담아 주세요']);
-      if (!phoneValid($('#phone-input').value)) { errs.push(['#phone-input', '전화번호를 확인해 주세요']); $('#phone-error').classList.remove('hidden'); }
-      if (!state.city) errs.push(['#city-group', '주문 지역(시)을 선택해 주세요']);
-      else if (!$('#dong-select').value) errs.push(['#dong-select', '읍·면·동을 선택해 주세요']);
-      if (!$('#address-input').value.trim()) errs.push(['#address-input', '상세 주소를 입력해 주세요']);
-      if (!state.slot) errs.push(['#slot-group', '희망 배송 시간을 골라 주세요']);
-      if (!$('#privacy-agree').checked) errs.push(['#privacy-agree', '개인정보 수집에 동의해 주세요']);
-      return errs;
+    function closeOptionModal() {
+      document.getElementById('option-modal').classList.add('hidden');
     }
 
-    async function submitOrder() {
-      const errs = validate();
-      if (errs.length) {
-        const [sel, msg] = errs[0];
-        toast(msg);
-        const el = $(sel);
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        if (el.focus && el.tagName !== 'DIV') setTimeout(() => el.focus({ preventScroll: true }), 300);
+    // 이벤트 바인딩
+    document.getElementById('category-tabs').addEventListener('click', (e) => {
+      const btn = e.target.closest('.cat-tab');
+      if (!btn) return;
+      state.category = btn.dataset.category;
+      document.querySelectorAll('.cat-tab').forEach((b) => {
+        const active = b.dataset.category === state.category;
+        b.className = `cat-tab shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold transition ${
+          active ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+        }`;
+      });
+      renderMenu();
+    });
+
+    document.getElementById('menu-container').addEventListener('click', (e) => {
+      const optBtn = e.target.closest('.open-opt-btn');
+      if (optBtn) {
+        openOptionModal(optBtn.dataset.openItem);
         return;
       }
-      const { order, text } = buildOrder();
-      const btn = $('#submit-order-btn');
+      const adBtn = e.target.closest('.open-ad-modal-btn');
+      if (adBtn) {
+        openAdModal(adBtn.dataset.adId);
+      }
+    });
+
+    document.querySelectorAll('.open-ad-modal-btn').forEach((btn) => {
+      btn.addEventListener('click', () => openAdModal(btn.dataset.adId));
+    });
+
+    document.getElementById('apply-hero-promo-btn').addEventListener('click', (e) => {
+      state.promoApplied = true;
+      e.currentTarget.textContent = '쿠폰 적용됨 ✓';
+      renderSummary();
+      showToast('인스타 첫 주문 2,000원 할인이 적용되었습니다!');
+      document.getElementById('menu-section').scrollIntoView({ behavior: 'smooth' });
+    });
+
+    document.getElementById('toggle-sample-agree-btn').addEventListener('click', (e) => {
+      state.sampleRequested = !state.sampleRequested;
+      e.currentTarget.textContent = state.sampleRequested ? '단가표·샘플 신청됨 ✓' : '단가표 함께 받기';
+      showToast(state.sampleRequested ? '배송 시 단가표와 원두 샘플을 함께 보내드립니다.' : '단가표 신청이 해제되었습니다.');
+    });
+
+    document.getElementById('opt-group-1').addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-opt1-idx]');
+      if (!btn) return;
+      state.opt1Idx = Number(btn.dataset.opt1Idx);
+      syncOptionModalUI();
+    });
+
+    document.getElementById('opt-group-2').addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-opt2-idx]');
+      if (!btn) return;
+      state.opt2Idx = Number(btn.dataset.opt2Idx);
+      syncOptionModalUI();
+    });
+
+    document.getElementById('close-opt-modal').addEventListener('click', closeOptionModal);
+    document.getElementById('option-modal').addEventListener('click', (e) => {
+      if (e.target.id === 'option-modal') closeOptionModal();   // 바깥 어두운 영역 눌러도 닫힘
+    });
+
+    document.getElementById('confirm-opt-btn').addEventListener('click', () => {
+      const item = state.activeModalItem;
+      if (!item) return;
+      const o1 = item.opt1List[state.opt1Idx];
+      const o2 = item.opt2List[state.opt2Idx];
+      const key = `${item.id}_${state.opt1Idx}_${state.opt2Idx}`;
+      const unitPrice = item.price + o1.extra + o2.extra;
+      if (state.cart[key]) {
+        state.cart[key].qty += 1;
+      } else {
+        state.cart[key] = {
+          id: item.id,
+          name: item.name,
+          opt1: o1.label,
+          opt2: o2.label,
+          unitPrice,
+          boxes: (o1.boxes || 1) * (o2.boxes || 1),
+          qty: 1
+        };
+      }
+      closeOptionModal();
+      renderMenu();
+      renderSummary();
+      showToast(`${item.name} 담기 완료!`);
+    });
+
+    document.getElementById('summary-items').addEventListener('click', (e) => {
+      const inc = e.target.closest('[data-cart-inc]');
+      const dec = e.target.closest('[data-cart-dec]');
+      if (inc) {
+        const k = inc.dataset.cartInc;
+        if (state.cart[k]) state.cart[k].qty += 1;
+      } else if (dec) {
+        const k = dec.dataset.cartDec;
+        if (state.cart[k]) {
+          state.cart[k].qty -= 1;
+          if (state.cart[k].qty <= 0) delete state.cart[k];
+        }
+      } else {
+        return;
+      }
+      renderMenu();
+      renderSummary();
+    });
+
+    document.getElementById('phone-input').addEventListener('input', (e) => {
+      e.target.value = formatPhone(e.target.value);
+    });
+
+    document.getElementById('region-chips').addEventListener('click', (e) => {
+      const chip = e.target.closest('.region-chip');
+      if (!chip) return;
+      const region = chip.dataset.region;
+      document.getElementById('region-input').value = region;
+      document.querySelectorAll('.region-chip').forEach((c) => {
+        const active = c === chip;
+        c.className = `region-chip px-2.5 py-1.5 rounded-lg border text-xs font-medium transition ${
+          active ? 'border-zinc-900 bg-zinc-900 text-white' : 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-400'
+        }`;
+      });
+    });
+
+    document.getElementById('close-ad-modal').addEventListener('click', () => {
+      document.getElementById('ad-modal').classList.add('hidden');
+    });
+    document.getElementById('ad-modal-action-btn').addEventListener('click', () => {
+      document.getElementById('ad-modal').classList.add('hidden');
+    });
+
+    document.getElementById('submit-order-btn').addEventListener('click', async () => {
+      const errEl = document.getElementById('form-error-msg');
+      const items = getCartArray();
+      const phone = document.getElementById('phone-input').value.trim();
+      const region = document.getElementById('region-input').value.trim();
+      const detail = document.getElementById('address-detail-input').value.trim();
+
+      const fail = (msg, focusId, scrollId) => {
+        errEl.textContent = msg;
+        errEl.classList.remove('hidden');
+        if (scrollId) document.getElementById(scrollId).scrollIntoView({ behavior: 'smooth' });
+        if (focusId) document.getElementById(focusId).focus();
+        showToast(msg);
+      };
+
+      if (items.length === 0) return fail('최소 1개 이상의 제품을 선택해 주세요.', null, 'menu-section');
+      if (!/^01[016789]-?\d{3,4}-?\d{4}$/.test(phone)) return fail('연락받을 휴대폰 번호를 정확히 입력해 주세요.', 'phone-input');
+      if (!region) return fail('주문 지역을 선택하거나 직접 입력해 주세요.', 'region-input');
+      if (!document.getElementById('privacy-agree').checked) return fail('개인정보 수집에 동의해 주세요.', 'privacy-agree');
+      errEl.classList.add('hidden');
+
+      const now = new Date();
+      const orderNo = '#RK-' + String(now.getMonth() + 1).padStart(2, '0') + String(now.getDate()).padStart(2, '0') + '-' + Math.floor(1000 + Math.random() * 9000);
+      const { order, text } = buildOrder(orderNo, phone, region, detail);
+      state.lastOrderText = text;
+
+      // 1) 웹훅이 설정돼 있으면 자동 접수 시도
       let sent = false;
       if (CONFIG.orderEndpoint) {
-        btn.disabled = true; btn.textContent = '전송 중…';
+        const btn = document.getElementById('submit-order-btn');
+        btn.disabled = true;
+        document.getElementById('submit-btn-text').textContent = '주문 전송 중…';
         try {
-          // text/plain 으로 보내 CORS 사전요청을 피함 (Apps Script 등에서 그대로 수신 가능)
+          // text/plain 으로 보내 CORS 사전요청을 피함 (구글 Apps Script 등에서 그대로 받음)
           const res = await fetch(CONFIG.orderEndpoint, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(order) });
           sent = res.ok;
-        } catch (e) { sent = false; }
-        btn.disabled = false; btn.textContent = '로켓 주문하기 🚀';
+        } catch (err) {
+          sent = false;
+        }
+        btn.disabled = false;
+        renderSummary();
       }
-      $('#order-text').textContent = text;
-      $('#done-desc').textContent = sent
-        ? '주문이 접수됐어요! 곧 확인 전화를 드립니다. 혹시 몰라 문자로도 남겨 주시면 더 빨라요.'
-        : '아래 [문자로 보내기]를 눌러 주문서를 보내 주시면 확인 전화를 드립니다.';
-      const phone = CONFIG.orderPhone.replace(/\D/g, '');
-      const ios = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-      $('#sms-order-btn').href = `sms:${phone}${ios ? '&' : '?'}body=${encodeURIComponent(text)}`;
-      $('#call-btn').href = `tel:${phone}`;
-      openModal('#done-modal');
-    }
 
-    /* ===================== 모달 ===================== */
-    function openModal(sel) { $(sel).classList.remove('hidden'); document.body.style.overflow = 'hidden'; icons(); }
-    function closeModals() { $$('#info-modal, #done-modal, #option-modal').forEach(m => m.classList.add('hidden')); document.body.style.overflow = ''; }
-    function openInfo(id) {
-      const c = AD_CONTENT[id]; if (!c) return;
-      $('#info-modal-title').textContent = c.title;
-      $('#info-modal-body').innerHTML = c.html;
-      openModal('#info-modal');
-    }
+      // 2) 화면: 자동 접수됐을 때만 "접수 완료", 아니면 문자 전송을 반드시 하도록 안내
+      document.getElementById('success-kicker').textContent = sent ? '로켓배송 주문 접수 완료' : '로켓배송 주문서 작성 완료';
+      document.getElementById('success-title').textContent = sent ? '주문이 정상 접수되었습니다!' : '마지막으로 주문서를 문자로 보내 주세요';
+      document.getElementById('sms-order-btn').textContent = sent ? '문자로도 남기기 (선택)' : '문자로 주문 보내기 (필수)';
+      document.getElementById('success-order-no').textContent = `주문번호 ${orderNo}`;
+      document.getElementById('success-details').innerHTML = `
+        <p><span class="font-bold">주문 품목:</span> ${items.map((i) => `${esc(i.name)}(${esc(i.opt1)}/${esc(i.opt2)}) × ${i.qty}`).join(', ')}</p>
+        <p><span class="font-bold">전화번호:</span> ${esc(phone)}</p>
+        <p><span class="font-bold">주문 지역:</span> ${esc(region)}${detail ? ' · ' + esc(detail) : ''} <span class="text-sky-600 font-bold">(🚀 로켓배송)</span></p>
+        ${state.sampleRequested ? '<p><span class="font-bold">추가 요청:</span> 도매 단가표 + 원두 샘플 동봉</p>' : ''}
+        <p><span class="font-bold">결제 예정 금액:</span> ${formatWon(order.total)}</p>
+      `;
 
-    /* ===================== 이벤트 ===================== */
-    document.addEventListener('click', (e) => {
-      const t = e.target.closest('button, a');
-      if (!t) {
-        if (['info-modal', 'done-modal', 'option-modal'].includes(e.target.id)) closeModals();
-        return;
-      }
-      if (t.classList.contains('cat-tab')) {
-        state.category = t.dataset.category;
-        $$('.cat-tab').forEach(b => {
-          const on = b === t;
-          b.classList.toggle('bg-zinc-900', on); b.classList.toggle('text-white', on);
-          b.classList.toggle('bg-zinc-100', !on); b.classList.toggle('text-zinc-600', !on);
-        });
-        renderMenu();
-      } else if (t.dataset.add) {
-        openSheet(t.dataset.add);
-      } else if (t.dataset.sheetOpt) {
-        sheet.opt = +t.dataset.sheetOpt; renderSheet();
-      } else if (t.id === 'sheet-inc' || t.id === 'sheet-dec') {
-        sheet.qty = Math.min(99, Math.max(1, sheet.qty + (t.id === 'sheet-inc' ? 1 : -1))); renderSheet();
-      } else if (t.id === 'sheet-add-btn') {
-        confirmSheet();
-      } else if (t.id === 'start-order-btn') {
-        document.querySelector('#menu-section').scrollIntoView({ behavior: 'smooth' });
-        toast('제품의 [+ 담기]를 눌러 주세요');
-      } else if (t.dataset.inc || t.dataset.dec) {
-        const key = t.dataset.inc || t.dataset.dec;
-        state.cart[key] = Math.max(0, (state.cart[key] || 0) + (t.dataset.inc ? 1 : -1));
-        if (!state.cart[key]) delete state.cart[key];
-        renderMenu(); renderCart();
-      } else if (t.classList.contains('open-ad-modal-btn')) {
-        openInfo(t.dataset.adId);
-      } else if (t.classList.contains('close-modal-btn')) {
-        closeModals();
-      } else if (t.classList.contains('city-btn')) {
-        state.city = t.dataset.city;
-        setChoice('.city-btn', 'city', state.city);
-        const sel = $('#dong-select');
-        sel.disabled = false;
-        sel.innerHTML = '<option value="">읍·면·동 선택</option>' + DONGS[state.city].map(d => `<option>${d}</option>`).join('');
-      } else if (t.classList.contains('type-btn')) {
-        state.type = state.type === t.dataset.type ? '' : t.dataset.type;
-        setChoice('.type-btn', 'type', state.type);
-      } else if (t.classList.contains('slot-btn')) {
-        state.slot = t.dataset.slot; setChoice('.slot-btn', 'slot', state.slot);
+      const shopPhone = CONFIG.orderPhone.replace(/\D/g, '');
+      const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+      document.getElementById('sms-order-btn').href = `sms:${shopPhone}${isIOS ? '&' : '?'}body=${encodeURIComponent(text)}`;
+      document.getElementById('call-order-btn').href = `tel:${shopPhone}`;
+
+      document.getElementById('success-modal').classList.remove('hidden');
+      if (window.lucide) lucide.createIcons();
+    });
+
+    document.getElementById('copy-order-btn').addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(state.lastOrderText);
+        showToast('주문서를 복사했어요. 인스타 DM에 붙여 넣어 주세요');
+      } catch (err) {
+        // 인앱 브라우저에서 클립보드가 막힌 경우: 숨은 입력칸으로 복사
+        const ta = document.createElement('textarea');
+        ta.value = state.lastOrderText;
+        document.body.appendChild(ta);
+        ta.select();
+        const ok = document.execCommand && document.execCommand('copy');
+        ta.remove();
+        showToast(ok ? '주문서를 복사했어요. 인스타 DM에 붙여 넣어 주세요' : '복사가 막혀 있어요. 문자로 보내기를 눌러 주세요');
       }
     });
 
-    $('#apply-hero-promo-btn').addEventListener('click', () => {
-      state.couponOn = true;
-      $('#apply-hero-promo-btn').textContent = '쿠폰 적용됨 ✓';
-      renderCart();
-      toast(totals().couponEligible ? '2,000원 할인 쿠폰이 적용됐어요' : `쿠폰 저장 완료 · ${won(CONFIG.couponMinOrder)} 이상 담으면 자동 적용`);
+    document.getElementById('close-success-modal').addEventListener('click', () => {
+      state.cart = {};
+      document.getElementById('success-modal').classList.add('hidden');
+      renderMenu();
+      renderSummary();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     });
 
-    $('#toggle-sample-agree-btn').addEventListener('click', () => {
-      const cb = $('#sample-agree'); cb.checked = !cb.checked;
-      $('#toggle-sample-agree-btn').textContent = cb.checked ? '단가표 신청됨 ✓' : '단가표 함께 받기';
-      toast(cb.checked ? '주문서에 단가표·샘플 요청을 넣었어요' : '단가표 요청을 뺐어요');
-    });
-    $('#sample-agree').addEventListener('change', (e) => {
-      $('#toggle-sample-agree-btn').textContent = e.target.checked ? '단가표 신청됨 ✓' : '단가표 함께 받기';
-    });
-
-    $('#phone-input').addEventListener('input', (e) => {
-      e.target.value = formatPhone(e.target.value);
-      if (phoneValid(e.target.value)) $('#phone-error').classList.add('hidden');
-    });
-    $('#phone-input').addEventListener('blur', (e) => {
-      $('#phone-error').classList.toggle('hidden', !e.target.value || phoneValid(e.target.value));
-    });
-
-    $('#submit-order-btn').addEventListener('click', submitOrder);
-    $('#copy-order-btn').addEventListener('click', async () => {
-      const text = $('#order-text').textContent;
-      try { await navigator.clipboard.writeText(text); toast('주문서를 복사했어요. DM·카톡에 붙여 넣어 주세요'); }
-      catch (e) {
-        const r = document.createRange(); r.selectNodeContents($('#order-text'));
-        const s = getSelection(); s.removeAllRanges(); s.addRange(r);
-        toast('길게 눌러 복사해 주세요');
-      }
-    });
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModals(); });
-
-    /* ===================== 시작 ===================== */
+    // 초기 렌더링
     renderMenu();
-    renderCart();
-    refreshSlots();
-    setInterval(refreshSlots, 60000);
-    icons();
+    renderSummary();
+    if (window.lucide) {
+      lucide.createIcons();
+    }
   </script>
 </body>
 </html>
